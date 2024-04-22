@@ -11,8 +11,10 @@ import shutil
 
 # Ignore B404:blacklist since all subprocesses are run with predefined executables.
 import subprocess  # nosec
+import sys
 import urllib.error
 import urllib.request
+from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Literal
 
@@ -521,71 +523,75 @@ class BuildImageConfig:
     Attributes:
         arch: The CPU architecture to build the image for.
         base_image: The ubuntu image to use as build base.
+        output: The path to write final image to.
     """
 
     arch: Arch
     base_image: BaseImage
+    output: Path
 
 
 class BuildImageError(Exception):
     """Represents an error while building the image."""
 
 
-def build_image(config: BuildImageConfig, output: Path) -> None:
+def build_image(config: BuildImageConfig) -> None:
     """Build and save the image locally.
 
     Args:
         config: The configuration values to build the image with.
-        output: The desired image output path.
 
     Raises:
         BuildImageError: If there was an error building the image.
     """
     logger.info("Clean build state.")
-    _clean_build_state()
-    try:
-        logger.info("Downloading cloud image.")
-        cloud_image_path = _download_cloud_image(arch=config.arch, base_image=config.base_image)
-        logger.info("Resizing cloud image.")
-        _resize_cloud_img(cloud_image_path=cloud_image_path)
-        logger.info("Mounting network block device.")
-        _mount_image_to_network_block_device(cloud_image_path=cloud_image_path)
-        logger.info("Replacing resolv.conf.")
-        _replace_mounted_resolv_conf()
-        logger.info("Resizing partitions.")
-        _resize_mount_partitions()
-    except (CloudImageDownloadError, ImageMountError, ResizePartitionError) as exc:
-        raise BuildImageError from exc
-
-    try:
-        logger.info("Setting up chroot environment.")
-        with ChrootContextManager(IMAGE_MOUNT_DIR):
-            # operator_libs_linux apt package uses dpkg -l and that does not work well with chroot
-            # env, hence use subprocess run.
-            subprocess.run(
-                ["/usr/bin/apt-get", "update", "-y"], check=True, timeout=60 * 5
-            )  # nosec: B603
-            subprocess.run(  # nosec: B603
-                ["/usr/bin/apt-get", "install", "-y", *IMAGE_DEFAULT_APT_PACKAGES],
-                check=True,
-                timeout=60 * 10,
-            )
-            _create_python_symlinks()
-            _disable_unattended_upgrades()
-            _configure_system_users()
-            _install_external_packages(arch=config.arch)
-    except (
-        ChrootBaseError,
-        subprocess.CalledProcessError,
-        UnattendedUpgradeDisableError,
-        SystemUserConfigurationError,
-        ExternalPackageInstallError,
-    ) as exc:
-        raise BuildImageError from exc
-
-    try:
+    with redirect_stdout(sys.stderr):
         _clean_build_state()
-        logger.info("Compressing image")
-        _compress_image(cloud_image_path, output)
-    except ImageCompressError as exc:
-        raise BuildImageError from exc
+        try:
+            logger.info("Downloading cloud image.")
+            cloud_image_path = _download_cloud_image(
+                arch=config.arch, base_image=config.base_image
+            )
+            logger.info("Resizing cloud image.")
+            _resize_cloud_img(cloud_image_path=cloud_image_path)
+            logger.info("Mounting network block device.")
+            _mount_image_to_network_block_device(cloud_image_path=cloud_image_path)
+            logger.info("Replacing resolv.conf.")
+            _replace_mounted_resolv_conf()
+            logger.info("Resizing partitions.")
+            _resize_mount_partitions()
+        except (CloudImageDownloadError, ImageMountError, ResizePartitionError) as exc:
+            raise BuildImageError from exc
+
+        try:
+            logger.info("Setting up chroot environment.")
+            with ChrootContextManager(IMAGE_MOUNT_DIR):
+                # operator_libs_linux apt package uses dpkg -l and that does not work well with
+                # chroot env, hence use subprocess run.
+                subprocess.run(
+                    ["/usr/bin/apt-get", "update", "-y"], check=True, timeout=60 * 5
+                )  # nosec: B603
+                subprocess.run(  # nosec: B603
+                    ["/usr/bin/apt-get", "install", "-y", *IMAGE_DEFAULT_APT_PACKAGES],
+                    check=True,
+                    timeout=60 * 10,
+                )
+                _create_python_symlinks()
+                _disable_unattended_upgrades()
+                _configure_system_users()
+                _install_external_packages(arch=config.arch)
+        except (
+            ChrootBaseError,
+            subprocess.CalledProcessError,
+            UnattendedUpgradeDisableError,
+            SystemUserConfigurationError,
+            ExternalPackageInstallError,
+        ) as exc:
+            raise BuildImageError from exc
+
+        try:
+            _clean_build_state()
+            logger.info("Compressing image")
+            _compress_image(cloud_image_path, config.output)
+        except ImageCompressError as exc:
+            raise BuildImageError from exc
