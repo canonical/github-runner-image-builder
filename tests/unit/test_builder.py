@@ -481,20 +481,9 @@ def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):
     )
 
     with pytest.raises(ImageCompressError) as exc:
-        builder._compress_image(image=MagicMock())
+        builder._compress_image(image=MagicMock(), output=MagicMock())
 
     assert "Compression error" in str(exc.getrepr())
-
-
-def test__compress_image(monkeypatch: pytest.MonkeyPatch):
-    """
-    arrange: given a monkeypatched subprocess run.
-    act: when _compress_image is called.
-    assert: Compressed image path is returned.
-    """
-    monkeypatch.setattr(subprocess, "run", MagicMock())
-
-    assert builder._compress_image(image=MagicMock()) == Path("compressed.img")
 
 
 @pytest.mark.parametrize(
@@ -551,6 +540,6 @@ def test_build_image_error(
     monkeypatch.setattr(patch_obj, sub_func, mock)
 
     with pytest.raises(BuildImageError) as exc:
-        builder.build_image(config=MagicMock())
+        builder.build_image(config=MagicMock(), output=MagicMock())
 
     assert expected_message in str(exc.getrepr())
