@@ -18,14 +18,6 @@ class Arch(str, Enum):
         X64: Represents an X64/AMD64 system architecture.
     """
 
-    def __str__(self) -> str:
-        """Interpolate to string value.
-
-        Returns:
-            The enum string value.
-        """
-        return self.value
-
     ARM64 = "arm64"
     X64 = "x64"
 
@@ -90,14 +82,6 @@ class BaseImage(str, Enum):
 
     JAMMY = "jammy"
     NOBLE = "noble"
-
-    def __str__(self) -> str:
-        """Interpolate to string value.
-
-        Returns:
-            The enum string value.
-        """
-        return self.value
 
     @classmethod
     def from_str(cls, tag_or_name: str) -> "BaseImage":

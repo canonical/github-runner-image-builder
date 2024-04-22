@@ -482,25 +482,22 @@ class ImageCompressError(Exception):
 
 
 @retry(tries=5, delay=5, max_delay=60, backoff=2, local_logger=logger)
-def _compress_image(image: Path) -> Path:
+def _compress_image(image: Path, output: Path) -> None:
     """Compress the cloud image.
 
     Args:
         image: The image to compress.
+        output: The desired image output path.
 
     Raises:
         ImageCompressError: If there was something wrong compressing the image.
-
-    Returns:
-        The compressed image path.
     """
     try:
         subprocess.run(  # nosec: B603
-            ["/usr/bin/virt-sparsify", "--compress", str(image), "compressed.img"],
+            ["/usr/bin/virt-sparsify", "--compress", str(image), str(output)],
             check=True,
             timeout=60 * 10,
         )
-        return Path("compressed.img")
     except subprocess.CalledProcessError as exc:
         raise ImageCompressError from exc
 
@@ -534,17 +531,15 @@ class BuildImageError(Exception):
     """Represents an error while building the image."""
 
 
-def build_image(config: BuildImageConfig) -> Path:
+def build_image(config: BuildImageConfig, output: Path) -> None:
     """Build and save the image locally.
 
     Args:
         config: The configuration values to build the image with.
+        output: The desired image output path.
 
     Raises:
         BuildImageError: If there was an error building the image.
-
-    Returns:
-        The saved image path.
     """
     logger.info("Clean build state.")
     _clean_build_state()
@@ -591,6 +586,6 @@ def build_image(config: BuildImageConfig) -> Path:
     try:
         _clean_build_state()
         logger.info("Compressing image")
-        return _compress_image(cloud_image_path)
+        _compress_image(cloud_image_path, output)
     except ImageCompressError as exc:
         raise BuildImageError from exc
