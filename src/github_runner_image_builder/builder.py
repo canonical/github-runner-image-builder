@@ -40,11 +40,11 @@ def _install_dependencies() -> None:
         DependencyInstallError: If there was an error installing apt packages.
     """
     try:
-        subprocess.run(["/usr/bin/apt-get", "install", "-y", *APT_DEPENDENCIES], check=True,
-                       timeout=30*60)  # nosec: B603
+        subprocess.run(
+            ["/usr/bin/apt-get", "install", "-y", *APT_DEPENDENCIES], check=True, timeout=30 * 60
+        )  # nosec: B603
     except subprocess.CalledProcessError as exc:
         raise DependencyInstallError from exc
-
 
 
 class NetworkBlockDeviceError(Exception):

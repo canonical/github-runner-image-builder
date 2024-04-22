@@ -35,7 +35,7 @@ def test_get_supported_arch_unsupported_arch(arch: str, monkeypatch: pytest.Monk
     monkeypatch.setattr(platform, "machine", lambda: arch)
 
     with pytest.raises(UnsupportedArchitectureError) as exc:
-        get_supported_arch
+        get_supported_arch()
 
     assert arch in str(exc.getrepr())
 
@@ -56,4 +56,4 @@ def test_get_supported_arch(arch: str, expected_arch: Arch, monkeypatch: pytest.
     """
     monkeypatch.setattr(platform, "machine", lambda: arch)
 
-    assert get_supported_arch == expected_arch
+    assert get_supported_arch() == expected_arch
