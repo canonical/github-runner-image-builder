@@ -1,7 +1,7 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Module for interacting with charm state and configurations."""
+"""Module containing configurations."""
 
 import logging
 import platform
