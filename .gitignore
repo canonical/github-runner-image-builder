@@ -1,0 +1,7 @@
+# development cofig files
+.vscode
+.tox
+# build artefacts
+build
+*.img
+**/*.egg-info

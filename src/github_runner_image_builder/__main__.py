@@ -1,17 +1,10 @@
-"""liquidctl – monitor and control liquid coolers and other devices.
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
 
-Copyright Jonas Malaco and contributors
-SPDX-License-Identifier: GPL-3.0-or-later
-"""
-
-# uses the psf/black style
+"""Main entrypoint for github-runner-image-builder."""
 
 import sys
-
-
-def main():
-    """The main entrypoint for the executable."""
-    pass
+from github_runner_image_builder.cli import main
 
 
 if __name__ == "__main__":

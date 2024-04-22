@@ -16,11 +16,35 @@ import urllib.request
 from pathlib import Path
 from typing import Literal
 
-from chroot import ChrootBaseError, ChrootContextManager
-from state import Arch, BaseImage
-from utils import retry
+from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextManager
+from github_runner_image_builder.config import Arch, BaseImage
+from github_runner_image_builder.utils import retry
 
 logger = logging.getLogger(__name__)
+
+APT_DEPENDENCIES = [
+    "qemu-utils",  # used for qemu utilities tools to build and resize image
+    "libguestfs-tools",  # used to modify VM images.
+]
+
+
+# nosec: B603: All subprocess runs are run with trusted executables.
+class DependencyInstallError(Exception):
+    """Represents an error while installing required dependencies."""
+
+
+def _install_dependencies() -> None:
+    """Install required dependencies to run qemu image build.
+
+    Raises:
+        DependencyInstallError: If there was an error installing apt packages.
+    """
+    try:
+        subprocess.run(["/usr/bin/apt-get", "install", "-y", *APT_DEPENDENCIES], check=True,
+                       timeout=30*60)  # nosec: B603
+    except subprocess.CalledProcessError as exc:
+        raise DependencyInstallError from exc
+
 
 
 class NetworkBlockDeviceError(Exception):
@@ -50,8 +74,9 @@ def setup_builder() -> None:
         BuilderSetupError: If there was an error setting up the host device for building images.
     """
     try:
+        _install_dependencies()
         _enable_nbd()
-    except NetworkBlockDeviceError as exc:
+    except (NetworkBlockDeviceError, DependencyInstallError) as exc:
         raise BuilderSetupError from exc
 
 
@@ -351,11 +376,11 @@ def _configure_system_users() -> None:
         SystemUserConfigurationError: If there was an error configuring ubuntu user.
     """
     try:
-        with (UBUNUT_HOME_PATH / ".profile").open("a") as profile_file:
-            profile_file.write("PATH=$PATH:/home/ubuntu/.local/bin\n")
         subprocess.run(  # nosec: B603
             ["/usr/sbin/useradd", "-m", UBUNTU_USER], check=True, timeout=30
         )
+        with (UBUNUT_HOME_PATH / ".profile").open("a") as profile_file:
+            profile_file.write("PATH=$PATH:/home/ubuntu/.local/bin\n")
         subprocess.run(  # nosec: B603
             ["/usr/sbin/groupadd", MICROK8S_GROUP], check=True, timeout=30
         )
