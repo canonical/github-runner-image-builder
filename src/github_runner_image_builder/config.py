@@ -9,6 +9,7 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+
 class Arch(str, Enum):
     """Supported system architectures.
 
@@ -78,6 +79,7 @@ def get_supported_arch() -> Arch:
 
 LTS_IMAGE_VERSION_TAG_MAP = {"22.04": "jammy", "24.04": "noble"}
 
+
 class BaseImage(str, Enum):
     """The ubuntu OS base image to build and deploy runners on.
 
@@ -96,3 +98,17 @@ class BaseImage(str, Enum):
             The enum string value.
         """
         return self.value
+
+    @classmethod
+    def from_str(cls, tag_or_name: str) -> "BaseImage":
+        """Retrieve the base image tag from charm.
+
+        Args:
+            tag_or_name: The base image string option.
+
+        Returns:
+            The base image configuration of the charm.
+        """
+        if tag_or_name in LTS_IMAGE_VERSION_TAG_MAP:
+            return cls(LTS_IMAGE_VERSION_TAG_MAP[tag_or_name])
+        return cls(tag_or_name)
