@@ -69,7 +69,7 @@ def _create_metadata_tar_gz(image: str, tmp_path: Path) -> Path:
     """Create metadata.tar.gz contents.
 
     Args:
-        image: The ubuntu LTS iamge name.
+        image: The ubuntu LTS image name.
         tmp_path: Temporary dir.
     """
     # Create metadata.yaml
@@ -93,7 +93,7 @@ def _create_metadata_tar_gz(image: str, tmp_path: Path) -> Path:
     return metadata_tar
 
 
-# This is a workaround until https://github.com/canonical/pylxd/pull/577 get's merged.
+# This is a workaround until https://github.com/canonical/pylxd/pull/577 gets merged.
 def _post_vm_img(
     client: Client,
     image_data: bytes,
@@ -106,7 +106,7 @@ def _post_vm_img(
         client: The LXD client.
         image_data: Image qcow2 (.img) file contents in bytes.
         metadata: The metadata.tar.gz contents in bytes.
-        public: Whether the image should be publically available.
+        public: Whether the image should be publicly available.
     """
     headers = {}
     if public:

@@ -13,11 +13,8 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.py }}
+      # need to run in sudo mode due to chroot
       - name: Install tox
-        run: python -m pip install tox-gh>=1.2
-        # need to run in sudo mode due to chroot
+        run: sudo python -m pip install tox-gh>=1.2
       - name: Run integration tests
         run: sudo $(which tox) -e integration
-      - name: Setup tmate session
-        if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3

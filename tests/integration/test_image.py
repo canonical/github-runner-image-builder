@@ -80,7 +80,7 @@ async def test_image(image: str, tmp_path: Path):
     assert: commands do not error.
     """
     main(["install"])
-    main(["build", "-i", image, "-o", image_path := (tmp_path / "rootfs.img")])
+    main(["build", "-i", image, "-o", str((image_path := tmp_path / "rootfs.img"))])
 
     lxd = Client()
     logger.info("Creating LXD VM Image.")

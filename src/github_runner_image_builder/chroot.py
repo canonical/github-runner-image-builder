@@ -53,7 +53,7 @@ class ChrootContextManager:
             chroot_shared_dir = self.chroot_path / shared_dir
             try:
                 subprocess.run(  # nosec: B603
-                    ["sudo", "/usr/bin/mount", "--bind", f"/{shared_dir}", str(chroot_shared_dir)],
+                    ["/usr/bin/mount", "--bind", f"/{shared_dir}", str(chroot_shared_dir)],
                     check=True,
                     timeout=30,
                 )
@@ -76,7 +76,7 @@ class ChrootContextManager:
         os.close(cast(int, self.root))
 
         try:
-            subprocess.run(["sudo", "/usr/bin/sync"], check=True)  # nosec: B603
+            subprocess.run(["/usr/bin/sync"], check=True)  # nosec: B603
         except subprocess.CalledProcessError as exc:
             raise SyncError from exc
 
@@ -84,14 +84,14 @@ class ChrootContextManager:
             chroot_shared_dir = self.chroot_path / shared_dir
             try:
                 subprocess.run(
-                    ["sudo", "/usr/bin/umount", str(chroot_shared_dir)], check=True
+                    ["/usr/bin/umount", str(chroot_shared_dir)], check=True
                 )  # nosec: B603
             except subprocess.CalledProcessError as exc:
                 raise MountError from exc
 
         try:
             subprocess.run(  # nosec: B603
-                ["sudo", "/usr/bin/umount", "-l", str(self.chroot_path / CHROOT_DEVICE_DIR)],
+                ["/usr/bin/umount", "-l", str(self.chroot_path / CHROOT_DEVICE_DIR)],
                 check=True,
             )
         except subprocess.CalledProcessError as exc:

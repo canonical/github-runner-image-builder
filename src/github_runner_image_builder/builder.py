@@ -61,9 +61,7 @@ def _enable_nbd() -> None:
         NetworkBlockDeviceError: If there was an error enable nbd kernel.
     """
     try:
-        subprocess.run(
-            ["sudo", "/usr/sbin/modprobe", "nbd"], check=True, timeout=10
-        )  # nosec: B603
+        subprocess.run(["/usr/sbin/modprobe", "nbd"], check=True, timeout=10)  # nosec: B603
     except subprocess.CalledProcessError as exc:
         raise NetworkBlockDeviceError from exc
 
