@@ -166,7 +166,7 @@ def _instance_running(instance: Instance) -> bool:
     if state.status != "Running":
         return False
     try:
-        result = instance.execute(["echo", "'hello world'"])
+        result = instance.execute(["snap", "model"])
     except BrokenPipeError:
         return False
     return result.exit_code == 0
