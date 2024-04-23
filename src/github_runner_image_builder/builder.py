@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 APT_DEPENDENCIES = [
     "qemu-utils",  # used for qemu utilities tools to build and resize image
     "libguestfs-tools",  # used to modify VM images.
+    "cloud-utils",  # used for growpart.
 ]
 
 
@@ -60,7 +61,9 @@ def _enable_nbd() -> None:
         NetworkBlockDeviceError: If there was an error enable nbd kernel.
     """
     try:
-        subprocess.run(["/usr/sbin/modprobe", "nbd"], check=True, timeout=10)  # nosec: B603
+        subprocess.run(
+            ["sudo", "/usr/sbin/modprobe", "nbd"], check=True, timeout=10
+        )  # nosec: B603
     except subprocess.CalledProcessError as exc:
         raise NetworkBlockDeviceError from exc
 
@@ -291,14 +294,12 @@ def _resize_mount_partitions() -> None:
     """
     try:
         subprocess.run(  # nosec: B603
-            ["/usr/bin/growpart", str(NETWORK_BLOCK_DEVICE_PATH), "1"],
-            check=True,
-            timeout=60,
+            ["/usr/bin/growpart", str(NETWORK_BLOCK_DEVICE_PATH), "1"], check=True, timeout=10 * 60
         )
         subprocess.run(  # nosec: B603
             ["/usr/sbin/resize2fs", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
             check=True,
-            timeout=60,
+            timeout=10 * 60,
         )
     except subprocess.CalledProcessError as exc:
         raise ResizePartitionError from exc
@@ -569,12 +570,16 @@ def build_image(config: BuildImageConfig) -> None:
                 # operator_libs_linux apt package uses dpkg -l and that does not work well with
                 # chroot env, hence use subprocess run.
                 subprocess.run(
-                    ["/usr/bin/apt-get", "update", "-y"], check=True, timeout=60 * 5
+                    ["/usr/bin/apt-get", "update", "-y"],
+                    check=True,
+                    timeout=60 * 5,
+                    env={"DEBIAN_FRONTEND": "noninteractive"},
                 )  # nosec: B603
                 subprocess.run(  # nosec: B603
                     ["/usr/bin/apt-get", "install", "-y", *IMAGE_DEFAULT_APT_PACKAGES],
                     check=True,
                     timeout=60 * 10,
+                    env={"DEBIAN_FRONTEND": "noninteractive"},
                 )
                 _create_python_symlinks()
                 _disable_unattended_upgrades()

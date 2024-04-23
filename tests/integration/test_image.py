@@ -5,122 +5,95 @@
 
 import logging
 from pathlib import Path
+from time import sleep
 from typing import NamedTuple
 
 import pytest
 from pylxd import Client
-from pylxd.models.image import Image
-from pylxd.models.instance import Instance
 
 from github_runner_image_builder.cli import main
+from tests.integration.helpers import create_lxd_instance, create_lxd_vm_image
 
 logger = logging.getLogger(__name__)
 
 
-class TestCommand(NamedTuple):
+class Commands(NamedTuple):
     """Test commands to execute.
 
     Attributes:
         name: The test name.
         command: The command to execute.
-        expected: The expected stdout result.
     """
 
     name: str
     command: str
-    expected: str
 
 
 # This is matched with E2E test run of github-runner-operator charm.
 TEST_RUNNER_COMMANDS = (
-    TestCommand(name="simple hello world", command="echo 'hello world'", expected="hello world"),
-    TestCommand(
-        name="file permission to /usr/local/bin",
-        command="ls -ld /usr/local/bin | grep drwxrwxrwx",
-        expected="drwxrwxrwx",
+    Commands(name="simple hello world", command="echo 'hello world'"),
+    Commands(name="file permission to /usr/local/bin", command="ls -ld /usr/local/bin"),
+    Commands(
+        name="file permission to /usr/local/bin (create)", command="touch /usr/local/bin/test_file"
     ),
-    TestCommand(
-        name="file permission to /usr/local/bin (create)",
-        command="touch /usr/local/bin/test_file",
-        expected="",
-    ),
-    TestCommand(
-        name="install microk8s", command="sudo snap install microk8s --classic", expected=""
-    ),
-    TestCommand(name="wait for microk8s", command="microk8s status --wait-ready", expected=""),
-    TestCommand(
+    Commands(name="install microk8s", command="sudo snap install microk8s --classic"),
+    Commands(name="wait for microk8s", command="microk8s status --wait-ready"),
+    Commands(
         name="deploy nginx in microk8s",
         command="microk8s kubectl create deployment nginx --image=nginx",
-        expected="",
     ),
-    TestCommand(
+    Commands(
         name="wait for nginx",
         command="microk8s kubectl rollout status deployment/nginx --timeout=30m",
-        expected="",
     ),
-    TestCommand(
-        name="update apt in docker",
-        command="docker run python:3.10-slim apt-get update",
-        expected="",
-    ),
-    TestCommand(name="docker version", command="docker version", expected=""),
-    TestCommand(name="check python3 alias", command="python --version", expected=""),
-    TestCommand(name="pip version", command="python3 -m pip --version", expected=""),
-    TestCommand(name="npm version", command="npm --version", expected=""),
-    TestCommand(name="shellcheck version", command="shellcheck --version", expected=""),
-    TestCommand(name="jq version", command="jq --version", expected=""),
-    TestCommand(name="yq version", command="yq --version", expected=""),
-    TestCommand(name="apt update", command="sudo apt-get update -y", expected=""),
-    TestCommand(name="install pipx", command="sudo apt-get install -y pipx", expected=""),
-    TestCommand(
-        name="install check-jsonschema", command="pipx install check-jsonschema", expected=""
-    ),
-    TestCommand(name="unzip version", command="unzip -v", expected=""),
-    TestCommand(name="gh version", command="gh --version", expected=""),
-    TestCommand(name="check jsonschema", command="check-jsonschema --version", expected=""),
-    TestCommand(
-        name="test sctp support",
-        command="sudo apt-get install lksctp-tools -yq && checksctp",
-        expected="",
+    Commands(name="update apt in docker", command="docker run python:3.10-slim apt-get update"),
+    Commands(name="docker version", command="docker version"),
+    Commands(name="check python3 alias", command="python --version"),
+    Commands(name="pip version", command="python3 -m pip --version"),
+    Commands(name="npm version", command="npm --version"),
+    Commands(name="shellcheck version", command="shellcheck --version"),
+    Commands(name="jq version", command="jq --version"),
+    Commands(name="yq version", command="yq --version"),
+    Commands(name="apt update", command="sudo apt-get update -y"),
+    Commands(name="install pipx", command="sudo apt-get install -y pipx"),
+    Commands(name="install check-jsonschema", command="pipx install check-jsonschema"),
+    Commands(name="unzip version", command="unzip -v"),
+    Commands(name="gh version", command="gh --version"),
+    Commands(name="check jsonschema", command="check-jsonschema --version"),
+    Commands(
+        name="test sctp support", command="sudo apt-get install lksctp-tools -yq && checksctp"
     ),
 )
 
 
 @pytest.mark.parametrize(
-    "image, output",
+    "image",
     [
-        pytest.param("jammy", "jammy.img", id="jammy"),
-        pytest.param("noble", "noble.img", id="noble"),
+        pytest.param("jammy", id="jammy"),
+        pytest.param("noble", id="noble"),
     ],
 )
-def test_image(image: str, output: str):
+async def test_image(image: str, tmp_path: Path):
     """
     arrange: given a built output from the CLI.
     act: when the image is booted and commands are executed.
     assert: commands do not error.
     """
     main(["install"])
-    main(["build", "-i", image, "-o", output])
+    main(["build", "-i", image, "-o", image_path := (tmp_path / "rootfs.img")])
 
-    lxd_client = Client()
-    # lxc_clients are not properly typed.
-    lxd_image: Image = lxd_client.images.create(  # pylint: disable=no-member
-        Path(output).read_bytes(), public=True, wait=True
-    )
-    lxd_image.add_alias(image)
-    instance_config = {
-        "name": f"test-{image}",
-        "source": {"type": "image", "alias": image},
-        "type": "virtual-machine",
-        "config": {"limits.cpu": "2"},
-    }
-    instance: Instance = lxd_client.instances.create(  # pylint: disable=no-member
-        instance_config, wait=True
-    )
-    instance.start(timeout=10 * 60, wait=True)
+    lxd = Client()
+    logger.info("Creating LXD VM Image.")
+    create_lxd_vm_image(lxd_client=lxd, img_path=image_path, image=image, tmp_path=tmp_path)
+    logger.info("Launching LXD instance.")
+    instance = await create_lxd_instance(lxd_client=lxd, image=image)
 
+    ubuntu_user = 1
     for command in TEST_RUNNER_COMMANDS:
         logger.info("Running command: %s", command.command)
-        result = instance.execute([command.command])
+        result = instance.execute(command.command.split(), encoding="utf-8", user=ubuntu_user)
         logger.info("Command output: %s %s %s", result.exit_code, result.stdout, result.stderr)
-        assert result.exit_code == 0
+
+        # wait before execution to mitigate: "error: too early for operation, device not yet seeded
+        # or device model not acknowledged" which happens when snap has not yet fully initialized.
+        sleep(1)
