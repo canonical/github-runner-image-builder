@@ -46,7 +46,7 @@ def test__install_dependencies_package_not_found(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(
         subprocess,
         "run",
-        MagicMock(side_effect=subprocess.CalledProcessError(1, [], "Package not found.")),
+        MagicMock(side_effect=[None, subprocess.CalledProcessError(1, [], "Package not found.")]),
     )
 
     with pytest.raises(DependencyInstallError) as exc:
