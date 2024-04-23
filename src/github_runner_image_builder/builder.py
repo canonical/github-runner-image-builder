@@ -44,6 +44,9 @@ def _install_dependencies() -> None:
     """
     try:
         subprocess.run(
+            ["/usr/bin/apt-get", "update", "-y"], check=True, timeout=30 * 60
+        )  # nosec: B603
+        subprocess.run(
             ["/usr/bin/apt-get", "install", "-y", *APT_DEPENDENCIES], check=True, timeout=30 * 60
         )  # nosec: B603
     except subprocess.CalledProcessError as exc:
