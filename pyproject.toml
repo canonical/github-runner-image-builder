@@ -1,3 +1,6 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 [project]
 name = "github-runner-image-builder"
 version = "0.0.1"
