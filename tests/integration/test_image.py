@@ -88,12 +88,11 @@ async def test_image(image: str, tmp_path: Path):
     logger.info("Launching LXD instance.")
     instance = await create_lxd_instance(lxd_client=lxd, image=image)
 
-    ubuntu_user = 1
     for command in TEST_RUNNER_COMMANDS:
         logger.info("Running command: %s", command.command)
-        result = instance.execute(command.command.split(), encoding="utf-8", user=ubuntu_user)
+        result = instance.execute(["sudo", "--user", "ubuntu", *command.command.split()])
         logger.info("Command output: %s %s %s", result.exit_code, result.stdout, result.stderr)
-
+        assert result.exit_code == 0
         # wait before execution to mitigate: "error: too early for operation, device not yet seeded
         # or device model not acknowledged" which happens when snap has not yet fully initialized.
         sleep(1)
