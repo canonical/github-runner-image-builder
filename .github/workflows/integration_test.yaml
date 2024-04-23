@@ -19,5 +19,5 @@ jobs:
       - name: Run integration tests
         run: sudo $(which tox) -e integration
       - name: Setup tmate session
-          if: ${{ failure() }}
-          uses: mxschmitt/action-tmate@v3
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
