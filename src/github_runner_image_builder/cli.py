@@ -15,7 +15,6 @@ from github_runner_image_builder.config import (
     BaseImage,
     get_supported_arch,
 )
-from github_runner_image_builder.openstack_manager import OpenstackManager, UploadImageConfig
 
 
 # This is a class used for type hinting argparse.
@@ -25,16 +24,12 @@ class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-me
     Attributes:
         action: CLI action positional argument.
         base: The base image to build.
-        revision_history: Maximum number of images to keep before deletion.
-        cloud: The Openstack cloud name to use.
-        name: The image name to upload to openstack.
+        output: Path of the output image file.
     """
 
-    action: Literal["install", "build", "get-latest"]
+    action: Literal["install", "build"]
     base: Literal["22.04", "jammy", "24.04", "noble"]
-    revision_history: int
-    cloud: str
-    name: str
+    output: str
 
 
 def non_empty_string(value: str) -> str:
@@ -59,40 +54,19 @@ def _install() -> None:
     builder.setup_builder()
 
 
-def _get_latest(cloud: str, name: str) -> str:
-    """Fetch latest image from Openstack.
-
-    Args:
-        cloud: Openstack cloud name to load from clouds.yaml.
-        name: Openstack image name to upload as.
-
-    Returns:
-        The latest image ID if available.
-    """
-    with OpenstackManager(cloud_name=cloud) as manager:
-        return manager.get_latest_image_id(name=name) or ""
-
-
-def _build(base: str, cloud: str, name: str, num_revisions: int) -> str:
+def _build(base: str, output: str) -> None:
     """Build and upload image.
 
     Args:
         base: Ubuntu image base.
-        cloud: Openstack cloud name to load from clouds.yaml.
-        name: Openstack image name to upload as.
-        num_revisions: Maximum number of revisions to keep before deletion.
-
-    Returns:
-        The built image ID.
+        output: The build image output path.
     """
     arch = get_supported_arch()
-    output = Path("compressed.img")
-    build_config = BuildImageConfig(arch=arch, base_image=BaseImage.from_str(base), output=output)
+    output_path = Path(output)
+    build_config = BuildImageConfig(
+        arch=arch, base_image=BaseImage.from_str(base), output=output_path
+    )
     builder.build_image(config=build_config)
-
-    upload_config = UploadImageConfig(name=name, num_revisions=num_revisions, path=output)
-    with OpenstackManager(cloud_name=cloud) as manager:
-        return manager.upload_image(config=upload_config)
 
 
 def main(args: list[str] | None = None) -> None:
@@ -105,7 +79,6 @@ def main(args: list[str] | None = None) -> None:
     if args is None:  # pragma: nocover
         args = sys.argv[1:]
 
-    print(args)
     parser = argparse.ArgumentParser(
         prog="Github runner image builder CLI",
         description="Builds github runner image and uploads it to openstack.",
@@ -117,9 +90,6 @@ def main(args: list[str] | None = None) -> None:
         required=True,
     )
     subparsers.add_parser("install")
-    get_parser = subparsers.add_parser("get-latest")
-    get_parser.add_argument("-c", "--cloud", dest="cloud", required=True, type=non_empty_string)
-    get_parser.add_argument("-n", "--name", dest="name", required=True, type=non_empty_string)
     build_parser = subparsers.add_parser("build")
     build_parser.add_argument(
         "-i",
@@ -134,32 +104,13 @@ def main(args: list[str] | None = None) -> None:
         default="jammy",
     )
     build_parser.add_argument(
-        "-r",
-        "--revision-history",
-        dest="revision_history",
-        required=False,
-        default=5,
-        type=int,
-        choices=list(range(2, 11)),
+        "-o", "--output", dest="output", required=True, type=non_empty_string
     )
-    build_parser.add_argument("-c", "--cloud", dest="cloud", required=True, type=non_empty_string)
-    build_parser.add_argument("-n", "--name", dest="name", required=True, type=non_empty_string)
     parsed = cast(ActionsNamespace, parser.parse_args(args))
 
     if parsed.action == "install":
         _install()
         return
 
-    if parsed.action == "get-latest":
-        print(_get_latest(cloud=parsed.cloud, name=parsed.name))
-        return
-
-    print(
-        _build(
-            base=parsed.base,
-            cloud=parsed.cloud,
-            name=parsed.name,
-            num_revisions=parsed.revision_history,
-        )
-    )
+    _build(base=parsed.base, output=parsed.output)
     return
