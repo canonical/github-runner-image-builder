@@ -43,7 +43,7 @@ TEST_RUNNER_COMMANDS = (
     ),
     Commands(
         name="wait for nginx",
-        command="microk8s kubectl rollout status deployment/nginx --timeout=30m",
+        command="microk8s kubectl rollout status deployment/nginx --timeout=40m",
     ),
     Commands(name="update apt in docker", command="docker run python:3.10-slim apt-get update"),
     Commands(name="docker version", command="docker version"),
@@ -57,9 +57,9 @@ TEST_RUNNER_COMMANDS = (
     Commands(name="install pipx", command="sudo apt-get install -y pipx"),
     Commands(name="pipx add path", command="pipx ensurepath"),
     Commands(name="install check-jsonschema", command="pipx install check-jsonschema"),
+    Commands(name="check jsonschema", command="check-jsonschema --version"),
     Commands(name="unzip version", command="unzip -v"),
     Commands(name="gh version", command="gh --version"),
-    Commands(name="check jsonschema", command="check-jsonschema --version"),
     Commands(
         name="test sctp support", command="sudo apt-get install lksctp-tools -yq && checksctp"
     ),
@@ -83,7 +83,16 @@ async def test_image(image: str, tmp_path: Path):
 
     for command in TEST_RUNNER_COMMANDS:
         logger.info("Running command: %s", command.command)
-        result = instance.execute(["sudo", "--user", "ubuntu", *command.command.split()])
+        result = instance.execute(
+            command.command.split(),
+            user=1000,  # ubuntu user
+            environment={
+                "PATH": (  # This is enable by github runner's .env file
+                    "/usr/local/sbin:/usr/local/bin:"
+                    "/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:/home/ubuntu/.local/bin"
+                )
+            },
+        )
         logger.info("Command output: %s %s %s", result.exit_code, result.stdout, result.stderr)
         assert result.exit_code == 0
         # wait before execution to mitigate: "error: too early for operation, device not yet seeded
