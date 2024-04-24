@@ -80,17 +80,13 @@ async def test_image(image: str, tmp_path: Path):
     logger.info("Launching LXD instance.")
     instance = await create_lxd_instance(lxd_client=lxd, image=image)
 
-    for command in TEST_RUNNER_COMMANDS:
-        logger.info("Running command: %s", command.command)
+    for testcmd in TEST_RUNNER_COMMANDS:
+        logger.info("Running command: %s", testcmd.command)
+        # run command as ubuntu user. Passing in user argument would not be equivalent to a login
+        # shell which is missing critical environment variables such as $USER and the user groups
+        # are not properly loaded.
         result = instance.execute(
-            command.command.split(),
-            user=1000,  # ubuntu user
-            environment={
-                "PATH": (  # This is enable by github runner's .env file
-                    "/usr/local/sbin:/usr/local/bin:"
-                    "/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:/home/ubuntu/.local/bin"
-                )
-            },
+            ["su", "-s", "/bin/bash", "-c", *testcmd.command.split(), "ubuntu"]
         )
         logger.info("Command output: %s %s %s", result.exit_code, result.stdout, result.stderr)
         assert result.exit_code == 0

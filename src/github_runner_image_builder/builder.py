@@ -369,7 +369,7 @@ class SystemUserConfigurationError(Exception):
 
 UBUNTU_USER = "ubuntu"
 DOCKER_GROUP = "docker"
-MICROK8S_GROUP = "snap_microk8s"
+MICROK8S_GROUP = "microk8s"
 LXD_GROUP = "lxd"
 UBUNTU_HOME = Path("/home/ubuntu")
 
@@ -386,6 +386,8 @@ def _configure_system_users() -> None:
         )
         with (UBUNTU_HOME / ".profile").open("a") as profile_file:
             profile_file.write("PATH=$PATH:/home/ubuntu/.local/bin\n")
+        with (UBUNTU_HOME / ".bashrc").open("a") as bashrc_file:
+            bashrc_file.write("PATH=$PATH:/home/ubuntu/.local/bin\n")
         subprocess.run(  # nosec: B603
             ["/usr/sbin/groupadd", MICROK8S_GROUP], check=True, timeout=30
         )
@@ -577,13 +579,13 @@ def build_image(config: BuildImageConfig) -> None:
                 subprocess.run(
                     ["/usr/bin/apt-get", "update", "-y"],
                     check=True,
-                    timeout=60 * 5,
+                    timeout=60 * 10,
                     env={"DEBIAN_FRONTEND": "noninteractive"},
                 )  # nosec: B603
                 subprocess.run(  # nosec: B603
                     ["/usr/bin/apt-get", "install", "-y", *IMAGE_DEFAULT_APT_PACKAGES],
                     check=True,
-                    timeout=60 * 10,
+                    timeout=60 * 20,
                     env={"DEBIAN_FRONTEND": "noninteractive"},
                 )
                 _create_python_symlinks()
