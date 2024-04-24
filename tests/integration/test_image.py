@@ -8,7 +8,6 @@ from pathlib import Path
 from time import sleep
 from typing import NamedTuple
 
-import pytest
 from pylxd import Client
 
 from github_runner_image_builder.cli import main
@@ -66,13 +65,6 @@ TEST_RUNNER_COMMANDS = (
 )
 
 
-@pytest.mark.parametrize(
-    "image",
-    [
-        pytest.param("jammy", id="jammy"),
-        pytest.param("noble", id="noble"),
-    ],
-)
 async def test_image(image: str, tmp_path: Path):
     """
     arrange: given a built output from the CLI.

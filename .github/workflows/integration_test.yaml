@@ -7,6 +7,9 @@ jobs:
   integration-tests:
     name: Integration test
     runs-on: [self-hosted, X64, edge, jammy]
+    strategy:
+      matrix:
+        image: [jammy, noble]
     steps:
       - uses: actions/checkout@v3
       - uses: canonical/setup-lxd@v0.1.1
@@ -18,4 +21,4 @@ jobs:
       - name: Install tox
         run: sudo python -m pip install tox-gh>=1.2
       - name: Run integration tests
-        run: sudo $(which tox) -e integration
+        run: sudo $(which tox) -e integration -- --image=${{ matrix.image }}
