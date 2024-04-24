@@ -22,3 +22,6 @@ jobs:
         run: sudo python -m pip install tox-gh>=1.2
       - name: Run integration tests
         run: sudo $(which tox) -e integration -- --image=${{ matrix.image }}
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: canonical/action-tmate@main
