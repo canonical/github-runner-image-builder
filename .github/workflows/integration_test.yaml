@@ -9,7 +9,7 @@ jobs:
     runs-on: [ubuntu-latest]
     strategy:
       matrix:
-        image: [jammy, noble]
+        image: [self-hosted, large, jammy, X64]
     steps:
       - uses: actions/checkout@v3
       - uses: canonical/setup-lxd@v0.1.1
