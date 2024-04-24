@@ -85,6 +85,8 @@ async def test_image(image: str, tmp_path: Path):
         # run command as ubuntu user. Passing in user argument would not be equivalent to a login
         # shell which is missing critical environment variables such as $USER and the user groups
         # are not properly loaded.
-        result = instance.execute(["su", "-s", "/bin/bash", "-c", testcmd.command, "ubuntu"])
+        result = instance.execute(
+            ["su", "--shell", "/bin/bash", "--login", "ubuntu", "-c", testcmd.command]
+        )
         logger.info("Command output: %s %s %s", result.exit_code, result.stdout, result.stderr)
         assert result.exit_code == 0
