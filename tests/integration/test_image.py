@@ -29,7 +29,7 @@ class Commands(NamedTuple):
 
 # This is matched with E2E test run of github-runner-operator charm.
 TEST_RUNNER_COMMANDS = (
-    Commands(name="simple hello world", command="echo 'hello world'"),
+    Commands(name="simple hello world", command="echo hello world"),
     Commands(name="file permission to /usr/local/bin", command="ls -ld /usr/local/bin"),
     Commands(
         name="file permission to /usr/local/bin (create)", command="touch /usr/local/bin/test_file"
@@ -85,8 +85,6 @@ async def test_image(image: str, tmp_path: Path):
         # run command as ubuntu user. Passing in user argument would not be equivalent to a login
         # shell which is missing critical environment variables such as $USER and the user groups
         # are not properly loaded.
-        result = instance.execute(
-            ["su", "-s", "/bin/bash", "-c", *testcmd.command.split(), "ubuntu"]
-        )
+        result = instance.execute(["su", "-s", "/bin/bash", "-c", testcmd.command, "ubuntu"])
         logger.info("Command output: %s %s %s", result.exit_code, result.stdout, result.stderr)
         assert result.exit_code == 0
