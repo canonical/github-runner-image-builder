@@ -6,7 +6,7 @@ on:
 jobs:
   integration-tests:
     name: Integration test
-    runs-on: [self-hosted, X64, edge, jammy]
+    runs-on: [ubuntu-latest]
     strategy:
       matrix:
         image: [jammy, noble]
