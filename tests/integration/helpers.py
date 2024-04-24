@@ -166,7 +166,9 @@ def _instance_running(instance: Instance) -> bool:
     if state.status != "Running":
         return False
     try:
-        result = instance.execute(["snap", "model"])
+        result = instance.execute(
+            ["sudo", "--user", "ubuntu", "sudo", "systemctl", "is-active", "snapd.seeded.service"]
+        )
     except BrokenPipeError:
         return False
     return result.exit_code == 0
