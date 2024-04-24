@@ -55,6 +55,7 @@ TEST_RUNNER_COMMANDS = (
     Commands(name="yq version", command="yq --version"),
     Commands(name="apt update", command="sudo apt-get update -y"),
     Commands(name="install pipx", command="sudo apt-get install -y pipx"),
+    Commands(name="pipx add path", command="pipx ensurepath"),
     Commands(name="install check-jsonschema", command="pipx install check-jsonschema"),
     Commands(name="unzip version", command="unzip -v"),
     Commands(name="gh version", command="gh --version"),
