@@ -5,7 +5,6 @@
 
 import logging
 from pathlib import Path
-from time import sleep
 from typing import NamedTuple
 
 from pylxd import Client
@@ -95,6 +94,3 @@ async def test_image(image: str, tmp_path: Path):
         )
         logger.info("Command output: %s %s %s", result.exit_code, result.stdout, result.stderr)
         assert result.exit_code == 0
-        # wait before execution to mitigate: "error: too early for operation, device not yet seeded
-        # or device model not acknowledged" which happens when snap has not yet fully initialized.
-        sleep(1)

@@ -369,8 +369,9 @@ class SystemUserConfigurationError(Exception):
 
 UBUNTU_USER = "ubuntu"
 DOCKER_GROUP = "docker"
-MICROK8S_GROUP = "microk8s"
-UBUNUT_HOME_PATH = Path("/home/ubuntu")
+MICROK8S_GROUP = "snap_microk8s"
+LXD_GROUP = "lxd"
+UBUNTU_HOME = Path("/home/ubuntu")
 
 
 def _configure_system_users() -> None:
@@ -383,7 +384,7 @@ def _configure_system_users() -> None:
         subprocess.run(  # nosec: B603
             ["/usr/sbin/useradd", "-m", UBUNTU_USER], check=True, timeout=30
         )
-        with (UBUNUT_HOME_PATH / ".profile").open("a") as profile_file:
+        with (UBUNTU_HOME / ".profile").open("a") as profile_file:
             profile_file.write("PATH=$PATH:/home/ubuntu/.local/bin\n")
         subprocess.run(  # nosec: B603
             ["/usr/sbin/groupadd", MICROK8S_GROUP], check=True, timeout=30
@@ -393,6 +394,9 @@ def _configure_system_users() -> None:
         )
         subprocess.run(  # nosec: B603
             ["/usr/sbin/usermod", "-aG", MICROK8S_GROUP, UBUNTU_USER], check=True, timeout=30
+        )
+        subprocess.run(  # nosec: B603
+            ["/usr/sbin/usermod", "-aG", LXD_GROUP, UBUNTU_USER], check=True, timeout=30
         )
         subprocess.run(  # nosec: B603
             ["/usr/bin/chmod", "777", "/usr/local/bin"], check=True, timeout=30

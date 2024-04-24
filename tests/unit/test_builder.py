@@ -366,11 +366,11 @@ def test__configure_system_users(monkeypatch: pytest.MonkeyPatch):
     act: when _configure_system_users is called.
     assert: SystemUserConfigurationError is raised.
     """
-    monkeypatch.setattr(builder, "UBUNUT_HOME_PATH", MagicMock())
+    monkeypatch.setattr(builder, "UBUNTU_HOME", MagicMock())
     monkeypatch.setattr(
         builder.subprocess,
         "run",
-        MagicMock(side_effect=[*([None] * 4), subprocess.SubprocessError("Failed to add group.")]),
+        MagicMock(side_effect=[*([None] * 5), subprocess.SubprocessError("Failed to add group.")]),
     )
 
     with pytest.raises(SystemUserConfigurationError) as exc:
