@@ -6,10 +6,10 @@ on:
 jobs:
   integration-tests:
     name: Integration test
-    runs-on: [ubuntu-latest]
+    runs-on: [self-hosted, large, jammy, X64]
     strategy:
       matrix:
-        image: [self-hosted, large, jammy, X64]
+        image: [jammy, noble]
     steps:
       - uses: actions/checkout@v3
       - uses: canonical/setup-lxd@v0.1.1
@@ -24,4 +24,4 @@ jobs:
         run: sudo $(which tox) -e integration -- --image=${{ matrix.image }}
       - name: Setup tmate session
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: canonical/action-tmate@main
