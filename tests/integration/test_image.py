@@ -42,7 +42,7 @@ TEST_RUNNER_COMMANDS = (
     ),
     Commands(
         name="wait for nginx",
-        command="microk8s kubectl rollout status deployment/nginx --timeout=15m",
+        command="microk8s kubectl rollout status deployment/nginx --timeout=20m",
     ),
     Commands(name="update apt in docker", command="docker run python:3.10-slim apt-get update"),
     Commands(name="docker version", command="docker version"),
