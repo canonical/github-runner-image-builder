@@ -113,4 +113,3 @@ def main(args: list[str] | None = None) -> None:
         return
 
     _build(base=parsed.base, output=parsed.output)
-    return

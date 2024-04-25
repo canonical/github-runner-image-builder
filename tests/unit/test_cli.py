@@ -37,7 +37,7 @@ def test__install(monkeypatch: pytest.MonkeyPatch):
 def test__build(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched builder.setup_builder function.
-    act: when _install is called.
+    act: when _build is called.
     assert: the mock function is called.
     """
     monkeypatch.setattr(cli.builder, "build_image", (builder_mock := MagicMock()))

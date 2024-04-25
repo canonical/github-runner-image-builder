@@ -136,6 +136,11 @@ def _post_vm_img(
 def create_lxd_vm_image(lxd_client: Client, img_path: Path, image: str, tmp_path: Path) -> Image:
     """Create LXD VM image.
 
+    1. Creates the metadata.tar.gz file with the corresponding Ubuntu OS image and a pre-defined
+    templates directory. See testdata/templates.
+    2. Uploads the created VM image to LXD - metadata and image of qcow2 format is required.
+    3. Tags the uploaded image with an alias for test use.
+
     Args:
         lxd_client: PyLXD client.
         img_path: qcow2 (.img) file path to upload.

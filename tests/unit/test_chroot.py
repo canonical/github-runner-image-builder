@@ -23,7 +23,7 @@ def test_chroot_bind_fail(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched subprocess run call that fails.
     act: when chroot context is entered.
-    assert: MoutError is raised.
+    assert: MountError is raised.
     """
     monkeypatch.setattr(
         subprocess,
@@ -45,7 +45,7 @@ def test_chroot_unmount_fail(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched subprocess run call that fails.
     act: when chroot context is exited.
-    assert: MoutError is raised.
+    assert: MountError is raised.
     """
     monkeypatch.setattr(os, "chroot", MagicMock())
     monkeypatch.setattr(os, "chdir", MagicMock())
