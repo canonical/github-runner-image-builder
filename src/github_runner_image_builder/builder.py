@@ -208,7 +208,7 @@ def _download_cloud_image(arch: Arch, base_image: BaseImage) -> Path:
             CLOUD_IMAGE_FILE_NAME.format(BASE_IMAGE=base_image.value, BIN_ARCH=bin_arch),
         )
         return Path(image_path)
-    except urllib.error.ContentTooShortError as exc:
+    except (urllib.error.ContentTooShortError, urllib.error.HTTPError) as exc:
         raise CloudImageDownloadError from exc
 
 
