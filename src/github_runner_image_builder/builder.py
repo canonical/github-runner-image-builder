@@ -87,14 +87,14 @@ def setup_builder() -> None:
 
 
 class UnsupportedArchitectureError(Exception):
-    """Raised when given machine charm architecture is unsupported.
+    """Raised when given machine architecture is unsupported.
 
     Attributes:
         arch: The current machine architecture.
     """
 
     def __init__(self, arch: str) -> None:
-        """Initialize a new instance of the CharmConfigInvalidError exception.
+        """Initialize a new instance of the UnsupportedArchitectureError exception.
 
         Args:
             arch: The current machine architecture.

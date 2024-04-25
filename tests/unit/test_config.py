@@ -29,7 +29,7 @@ from github_runner_image_builder.config import (
 )
 def test_get_supported_arch_unsupported_arch(arch: str, monkeypatch: pytest.MonkeyPatch):
     """
-    arrange: given architectures that are not supported by the charm.
+    arrange: given architectures that are not supported by the app.
     act: when get_supported_arch is called.
     assert: UnsupportedArchitectureError is raised
     """
@@ -51,7 +51,7 @@ def test_get_supported_arch_unsupported_arch(arch: str, monkeypatch: pytest.Monk
 )
 def test_get_supported_arch(arch: str, expected_arch: Arch, monkeypatch: pytest.MonkeyPatch):
     """
-    arrange: given architectures that is supported by the charm.
+    arrange: given architectures that is supported by the app.
     act: when get_supported_arch is called.
     assert: expected architecture is returned.
     """

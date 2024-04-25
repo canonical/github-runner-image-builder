@@ -23,7 +23,7 @@ class Arch(str, Enum):
 
 
 class UnsupportedArchitectureError(Exception):
-    """Raised when given machine charm architecture is unsupported.
+    """Raised when given machine architecture is unsupported.
 
     Attributes:
         arch: The current machine architecture.
@@ -38,7 +38,7 @@ class UnsupportedArchitectureError(Exception):
         return f"UnsupportedArchitectureError: {self.arch}"
 
     def __init__(self, arch: str) -> None:
-        """Initialize a new instance of the CharmConfigInvalidError exception.
+        """Initialize a new instance of the UnsupportedArchitectureError exception.
 
         Args:
             arch: The current machine architecture.
@@ -69,9 +69,6 @@ def get_supported_arch() -> Arch:
             raise UnsupportedArchitectureError(arch=arch)
 
 
-LTS_IMAGE_VERSION_TAG_MAP = {"22.04": "jammy", "24.04": "noble"}
-
-
 class BaseImage(str, Enum):
     """The ubuntu OS base image to build and deploy runners on.
 
@@ -85,14 +82,17 @@ class BaseImage(str, Enum):
 
     @classmethod
     def from_str(cls, tag_or_name: str) -> "BaseImage":
-        """Retrieve the base image tag from charm.
+        """Retrieve the base image tag from input.
 
         Args:
             tag_or_name: The base image string option.
 
         Returns:
-            The base image configuration of the charm.
+            The base image configuration of the app.
         """
         if tag_or_name in LTS_IMAGE_VERSION_TAG_MAP:
             return cls(LTS_IMAGE_VERSION_TAG_MAP[tag_or_name])
         return cls(tag_or_name)
+
+
+LTS_IMAGE_VERSION_TAG_MAP = {"22.04": BaseImage.JAMMY.value, "24.04": BaseImage.NOBLE.value}

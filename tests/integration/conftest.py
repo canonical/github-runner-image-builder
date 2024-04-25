@@ -7,7 +7,7 @@ import pytest
 
 @pytest.fixture(scope="module", name="image")
 def image_fixture(pytestconfig: pytest.Config) -> str:
-    """Path to the built charm."""
+    """The ubuntu image base to build from."""
     image = pytestconfig.getoption("--image")
     assert image, "Please specify the --image command line option"
     return image

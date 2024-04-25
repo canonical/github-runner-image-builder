@@ -1,7 +1,7 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Fixtures for github runner charm."""
+"""Fixtures for github runner image builder app."""
 
 
 from pytest import Parser
