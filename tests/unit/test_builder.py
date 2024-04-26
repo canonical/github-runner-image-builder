@@ -19,6 +19,7 @@ from github_runner_image_builder.builder import (
     BuilderSetupError,
     BuildImageError,
     ChrootBaseError,
+    CleanBuildStateError,
     CloudImageDownloadError,
     DependencyInstallError,
     ExternalPackageInstallError,
@@ -140,6 +141,25 @@ def test__get_supported_runner_arch(arch: Arch, expected: SupportedCloudImageArc
     assert: Expected architecture in cloud_images format is returned.
     """
     assert builder._get_supported_runner_arch(arch) == expected
+
+
+def test__clean_build_state_error(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a magic mocked IMAGE_MOUNT_DIR and subprocess call that raises exceptions.
+    act: when _clean_build_state is called.
+    assert: CleanBuildStateError is raised.
+    """
+    mock_mount_dir = MagicMock()
+    mock_subprocess_run = MagicMock(
+        side_effect=subprocess.CalledProcessError(1, [], "", "qemu-nbd error")
+    )
+    monkeypatch.setattr(builder, "IMAGE_MOUNT_DIR", mock_mount_dir)
+    monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
+
+    with pytest.raises(CleanBuildStateError) as exc:
+        builder._clean_build_state()
+
+    assert "qemu-nbd error" in str(exc.getrepr())
 
 
 def test__clean_build_state(monkeypatch: pytest.MonkeyPatch):

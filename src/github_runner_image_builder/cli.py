@@ -6,30 +6,16 @@ import argparse
 import itertools
 import sys
 from pathlib import Path
-from typing import Literal, cast
+from typing import cast
 
 from github_runner_image_builder import builder
 from github_runner_image_builder.builder import BuildImageConfig
 from github_runner_image_builder.config import (
     LTS_IMAGE_VERSION_TAG_MAP,
+    ActionsNamespace,
     BaseImage,
     get_supported_arch,
 )
-
-
-# This is a class used for type hinting argparse.
-class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-methods
-    """Action positional argument namespace.
-
-    Attributes:
-        action: CLI action positional argument.
-        base: The base image to build.
-        output: Path of the output image file.
-    """
-
-    action: Literal["install", "build"]
-    base: Literal["22.04", "jammy", "24.04", "noble"]
-    output: str
 
 
 def non_empty_string(value: str) -> str:

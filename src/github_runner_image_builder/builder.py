@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Literal
 
 from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextManager
-from github_runner_image_builder.config import Arch, BaseImage
+from github_runner_image_builder.config import BIN_ARCH_MAP, Arch, BaseImage
 from github_runner_image_builder.utils import retry
 
 logger = logging.getLogger(__name__)
@@ -31,8 +31,12 @@ APT_DEPENDENCIES = [
 ]
 
 
+class ImageBuilderBaseError(Exception):
+    """Represents an error with any builder related executions."""
+
+
 # nosec: B603: All subprocess runs are run with trusted executables.
-class DependencyInstallError(Exception):
+class DependencyInstallError(ImageBuilderBaseError):
     """Represents an error while installing required dependencies."""
 
 
@@ -47,13 +51,15 @@ def _install_dependencies() -> None:
             ["/usr/bin/apt-get", "update", "-y"], check=True, timeout=30 * 60
         )  # nosec: B603
         subprocess.run(
-            ["/usr/bin/apt-get", "install", "-y", *APT_DEPENDENCIES], check=True, timeout=30 * 60
+            ["/usr/bin/apt-get", "install", "-y", "--no-install-recommends", *APT_DEPENDENCIES],
+            check=True,
+            timeout=30 * 60,
         )  # nosec: B603
     except subprocess.CalledProcessError as exc:
         raise DependencyInstallError from exc
 
 
-class NetworkBlockDeviceError(Exception):
+class NetworkBlockDeviceError(ImageBuilderBaseError):
     """Represents an error while enabling network block device."""
 
 
@@ -69,7 +75,7 @@ def _enable_nbd() -> None:
         raise NetworkBlockDeviceError from exc
 
 
-class BuilderSetupError(Exception):
+class BuilderSetupError(ImageBuilderBaseError):
     """Represents an error while setting up host machine as builder."""
 
 
@@ -82,11 +88,11 @@ def setup_builder() -> None:
     try:
         _install_dependencies()
         _enable_nbd()
-    except (NetworkBlockDeviceError, DependencyInstallError) as exc:
+    except ImageBuilderBaseError as exc:
         raise BuilderSetupError from exc
 
 
-class UnsupportedArchitectureError(Exception):
+class UnsupportedArchitectureError(ImageBuilderBaseError):
     """Raised when given machine architecture is unsupported.
 
     Attributes:
@@ -94,7 +100,7 @@ class UnsupportedArchitectureError(Exception):
     """
 
     def __init__(self, arch: str) -> None:
-        """Initialize a new instance of the UnsupportedArchitectureError exception.
+        """Initialize a new instance of the UnsupportedArchitectureError.
 
         Args:
             arch: The current machine architecture.
@@ -137,49 +143,60 @@ NETWORK_BLOCK_DEVICE_PATH = Path("/dev/nbd0")
 NETWORK_BLOCK_DEVICE_PARTITION_PATH = Path("/dev/nbd0p1")
 
 
+class CleanBuildStateError(ImageBuilderBaseError):
+    """Represents an error cleaning up build state."""
+
+
 def _clean_build_state() -> None:
-    """Remove any artefacts left by previous build."""
+    """Remove any artefacts left by previous build.
+
+    Raises:
+        CleanBuildStateError: if there was an error cleaning up the build state.
+    """
     # The commands will fail if artefacts do not exist and hence there is no need to check the
     # output of subprocess runs.
     IMAGE_MOUNT_DIR.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "dev")], timeout=30, check=False
-    )  # nosec: B603
-    subprocess.run(
-        ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "proc")], timeout=30, check=False
-    )  # nosec: B603
-    subprocess.run(
-        ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "sys")], timeout=30, check=False
-    )  # nosec: B603
-    subprocess.run(
-        ["/usr/bin/umount", str(IMAGE_MOUNT_DIR)], timeout=30, check=False
-    )  # nosec: B603
-    subprocess.run(
-        ["/usr/bin/umount", str(NETWORK_BLOCK_DEVICE_PATH)], timeout=30, check=False
-    )  # nosec: B603
-    subprocess.run(  # nosec: B603
-        ["/usr/bin/umount", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)], timeout=30, check=False
-    )
-    subprocess.run(  # nosec: B603
-        ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PATH)],
-        timeout=30,
-        check=False,
-    )
-    subprocess.run(  # nosec: B603
-        ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
-        timeout=30,
-        check=False,
-    )
+    try:
+        subprocess.run(
+            ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "dev")], timeout=30, check=False
+        )  # nosec: B603
+        subprocess.run(
+            ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "proc")], timeout=30, check=False
+        )  # nosec: B603
+        subprocess.run(
+            ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "sys")], timeout=30, check=False
+        )  # nosec: B603
+        subprocess.run(
+            ["/usr/bin/umount", str(IMAGE_MOUNT_DIR)], timeout=30, check=False
+        )  # nosec: B603
+        subprocess.run(
+            ["/usr/bin/umount", str(NETWORK_BLOCK_DEVICE_PATH)], timeout=30, check=False
+        )  # nosec: B603
+        subprocess.run(  # nosec: B603
+            ["/usr/bin/umount", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)], timeout=30, check=False
+        )
+        subprocess.run(  # nosec: B603
+            ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PATH)],
+            timeout=30,
+            check=False,
+        )
+        subprocess.run(  # nosec: B603
+            ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
+            timeout=30,
+            check=False,
+        )
+    except subprocess.SubprocessError as exc:
+        raise CleanBuildStateError from exc
 
 
 CLOUD_IMAGE_URL_TMPL = (
     "https://cloud-images.ubuntu.com/{BASE_IMAGE}/current/"
     "{BASE_IMAGE}-server-cloudimg-{BIN_ARCH}.img"
 )
-CLOUD_IMAGE_FILE_NAME = "{BASE_IMAGE}-server-cloudimg-{BIN_ARCH}.img"
+CLOUD_IMAGE_FILE_NAME_TMPL = "{BASE_IMAGE}-server-cloudimg-{BIN_ARCH}.img"
 
 
-class CloudImageDownloadError(Exception):
+class CloudImageDownloadError(ImageBuilderBaseError):
     """Represents an error downloading cloud image."""
 
 
@@ -205,15 +222,19 @@ def _download_cloud_image(arch: Arch, base_image: BaseImage) -> Path:
         # The ubuntu-cloud-images is a trusted source
         image_path, _ = urllib.request.urlretrieve(  # nosec: B310
             CLOUD_IMAGE_URL_TMPL.format(BASE_IMAGE=base_image.value, BIN_ARCH=bin_arch),
-            CLOUD_IMAGE_FILE_NAME.format(BASE_IMAGE=base_image.value, BIN_ARCH=bin_arch),
+            CLOUD_IMAGE_FILE_NAME_TMPL.format(BASE_IMAGE=base_image.value, BIN_ARCH=bin_arch),
         )
         return Path(image_path)
-    except (urllib.error.ContentTooShortError, urllib.error.HTTPError) as exc:
+    except urllib.error.URLError as exc:
         raise CloudImageDownloadError from exc
 
 
-class ImageResizeError(Exception):
+class ImageResizeError(ImageBuilderBaseError):
     """Represents an error while resizing the image."""
+
+
+# This amount is the smallest increase that caters for the installations within this image.
+RESIZE_AMOUNT = "+1.5G"
 
 
 def _resize_cloud_img(cloud_image_path: Path) -> None:
@@ -227,13 +248,15 @@ def _resize_cloud_img(cloud_image_path: Path) -> None:
     """
     try:
         subprocess.run(  # nosec: B603
-            ["/usr/bin/qemu-img", "resize", str(cloud_image_path), "+1.5G"], check=True, timeout=60
+            ["/usr/bin/qemu-img", "resize", str(cloud_image_path), RESIZE_AMOUNT],
+            check=True,
+            timeout=60,
         )
     except subprocess.CalledProcessError as exc:
         raise ImageResizeError from exc
 
 
-class ImageMountError(Exception):
+class ImageMountError(ImageBuilderBaseError):
     """Represents an error while mounting the image to network block device."""
 
 
@@ -283,7 +306,7 @@ def _replace_mounted_resolv_conf() -> None:
     shutil.copy(str(HOST_RESOLV_CONF_PATH), str(MOUNTED_RESOLV_CONF_PATH))
 
 
-class ResizePartitionError(Exception):
+class ResizePartitionError(ImageBuilderBaseError):
     """Represents an error while resizing network block device partitions."""
 
 
@@ -321,7 +344,7 @@ APT_UPGRADE_TIMER = "apt-daily-upgrade.timer"
 APT_UPGRAD_SVC = "apt-daily-upgrade.service"
 
 
-class UnattendedUpgradeDisableError(Exception):
+class UnattendedUpgradeDisableError(ImageBuilderBaseError):
     """Represents an error while disabling unattended-upgrade related services."""
 
 
@@ -363,7 +386,7 @@ def _disable_unattended_upgrades() -> None:
         raise UnattendedUpgradeDisableError from exc
 
 
-class SystemUserConfigurationError(Exception):
+class SystemUserConfigurationError(ImageBuilderBaseError):
     """Represents an error while adding user to chroot env."""
 
 
@@ -385,9 +408,9 @@ def _configure_system_users() -> None:
             ["/usr/sbin/useradd", "-m", UBUNTU_USER], check=True, timeout=30
         )
         with (UBUNTU_HOME / ".profile").open("a") as profile_file:
-            profile_file.write("PATH=$PATH:/home/ubuntu/.local/bin\n")
+            profile_file.write(f"PATH=$PATH:{UBUNTU_HOME}/.local/bin\n")
         with (UBUNTU_HOME / ".bashrc").open("a") as bashrc_file:
-            bashrc_file.write("PATH=$PATH:/home/ubuntu/.local/bin\n")
+            bashrc_file.write(f"PATH=$PATH:{UBUNTU_HOME}/.local/bin\n")
         subprocess.run(  # nosec: B603
             ["/usr/sbin/groupadd", MICROK8S_GROUP], check=True, timeout=30
         )
@@ -419,8 +442,11 @@ YQ_EXTRACT_CHECKSUM_SCRIPT_URL = (
 )
 
 
-class ExternalPackageInstallError(Exception):
+class ExternalPackageInstallError(ImageBuilderBaseError):
     """Represents an error installilng external packages."""
+
+
+BUF_SIZE = 65536  # 64kb
 
 
 def _validate_checksum(file: Path, expected_checksum: str) -> bool:
@@ -434,11 +460,13 @@ def _validate_checksum(file: Path, expected_checksum: str) -> bool:
         True if the checksums match. False otherwise.
     """
     sha256 = hashlib.sha256()
-    sha256.update(file.read_bytes())
+    with file.open(mode="rb") as checksum_file:
+        while True:
+            data = checksum_file.read(BUF_SIZE)
+            if not data:
+                break
+            sha256.update(data)
     return sha256.hexdigest() == expected_checksum
-
-
-BIN_ARCH_MAP: dict[Arch, str] = {Arch.ARM64: "arm64", Arch.X64: "amd64"}
 
 
 def _install_external_packages(arch: Arch) -> None:
@@ -487,7 +515,7 @@ def _install_external_packages(arch: Arch) -> None:
         raise ExternalPackageInstallError from exc
 
 
-class ImageCompressError(Exception):
+class ImageCompressError(ImageBuilderBaseError):
     """Represents an error while compressing cloud-img."""
 
 
@@ -539,7 +567,7 @@ class BuildImageConfig:
     output: Path
 
 
-class BuildImageError(Exception):
+class BuildImageError(ImageBuilderBaseError):
     """Represents an error while building the image."""
 
 
@@ -554,8 +582,8 @@ def build_image(config: BuildImageConfig) -> None:
     """
     logger.info("Clean build state.")
     with redirect_stdout(sys.stderr):
-        _clean_build_state()
         try:
+            _clean_build_state()
             logger.info("Downloading cloud image.")
             cloud_image_path = _download_cloud_image(
                 arch=config.arch, base_image=config.base_image
@@ -568,7 +596,7 @@ def build_image(config: BuildImageConfig) -> None:
             _replace_mounted_resolv_conf()
             logger.info("Resizing partitions.")
             _resize_mount_partitions()
-        except (CloudImageDownloadError, ImageMountError, ResizePartitionError) as exc:
+        except ImageBuilderBaseError as exc:
             raise BuildImageError from exc
 
         try:
@@ -583,7 +611,13 @@ def build_image(config: BuildImageConfig) -> None:
                     env={"DEBIAN_FRONTEND": "noninteractive"},
                 )  # nosec: B603
                 subprocess.run(  # nosec: B603
-                    ["/usr/bin/apt-get", "install", "-y", *IMAGE_DEFAULT_APT_PACKAGES],
+                    [
+                        "/usr/bin/apt-get",
+                        "install",
+                        "-y",
+                        "--no-install-recommends",
+                        *IMAGE_DEFAULT_APT_PACKAGES,
+                    ],
                     check=True,
                     timeout=60 * 20,
                     env={"DEBIAN_FRONTEND": "noninteractive"},
@@ -592,18 +626,12 @@ def build_image(config: BuildImageConfig) -> None:
                 _disable_unattended_upgrades()
                 _configure_system_users()
                 _install_external_packages(arch=config.arch)
-        except (
-            ChrootBaseError,
-            subprocess.CalledProcessError,
-            UnattendedUpgradeDisableError,
-            SystemUserConfigurationError,
-            ExternalPackageInstallError,
-        ) as exc:
+        except (ImageBuilderBaseError, ChrootBaseError) as exc:
             raise BuildImageError from exc
 
         try:
             _clean_build_state()
             logger.info("Compressing image")
             _compress_image(cloud_image_path, config.output)
-        except ImageCompressError as exc:
+        except ImageBuilderBaseError as exc:
             raise BuildImageError from exc

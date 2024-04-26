@@ -3,11 +3,28 @@
 
 """Module containing configurations."""
 
+import argparse
 import logging
 import platform
 from enum import Enum
+from typing import Literal
 
 logger = logging.getLogger(__name__)
+
+
+# This is a class used for type hinting argparse.
+class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-methods
+    """Action positional argument namespace.
+
+    Attributes:
+        action: CLI action positional argument.
+        base: The base image to build.
+        output: Path of the output image file.
+    """
+
+    action: Literal["install", "build"]
+    base: Literal["22.04", "jammy", "24.04", "noble"]
+    output: str
 
 
 class Arch(str, Enum):
@@ -48,6 +65,7 @@ class UnsupportedArchitectureError(Exception):
 
 ARCHITECTURES_ARM64 = {"aarch64", "arm64"}
 ARCHITECTURES_X86 = {"x86_64"}
+BIN_ARCH_MAP: dict[Arch, str] = {Arch.ARM64: "arm64", Arch.X64: "amd64"}
 
 
 def get_supported_arch() -> Arch:
