@@ -437,6 +437,7 @@ def _install_external_packages() -> None:
         ExternalPackageInstallError: If there was an error installing external package.
     """
     try:
+        # 2024/04/26 There's a potential security risk here, npm is subject to toolchain attacks.
         subprocess.run(
             ["/usr/bin/npm", "install", "--global", "yarn"], check=True, timeout=60 * 5
         )  # nosec: B603
