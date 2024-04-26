@@ -511,7 +511,7 @@ def _install_external_packages(arch: Arch) -> None:
             raise ExternalPackageInstallError("Invalid checksum")
         yq_path.chmod(755)
         yq_path.rename("/usr/bin/yq")
-    except (subprocess.SubprocessError, urllib.error.ContentTooShortError) as exc:
+    except (subprocess.SubprocessError, urllib.error.URLError) as exc:
         raise ExternalPackageInstallError from exc
 
 
