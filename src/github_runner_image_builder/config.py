@@ -65,7 +65,6 @@ class UnsupportedArchitectureError(Exception):
 
 ARCHITECTURES_ARM64 = {"aarch64", "arm64"}
 ARCHITECTURES_X86 = {"x86_64"}
-BIN_ARCH_MAP: dict[Arch, str] = {Arch.ARM64: "arm64", Arch.X64: "amd64"}
 
 
 def get_supported_arch() -> Arch:

@@ -32,9 +32,10 @@ from github_runner_image_builder.builder import (
     SystemUserConfigurationError,
     UnattendedUpgradeDisableError,
     UnsupportedArchitectureError,
+    YQBuildError,
     os,
+    shutil,
     subprocess,
-    urllib,
 )
 
 
@@ -47,7 +48,9 @@ def test__install_dependencies_package_not_found(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(
         subprocess,
         "run",
-        MagicMock(side_effect=[None, subprocess.CalledProcessError(1, [], "Package not found.")]),
+        MagicMock(
+            side_effect=[None, None, subprocess.CalledProcessError(1, [], "Package not found.")]
+        ),
     )
 
     with pytest.raises(DependencyInstallError) as exc:
@@ -341,6 +344,39 @@ def test__resize_mount_partitions(monkeypatch: pytest.MonkeyPatch):
     assert "resize error" in str(exc.getrepr())
 
 
+def test__install_yq_error(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched subprocess.run function that raises an error.
+    act: when _install_yq is called.
+    assert: YQBuildError is raised.
+    """
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        MagicMock(side_effect=[None, subprocess.CalledProcessError(1, [], "", "Go build error.")]),
+    )
+
+    with pytest.raises(YQBuildError) as exc:
+        builder._install_yq()
+
+    assert "Go build error" in str(exc.getrepr())
+
+
+def test__install_yq(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched yq install mock functions.
+    act: when _install_yq is called.
+    assert: Mock functions are called.
+    """
+    monkeypatch.setattr(subprocess, "run", (run_mock := MagicMock()))
+    monkeypatch.setattr(shutil, "copy", (copy_mock := MagicMock()))
+
+    builder._install_yq()
+
+    run_mock.assert_called()
+    copy_mock.assert_called()
+
+
 def test__create_python_symlinks(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched os.symlink function.
@@ -399,76 +435,28 @@ def test__configure_system_users(monkeypatch: pytest.MonkeyPatch):
     assert "Failed to add group." in str(exc.getrepr())
 
 
-def test__validate_checksum(tmp_path: Path):
+def test__install_external_packages_error(monkeypatch: pytest.MonkeyPatch):
     """
-    arrange: given a path with contents "test".
-    act: when _validate_checksum is called.
-    assert: expected checksum is matched.
+    arrange: given a monkeypatched subprocess.run that raises an error.
+    act: when _install_external_packages is called.
+    assert: ExternalPackageInstallError is raised.
     """
-    tmp_file = tmp_path / "test.txt"
-    tmp_file.write_text("test", encoding="utf-8")
-    assert builder._validate_checksum(
-        file=tmp_file,
-        expected_checksum="9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    # The test mocks use similar codes.
+    monkeypatch.setattr(  # pylint: disable=duplicate-code
+        subprocess,
+        "run",
+        MagicMock(
+            side_effect=[
+                None,
+                subprocess.CalledProcessError(1, [], "", "Failed to clean npm cache."),
+            ]
+        ),
     )
 
-
-@pytest.mark.parametrize(
-    "patch_obj, sub_func, mock, expected_message",
-    [
-        pytest.param(
-            subprocess,
-            "run",
-            MagicMock(side_effect=[None, subprocess.SubprocessError("Cache clean failed")]),
-            "Cache clean failed",
-            id="Cache clean failed",
-        ),
-        pytest.param(
-            builder.urllib.request,
-            "urlretrieve",
-            MagicMock(
-                side_effect=[
-                    None,
-                    None,
-                    None,
-                    builder.urllib.error.ContentTooShortError("Network interrupted", ()),
-                ]
-            ),
-            "Network interrupted",
-            id="Network interrupted",
-        ),
-        pytest.param(
-            builder,
-            "_validate_checksum",
-            MagicMock(return_value=False),
-            "Invalid checksum",
-            id="Invalid checksum",
-        ),
-    ],
-)
-def test__install_external_packages_error(
-    patch_obj: Any,
-    sub_func: str,
-    mock: MagicMock,
-    expected_message: str,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """
-    arrange: given a monkeypatched functions of _install_external_packages that raises exceptions.
-    act: when _install_external_packages is called.
-    assert: A ExternalPackageInstallError is raised.
-    """
-    monkeypatch.setattr(subprocess, "run", MagicMock())
-    monkeypatch.setattr(subprocess, "check_output", MagicMock())
-    monkeypatch.setattr(urllib.request, "urlretrieve", MagicMock())
-    monkeypatch.setattr(builder, "_validate_checksum", MagicMock())
-    monkeypatch.setattr(builder, "Path", MagicMock())
-    monkeypatch.setattr(patch_obj, sub_func, mock)
-
     with pytest.raises(ExternalPackageInstallError) as exc:
-        builder._install_external_packages(arch=Arch.ARM64)
+        builder._install_external_packages()
 
-    assert expected_message in str(exc.getrepr())
+    assert "Failed to clean npm cache." in str(exc.getrepr())
 
 
 def test__install_external_packages(monkeypatch: pytest.MonkeyPatch):
@@ -478,12 +466,8 @@ def test__install_external_packages(monkeypatch: pytest.MonkeyPatch):
     assert: The function exists without raising an error.
     """
     monkeypatch.setattr(subprocess, "run", MagicMock())
-    monkeypatch.setattr(subprocess, "check_output", MagicMock())
-    monkeypatch.setattr(urllib.request, "urlretrieve", MagicMock())
-    monkeypatch.setattr(builder, "_validate_checksum", MagicMock())
-    monkeypatch.setattr(builder, "Path", MagicMock())
 
-    assert builder._install_external_packages(arch=Arch.ARM64) is None
+    assert builder._install_external_packages() is None
 
 
 def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):
@@ -550,6 +534,7 @@ def test_build_image_error(
     monkeypatch.setattr(builder, "_mount_image_to_network_block_device", MagicMock())
     monkeypatch.setattr(builder, "_resize_mount_partitions", MagicMock())
     monkeypatch.setattr(builder, "_replace_mounted_resolv_conf", MagicMock())
+    monkeypatch.setattr(builder, "_install_yq", MagicMock())
     monkeypatch.setattr(builder, "ChrootContextManager", MagicMock())
     monkeypatch.setattr(builder.subprocess, "run", MagicMock())
     monkeypatch.setattr(builder, "_create_python_symlinks", MagicMock())
