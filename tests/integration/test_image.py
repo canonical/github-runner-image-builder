@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import NamedTuple
 
+import pytest
 from pylxd import Client
 
 from github_runner_image_builder.cli import main
@@ -65,6 +66,7 @@ TEST_RUNNER_COMMANDS = (
 )
 
 
+@pytest.mark.asyncio
 async def test_image(image: str, tmp_path: Path):
     """
     arrange: given a built output from the CLI.
