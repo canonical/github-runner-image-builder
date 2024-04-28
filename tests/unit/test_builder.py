@@ -362,6 +362,22 @@ def test__install_yq_error(monkeypatch: pytest.MonkeyPatch):
     assert "Go build error" in str(exc.getrepr())
 
 
+def test__install_yq_already_exists(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched yq mocked path that already exists.
+    act: when _install_yq is called.
+    assert: Mock functions are called.
+    """
+    monkeypatch.setattr(builder, "YQ_REPOSITORY_PATH", MagicMock(return_value=True))
+    monkeypatch.setattr(subprocess, "run", (run_mock := MagicMock()))
+    monkeypatch.setattr(shutil, "copy", (copy_mock := MagicMock()))
+
+    builder._install_yq()
+
+    run_mock.assert_called()
+    copy_mock.assert_called()
+
+
 def test__install_yq(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched yq install mock functions.

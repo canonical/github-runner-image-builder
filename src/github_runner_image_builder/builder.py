@@ -337,11 +337,18 @@ def _install_yq() -> None:
         YQBuildError: If there was an error building yq from source.
     """
     try:
-        subprocess.run(  # nosec: B603
-            ["/usr/bin/git", "clone", str(YQ_REPOSITORY_URL), str(YQ_REPOSITORY_PATH)],
-            check=True,
-            timeout=60 * 10,
-        )
+        if not YQ_REPOSITORY_PATH.exists():
+            subprocess.run(  # nosec: B603
+                ["/usr/bin/git", "clone", str(YQ_REPOSITORY_URL), str(YQ_REPOSITORY_PATH)],
+                check=True,
+                timeout=60 * 10,
+            )
+        else:
+            subprocess.run(  # nosec: B603
+                ["/usr/bin/git", "-C", str(YQ_REPOSITORY_PATH), "pull"],
+                check=True,
+                timeout=60 * 10,
+            )
         subprocess.run(  # nosec: B603
             ["/snap/bin/go", "build", "-C", str(YQ_REPOSITORY_PATH), "-o", str(HOST_YQ_BIN_PATH)],
             check=True,
