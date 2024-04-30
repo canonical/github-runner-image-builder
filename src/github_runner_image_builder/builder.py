@@ -56,13 +56,6 @@ IMAGE_MOUNT_DIR = Path("/mnt/ubuntu-image/")
 NETWORK_BLOCK_DEVICE_PATH = Path("/dev/nbd0")
 NETWORK_BLOCK_DEVICE_PARTITION_PATH = Path("/dev/nbd0p1")
 
-# Constants for downloading cloud-images
-CLOUD_IMAGE_URL_TMPL = (
-    "https://cloud-images.ubuntu.com/{BASE_IMAGE}/current/"
-    "{BASE_IMAGE}-server-cloudimg-{BIN_ARCH}.img"
-)
-CLOUD_IMAGE_FILE_NAME_TMPL = "{BASE_IMAGE}-server-cloudimg-{BIN_ARCH}.img"
-
 # Constants for building image
 # This amount is the smallest increase that caters for the installations within this image.
 RESIZE_AMOUNT = "+1.5G"
@@ -176,7 +169,7 @@ def _get_supported_runner_arch(arch: Arch) -> SupportedCloudImageArch:
         case Arch.ARM64:
             return "arm64"
         case _:
-            raise UnsupportedArchitectureError(arch)
+            raise UnsupportedArchitectureError(f"Detected system arch: {arch} is unsupported.")
 
 
 def _clean_build_state() -> None:
@@ -241,9 +234,13 @@ def _download_cloud_image(arch: Arch, base_image: BaseImage) -> Path:
 
     try:
         # The ubuntu-cloud-images is a trusted source
-        image_path, _ = urllib.request.urlretrieve(  # nosec: B310
-            CLOUD_IMAGE_URL_TMPL.format(BASE_IMAGE=base_image.value, BIN_ARCH=bin_arch),
-            CLOUD_IMAGE_FILE_NAME_TMPL.format(BASE_IMAGE=base_image.value, BIN_ARCH=bin_arch),
+        image_path = f"{base_image.value}-server-cloudimg-{bin_arch}.img"
+        urllib.request.urlretrieve(  # nosec: B310
+            (
+                f"https://cloud-images.ubuntu.com/{base_image.value}/current/{base_image.value}"
+                f"-server-cloudimg-{bin_arch}.img"
+            ),
+            image_path,
         )
         return Path(image_path)
     except urllib.error.URLError as exc:

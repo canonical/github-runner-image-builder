@@ -16,6 +16,7 @@ import pytest
 from github_runner_image_builder import builder
 from github_runner_image_builder.builder import (
     Arch,
+    BaseImage,
     BuilderSetupError,
     BuildImageError,
     ChrootBaseError,
@@ -230,13 +231,11 @@ def test__download_cloud_image(monkeypatch: pytest.MonkeyPatch):
     act: when _download_cloud_image is called.
     assert: the downloaded path is returned.
     """
-    monkeypatch.setattr(builder, "_get_supported_runner_arch", MagicMock)
-    monkeypatch.setattr(
-        builder.urllib.request, "urlretrieve", MagicMock(return_value=("test-path", ""))
-    )
+    monkeypatch.setattr(builder, "_get_supported_runner_arch", MagicMock(return_value="amd64"))
+    monkeypatch.setattr(builder.urllib.request, "urlretrieve", MagicMock())
 
-    assert builder._download_cloud_image(arch=MagicMock(), base_image=MagicMock()) == Path(
-        "test-path"
+    assert builder._download_cloud_image(arch=Arch.X64, base_image=BaseImage.JAMMY) == Path(
+        "jammy-server-cloudimg-amd64.img"
     )
 
 

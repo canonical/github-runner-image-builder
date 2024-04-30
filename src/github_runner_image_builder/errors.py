@@ -22,19 +22,7 @@ class BuilderSetupError(ImageBuilderBaseError):
 
 
 class UnsupportedArchitectureError(ImageBuilderBaseError):
-    """Raised when given machine architecture is unsupported.
-
-    Attributes:
-        arch: The current machine architecture.
-    """
-
-    def __init__(self, arch: str) -> None:
-        """Initialize a new instance of the UnsupportedArchitectureError.
-
-        Args:
-            arch: The current machine architecture.
-        """
-        self.arch = arch
+    """Raised when given machine architecture is unsupported."""
 
 
 class CleanBuildStateError(ImageBuilderBaseError):
