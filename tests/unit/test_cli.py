@@ -7,6 +7,7 @@
 # pylint:disable=protected-access
 
 import itertools
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -15,10 +16,31 @@ from github_runner_image_builder import cli
 from github_runner_image_builder.cli import main
 
 
+@pytest.fixture(scope="function", name="callback_path")
+def callback_path_fixture(tmp_path: Path):
+    """The testing callback file path."""
+    test_path = tmp_path / "test"
+    test_path.touch()
+    return test_path
+
+
 @pytest.fixture(scope="function", name="build_image_inputs")
-def build_image_inputs_fixture():
+def build_image_inputs_fixture(callback_path: Path):
     """Valid CLI inputs."""
-    return {"-i": "jammy", "-o": "jammy-github-runner-arm64.img"}
+    return {"-i": "jammy", "-c": "test-cloud-name", "-n": "5", "-p": str(callback_path)}
+
+
+def test__existing_path(tmp_path: Path):
+    """
+    arrange: given a path that does not exist.
+    act: when _existing_path is called.
+    assert: ValueError is raised.
+    """
+    not_exists_path = tmp_path / "non-existent"
+    with pytest.raises(ValueError) as exc:
+        cli._existing_path(str(not_exists_path))
+
+    assert f"Given path {not_exists_path} not found." in str(exc.getrepr())
 
 
 def test__install(monkeypatch: pytest.MonkeyPatch):
@@ -34,17 +56,26 @@ def test__install(monkeypatch: pytest.MonkeyPatch):
     setup_mock.assert_called_once()
 
 
-def test__build(monkeypatch: pytest.MonkeyPatch):
+def test__build(monkeypatch: pytest.MonkeyPatch, callback_path: Path):
     """
     arrange: given a monkeypatched builder.setup_builder function.
     act: when _build is called.
     assert: the mock function is called.
     """
     monkeypatch.setattr(cli.builder, "build_image", (builder_mock := MagicMock()))
+    monkeypatch.setattr(
+        cli, "OpenstackManager", MagicMock(return_value=(openstack_manager := MagicMock()))
+    )
 
-    cli._build(base="jammy", output=MagicMock())
+    cli._build_and_upload(
+        base="jammy",
+        cloud_name=MagicMock(),
+        num_revisions=MagicMock(),
+        callback_script_path=callback_path,
+    )
 
     builder_mock.assert_called_once()
+    openstack_manager.upload_image.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -61,7 +92,7 @@ def test_main_invalid_choice(monkeypatch: pytest.MonkeyPatch, choice: str):
     assert: SystemExit is raised and mocked builder functions are not called.
     """
     monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
-    monkeypatch.setattr(cli, "_build", (build_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
 
     with pytest.raises(SystemExit):
         main([choice])
@@ -77,7 +108,7 @@ def test_main_install(monkeypatch: pytest.MonkeyPatch):
     assert: Setup builder mock function is called.
     """
     monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
-    monkeypatch.setattr(cli, "_build", (build_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
 
     main(["install"])
 
@@ -104,7 +135,7 @@ def test_main_invalid_build_inputs(
     assert: SystemExit is raised.
     """
     monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
-    monkeypatch.setattr(cli, "_build", (build_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
     build_image_inputs.update(invalid_patch)
     inputs = list(
         itertools.chain.from_iterable(
@@ -137,7 +168,7 @@ def test_main_base_image(
     assert: build image is called.
     """
     monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
-    monkeypatch.setattr(cli, "_build", (build_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
     build_image_inputs.update({"-i": image})
     inputs = list(
         itertools.chain.from_iterable(

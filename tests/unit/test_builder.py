@@ -500,7 +500,7 @@ def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):
     )
 
     with pytest.raises(ImageCompressError) as exc:
-        builder._compress_image(image=MagicMock(), output=MagicMock())
+        builder._compress_image(image=MagicMock())
 
     assert "Compression error" in str(exc.getrepr())
 

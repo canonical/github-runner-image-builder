@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Literal
 
 from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextManager
-from github_runner_image_builder.config import Arch, BaseImage
+from github_runner_image_builder.config import IMAGE_OUTPUT_PATH, Arch, BaseImage
 from github_runner_image_builder.errors import (
     BuilderSetupError,
     BuildImageError,
@@ -453,19 +453,18 @@ def _install_external_packages() -> None:
 
 
 @retry(tries=5, delay=5, max_delay=60, backoff=2, local_logger=logger)
-def _compress_image(image: Path, output: Path) -> None:
+def _compress_image(image: Path) -> None:
     """Compress the cloud image.
 
     Args:
         image: The image to compress.
-        output: The desired image output path.
 
     Raises:
         ImageCompressError: If there was something wrong compressing the image.
     """
     try:
         subprocess.run(  # nosec: B603
-            ["/usr/bin/virt-sparsify", "--compress", str(image), str(output)],
+            ["/usr/bin/virt-sparsify", "--compress", str(image), str(IMAGE_OUTPUT_PATH)],
             check=True,
             timeout=60 * 10,
         )
@@ -480,12 +479,10 @@ class BuildImageConfig:
     Attributes:
         arch: The CPU architecture to build the image for.
         base_image: The ubuntu image to use as build base.
-        output: The path to write final image to.
     """
 
     arch: Arch
     base_image: BaseImage
-    output: Path
 
 
 def build_image(config: BuildImageConfig) -> None:
@@ -551,6 +548,6 @@ def build_image(config: BuildImageConfig) -> None:
         try:
             _clean_build_state()
             logger.info("Compressing image")
-            _compress_image(cloud_image_path, config.output)
+            _compress_image(cloud_image_path)
         except ImageBuilderBaseError as exc:
             raise BuildImageError from exc

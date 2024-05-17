@@ -7,6 +7,7 @@ import argparse
 import logging
 import platform
 from enum import Enum
+from pathlib import Path
 from typing import Literal
 
 logger = logging.getLogger(__name__)
@@ -19,12 +20,17 @@ class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-me
     Attributes:
         action: CLI action positional argument.
         base: The base image to build.
-        output: Path of the output image file.
+        cloud_name: The Openstack cloud to interact with. The CLI assumes clouds.yaml is written
+            to the default path, i.e. current directory or ~/.config/openstack or /etc/openstack.
+        num_revisions: The maximum number of images to keep before deletion.
+        callback_script_path: The callback script path to run after image build.
     """
 
     action: Literal["install", "build"]
     base: Literal["22.04", "jammy", "24.04", "noble"]
-    output: str
+    cloud_name: str
+    num_revisions: int
+    callback_script_path: Path
 
 
 class Arch(str, Enum):
@@ -113,3 +119,5 @@ class BaseImage(str, Enum):
 
 
 LTS_IMAGE_VERSION_TAG_MAP = {"22.04": BaseImage.JAMMY.value, "24.04": BaseImage.NOBLE.value}
+
+IMAGE_OUTPUT_PATH = Path("compressed.img")

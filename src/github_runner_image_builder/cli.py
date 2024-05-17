@@ -4,6 +4,7 @@
 """Main entrypoint for github-runner-image-builder cli application."""
 import argparse
 import itertools
+import subprocess
 import sys
 from pathlib import Path
 from typing import cast
@@ -11,28 +12,31 @@ from typing import cast
 from github_runner_image_builder import builder
 from github_runner_image_builder.builder import BuildImageConfig
 from github_runner_image_builder.config import (
+    IMAGE_OUTPUT_PATH,
     LTS_IMAGE_VERSION_TAG_MAP,
     ActionsNamespace,
     BaseImage,
     get_supported_arch,
 )
+from github_runner_image_builder.upload import OpenstackManager, UploadImageConfig
 
 
-def non_empty_string(value: str) -> str:
-    """Check the string is non-empty.
+def _existing_path(value: str) -> Path:
+    """Check the path exists.
 
     Args:
-        value: The string value to check.
+        value: The path string.
 
     Raises:
-        ValueError: If empty string was received.
+        ValueError: If the path does not exist.
 
     Returns:
-        Non-empty string value.
+        Path that exists.
     """
-    if not value:
-        raise ValueError("Empty string.")
-    return value
+    path = Path(value)
+    if not path.exists():
+        raise ValueError(f"Given path {value} not found.")
+    return path
 
 
 def _install() -> None:
@@ -40,19 +44,32 @@ def _install() -> None:
     builder.setup_builder()
 
 
-def _build(base: str, output: str) -> None:
+def _build_and_upload(
+    base: str, cloud_name: str, num_revisions: int, callback_script_path: Path
+) -> None:
     """Build and upload image.
 
     Args:
         base: Ubuntu image base.
-        output: The build image output path.
+        cloud_name: The Openstack cloud to upload the image to.
+        num_revisions: Number of image revisions to keep before deletion.
+        callback_script_path: Path to bash script to call after image upload.
     """
     arch = get_supported_arch()
-    output_path = Path(output)
-    build_config = BuildImageConfig(
-        arch=arch, base_image=BaseImage.from_str(base), output=output_path
-    )
+    base_image = BaseImage.from_str(base)
+    build_config = BuildImageConfig(arch=arch, base_image=base_image)
     builder.build_image(config=build_config)
+    with OpenstackManager(cloud_name=cloud_name) as manager:
+        image_id = manager.upload_image(
+            config=UploadImageConfig(
+                arch=arch,
+                app_name="TBD",
+                base=base_image,
+                num_revisions=num_revisions,
+                src_path=IMAGE_OUTPUT_PATH,
+            )
+        )
+    subprocess.check_call([str(callback_script_path), image_id])
 
 
 def main(args: list[str] | None = None) -> None:
@@ -90,7 +107,34 @@ def main(args: list[str] | None = None) -> None:
         default="jammy",
     )
     build_parser.add_argument(
-        "-o", "--output", dest="output", required=True, type=non_empty_string
+        "-c",
+        "--cloud-name",
+        dest="cloud_name",
+        required=True,
+        help=(
+            "The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in paths "
+            "of the following order: current directory, ~/.config/openstack, /etc/openstack."
+        ),
+    )
+    build_parser.add_argument(
+        "-n",
+        "--num-revisions",
+        dest="num_revisions",
+        required=False,
+        type=int,
+        default=5,
+        help="The maximum number of images to keep before deletion.",
+    )
+    build_parser.add_argument(
+        "-p",
+        "--callback-script-path",
+        dest="callback_script_path",
+        required=True,
+        type=_existing_path,
+        help=(
+            "The callback script to trigger after image is built. The callback script is called"
+            "with the first argument as the image ID."
+        ),
     )
     parsed = cast(ActionsNamespace, parser.parse_args(args))
 
@@ -98,4 +142,9 @@ def main(args: list[str] | None = None) -> None:
         _install()
         return
 
-    _build(base=parsed.base, output=parsed.output)
+    _build_and_upload(
+        base=parsed.base,
+        cloud_name=parsed.cloud_name,
+        num_revisions=parsed.num_revisions,
+        callback_script_path=parsed.callback_script_path,
+    )

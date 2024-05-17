@@ -46,7 +46,7 @@ class ChrootContextManager:
         Raises:
             MountError: If there was an error mounting required shared directories.
         """
-        self.root = os.open("/", os.O_PATH)
+        # self.root = os.open("/", os.O_PATH)
         self.cwd = os.getcwd()
 
         for shared_dir in CHROOT_EXTENDED_SHARED_DIRS:
