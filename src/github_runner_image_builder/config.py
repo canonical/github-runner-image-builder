@@ -20,17 +20,19 @@ class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-me
     Attributes:
         action: CLI action positional argument.
         base: The base image to build.
+        callback_script_path: The callback script path to run after image build.
         cloud_name: The Openstack cloud to interact with. The CLI assumes clouds.yaml is written
             to the default path, i.e. current directory or ~/.config/openstack or /etc/openstack.
+        image_name: The image name to upload as.
         num_revisions: The maximum number of images to keep before deletion.
-        callback_script_path: The callback script path to run after image build.
     """
 
     action: Literal["install", "build"]
     base: Literal["22.04", "jammy", "24.04", "noble"]
-    cloud_name: str
-    num_revisions: int
     callback_script_path: Path
+    cloud_name: str
+    image_name: str
+    num_revisions: int
 
 
 class Arch(str, Enum):

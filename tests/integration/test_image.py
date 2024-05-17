@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import NamedTuple
 
 import pytest
+from openstack.connection import Connection
 from pylxd import Client
 
-from github_runner_image_builder.cli import main
+from github_runner_image_builder.config import IMAGE_OUTPUT_PATH
 from tests.integration.helpers import create_lxd_instance, create_lxd_vm_image
 
 logger = logging.getLogger(__name__)
@@ -67,18 +68,16 @@ TEST_RUNNER_COMMANDS = (
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("cli_run")
 async def test_image(image: str, tmp_path: Path):
     """
     arrange: given a built output from the CLI.
     act: when the image is booted and commands are executed.
     assert: commands do not error.
     """
-    main(["install"])
-    main(["build", "-i", image, "-o", str((image_path := tmp_path / "rootfs.img"))])
-
     lxd = Client()
     logger.info("Creating LXD VM Image.")
-    create_lxd_vm_image(lxd_client=lxd, img_path=image_path, image=image, tmp_path=tmp_path)
+    create_lxd_vm_image(lxd_client=lxd, img_path=IMAGE_OUTPUT_PATH, image=image, tmp_path=tmp_path)
     logger.info("Launching LXD instance.")
     instance = await create_lxd_instance(lxd_client=lxd, image=image)
 
@@ -92,3 +91,25 @@ async def test_image(image: str, tmp_path: Path):
         )
         logger.info("Command output: %s %s %s", result.exit_code, result.stdout, result.stderr)
         assert result.exit_code == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("cli_run")
+async def test_openstack_upload(openstack_connection: Connection, openstack_image_name: str):
+    """
+    arrange: given a built output from the CLI.
+    act: when openstack images are listed.
+    assert: the built image is uploaded in Openstack.
+    """
+    assert len(openstack_connection.get_image(openstack_image_name))
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("cli_run")
+async def test_script_callback(callback_result_path: Path):
+    """
+    arrange: given a CLI run with script that creates a file.
+    act: None.
+    assert: the file exist.
+    """
+    assert callback_result_path.exists()

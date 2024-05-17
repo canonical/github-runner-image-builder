@@ -45,15 +45,20 @@ def _install() -> None:
 
 
 def _build_and_upload(
-    base: str, cloud_name: str, num_revisions: int, callback_script_path: Path
+    base: str,
+    callback_script_path: Path,
+    cloud_name: str,
+    image_name: str,
+    num_revisions: int,
 ) -> None:
     """Build and upload image.
 
     Args:
         base: Ubuntu image base.
-        cloud_name: The Openstack cloud to upload the image to.
-        num_revisions: Number of image revisions to keep before deletion.
         callback_script_path: Path to bash script to call after image upload.
+        cloud_name: The Openstack cloud to upload the image to.
+        image_name: The image name to upload as.
+        num_revisions: Number of image revisions to keep before deletion.
     """
     arch = get_supported_arch()
     base_image = BaseImage.from_str(base)
@@ -63,8 +68,8 @@ def _build_and_upload(
         image_id = manager.upload_image(
             config=UploadImageConfig(
                 arch=arch,
-                app_name="TBD",
                 base=base_image,
+                image_name=image_name,
                 num_revisions=num_revisions,
                 src_path=IMAGE_OUTPUT_PATH,
             )
@@ -136,6 +141,13 @@ def main(args: list[str] | None = None) -> None:
             "with the first argument as the image ID."
         ),
     )
+    build_parser.add_argument(
+        "-o",
+        "--output-image-name",
+        dest="image_name",
+        required=True,
+        help="The image name to upload to Openstack.",
+    )
     parsed = cast(ActionsNamespace, parser.parse_args(args))
 
     if parsed.action == "install":
@@ -144,7 +156,8 @@ def main(args: list[str] | None = None) -> None:
 
     _build_and_upload(
         base=parsed.base,
-        cloud_name=parsed.cloud_name,
-        num_revisions=parsed.num_revisions,
         callback_script_path=parsed.callback_script_path,
+        cloud_name=parsed.cloud_name,
+        image_name=parsed.image_name,
+        num_revisions=parsed.num_revisions,
     )
