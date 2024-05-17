@@ -112,7 +112,7 @@ def callback_script_fixture(callback_result_path: Path) -> Path:
         f"""#!/bin/bash
 touch {callback_result_path}
 """,
-        encodig="utf-8",
+        encoding="utf-8",
     )
     return callback_script
 
