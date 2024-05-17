@@ -6,7 +6,7 @@ on:
 jobs:
   integration-tests:
     name: Integration test
-    runs-on: [self-hosted, large, jammy, X64]
+    runs-on: [self-hosted, stg-private-endpoint]
     strategy:
       matrix:
         image: [jammy, noble]
