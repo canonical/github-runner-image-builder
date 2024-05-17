@@ -141,7 +141,7 @@ def cli_run_fixture(
             "-c",
             cloud_name,
             "-n",
-            2,
+            "2",
             "-p",
             str(callback_script),
             "-o",
