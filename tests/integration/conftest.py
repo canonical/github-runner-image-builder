@@ -110,7 +110,8 @@ def callback_script_fixture(callback_result_path: Path) -> Path:
     callback_script = Path("callback")
     callback_script.write_text(
         f"""#!/bin/bash
-touch {callback_result_path}
+IMAGE_ID=$1
+echo $IMAGE_ID | tee {callback_result_path}
 """,
         encoding="utf-8",
     )

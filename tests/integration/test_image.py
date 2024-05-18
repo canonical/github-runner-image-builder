@@ -113,3 +113,4 @@ async def test_script_callback(callback_result_path: Path):
     assert: the file exist.
     """
     assert callback_result_path.exists()
+    assert len(callback_result_path.read_text(encoding="utf-8"))

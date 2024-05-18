@@ -74,7 +74,7 @@ def _build_and_upload(
                 src_path=IMAGE_OUTPUT_PATH,
             )
         )
-    subprocess.check_call([str(callback_script_path), image_id])
+    subprocess.check_call(["/bin/bash", str(callback_script_path), image_id])
 
 
 def main(args: list[str] | None = None) -> None:
