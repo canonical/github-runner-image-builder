@@ -27,7 +27,13 @@ def callback_path_fixture(tmp_path: Path):
 @pytest.fixture(scope="function", name="build_image_inputs")
 def build_image_inputs_fixture(callback_path: Path):
     """Valid CLI inputs."""
-    return {"-i": "jammy", "-c": "test-cloud-name", "-n": "5", "-p": str(callback_path)}
+    return {
+        "-i": "jammy",
+        "-c": "test-cloud-name",
+        "-n": "5",
+        "-p": str(callback_path),
+        "-o": "test-image",
+    }
 
 
 def test__existing_path(tmp_path: Path):
@@ -69,9 +75,10 @@ def test__build(monkeypatch: pytest.MonkeyPatch, callback_path: Path):
 
     cli._build_and_upload(
         base="jammy",
-        cloud_name=MagicMock(),
-        num_revisions=MagicMock(),
         callback_script_path=callback_path,
+        cloud_name=MagicMock(),
+        image_name=MagicMock(),
+        num_revisions=MagicMock(),
     )
 
     builder_mock.assert_called_once()
@@ -121,7 +128,6 @@ def test_main_install(monkeypatch: pytest.MonkeyPatch):
     [
         pytest.param({"-i": ""}, id="no base-image"),
         pytest.param({"-i": "test"}, id="invalid base-image"),
-        pytest.param({"-o": ""}, id="empty output"),
     ],
 )
 def test_main_invalid_build_inputs(

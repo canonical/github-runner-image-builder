@@ -15,7 +15,6 @@ from openstack.image.v2.image import Image
 
 from github_runner_image_builder.config import Arch, BaseImage
 from github_runner_image_builder.errors import (
-    GetImageError,
     OpenstackConnectionError,
     UnauthorizedError,
     UploadImageError,
@@ -30,7 +29,6 @@ class UploadImageConfig:
 
     Attributes:
         arch: The architecture the image was built for.
-        app_name: The application name as a part of image naming.
         base: The ubuntu OS base the image was created with.
         image_name: The image name to upload as.
         num_revisions: The number of revisions to keep for an image.
@@ -138,23 +136,3 @@ class OpenstackManager:
             return image.id
         except openstack.exceptions.OpenStackCloudException as exc:
             raise UploadImageError from exc
-
-    def get_latest_image_id(self, image_name: str) -> str | None:
-        """Fetch the latest image id.
-
-        Args:
-            image_name: The image name to upload as.
-
-        Raises:
-            GetImageError: If there was an error fetching image from Openstack.
-
-        Returns:
-            The image ID if exists, None otherwise.
-        """
-        try:
-            images = self._get_images_by_latest(image_name=image_name)
-        except OpenstackConnectionError as exc:
-            raise GetImageError from exc
-        if not images:
-            return None
-        return images[0].id
