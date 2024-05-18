@@ -86,7 +86,7 @@ def clouds_yaml_contents_fixture(
 def cloud_name_fixture(clouds_yaml_contents: str) -> str:
     """The cloud to use from cloud config."""
     clouds_yaml = yaml.safe_load(clouds_yaml_contents)
-    clouds_yaml_path = Path.cwd() / "clouds.yaml"
+    clouds_yaml_path = Path("clouds.yaml")
     clouds_yaml_path.write_text(data=clouds_yaml_contents, encoding="utf-8")
     first_cloud = next(iter(clouds_yaml["clouds"].keys()))
     return first_cloud
