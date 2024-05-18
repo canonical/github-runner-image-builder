@@ -24,4 +24,4 @@ jobs:
         run: sudo $(which tox) -e integration -- --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
       - name: Setup tmate session
         if: ${{ failure() }}
-        uses: canonical/action-tmate@main
+        uses: mxschmitt/action-tmate@v3
