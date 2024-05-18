@@ -82,7 +82,7 @@ def test__build(monkeypatch: pytest.MonkeyPatch, callback_path: Path):
     )
 
     builder_mock.assert_called_once()
-    openstack_manager.upload_image.assert_called_once()
+    openstack_manager.__enter__.return_value.upload_image.assert_called_once()
 
 
 @pytest.mark.parametrize(

@@ -4,7 +4,9 @@
 """Main entrypoint for github-runner-image-builder cli application."""
 import argparse
 import itertools
-import subprocess
+
+# Subprocess module is used to execute trusted commands
+import subprocess  # nosec: B404
 import sys
 from pathlib import Path
 from typing import cast
@@ -74,7 +76,8 @@ def _build_and_upload(
                 src_path=IMAGE_OUTPUT_PATH,
             )
         )
-    subprocess.check_call(["/bin/bash", str(callback_script_path), image_id])
+    # The callback script is a user trusted script.
+    subprocess.check_call(["/bin/bash", str(callback_script_path), image_id])  # nosec: B603
 
 
 def main(args: list[str] | None = None) -> None:

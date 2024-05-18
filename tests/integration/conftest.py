@@ -51,7 +51,7 @@ def private_endpoint_clouds_yaml_fixture(pytestconfig: pytest.Config) -> Optiona
             region_name,
         )
     ):
-        return
+        return None
     return string.Template(
         Path("tests/integration/data/clouds.yaml.tmpl").read_text(encoding="utf-8")
     ).substitute(
@@ -99,7 +99,7 @@ def openstack_connection_fixture(cloud_name: str) -> Connection:
 
 
 @pytest.fixture(scope="module", name="callback_result_path")
-def callback_result_path() -> Path:
+def callback_result_path_fixture() -> Path:
     """The file created when the callback script is run."""
     return Path("callback_complete")
 
