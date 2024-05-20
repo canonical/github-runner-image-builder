@@ -11,6 +11,7 @@ import pytest
 from openstack.connection import Connection
 from pylxd import Client
 
+from github_runner_image_builder.cli import main
 from github_runner_image_builder.config import IMAGE_OUTPUT_PATH
 from tests.integration.helpers import create_lxd_instance, create_lxd_vm_image
 
@@ -114,3 +115,23 @@ async def test_script_callback(callback_result_path: Path):
     """
     assert callback_result_path.exists()
     assert len(callback_result_path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("cli_run")
+async def test_get_image(
+    cloud_name: str,
+    openstack_image_name: str,
+    capsys: pytest.CaptureFixture,
+    openstack_connection: Connection,
+):
+    """
+    arrange: a cli that already ran.
+    act: when get image id is run.
+    assert: the latest image matches the stdout output.
+    """
+    main(["get", "-c", cloud_name, "-o", openstack_image_name])
+    image_id = openstack_connection.get_image_id(openstack_image_name)
+
+    res = capsys.readouterr()
+    assert res.out == image_id, f"Openstack image not matching, {res.out} {res.err}, {image_id}"
