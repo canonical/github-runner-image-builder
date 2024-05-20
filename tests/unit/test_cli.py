@@ -62,7 +62,24 @@ def test__install(monkeypatch: pytest.MonkeyPatch):
     setup_mock.assert_called_once()
 
 
-def test__build(monkeypatch: pytest.MonkeyPatch, callback_path: Path):
+def test__get(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
+    """
+    arrange: given a monkeypatched OpenstackManager.get_latest_image_id.
+    act: when _get is called.
+    assert: the image id is captured in stdout.
+    """
+    openstack_manager_mock = MagicMock()
+    openstack_manager_mock.__enter__.return_value = (openstack_mock := MagicMock())
+    openstack_mock.get_latest_image_id.return_value = "testing_id"
+    monkeypatch.setattr(cli, "OpenstackManager", MagicMock(return_value=openstack_manager_mock))
+
+    cli._get(cloud_name=MagicMock(), image_name=MagicMock())
+
+    res = capsys.readouterr()
+    assert "testing_id" in res.out
+
+
+def test__build_and_upload(monkeypatch: pytest.MonkeyPatch, callback_path: Path):
     """
     arrange: given a monkeypatched builder.setup_builder function.
     act: when _build is called.
@@ -99,12 +116,14 @@ def test_main_invalid_choice(monkeypatch: pytest.MonkeyPatch, choice: str):
     assert: SystemExit is raised and mocked builder functions are not called.
     """
     monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
     monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
 
     with pytest.raises(SystemExit):
         main([choice])
 
     install_mock.assert_not_called()
+    get_mock.assert_not_called()
     build_mock.assert_not_called()
 
 
@@ -112,14 +131,33 @@ def test_main_install(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given install argument and mocked builder functions.
     act: when main is called.
-    assert: Setup builder mock function is called.
+    assert: install builder mock function is called.
     """
     monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
     monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
 
     main(["install"])
 
     install_mock.assert_called()
+    get_mock.assert_not_called()
+    build_mock.assert_not_called()
+
+
+def test_main_get(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given install argument and mocked builder functions.
+    act: when main is called.
+    assert: get mock function is called.
+    """
+    monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
+
+    main(["get", "-c", "test-cloud", "-o", "test-output-image-name"])
+
+    install_mock.assert_not_called()
+    get_mock.assert_called()
     build_mock.assert_not_called()
 
 
@@ -141,6 +179,7 @@ def test_main_invalid_build_inputs(
     assert: SystemExit is raised.
     """
     monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
     monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
     build_image_inputs.update(invalid_patch)
     inputs = list(
@@ -153,6 +192,7 @@ def test_main_invalid_build_inputs(
         main(["build", *inputs])
 
     install_mock.assert_not_called()
+    get_mock.assert_not_called()
     build_mock.assert_not_called()
 
 
@@ -174,6 +214,7 @@ def test_main_base_image(
     assert: build image is called.
     """
     monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
+    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
     monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
     build_image_inputs.update({"-i": image})
     inputs = list(
@@ -185,4 +226,5 @@ def test_main_base_image(
     main(["build", *inputs])
 
     install_mock.assert_not_called()
+    get_mock.assert_not_called()
     build_mock.assert_called()

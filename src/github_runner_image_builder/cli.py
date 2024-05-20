@@ -54,7 +54,7 @@ def _get(cloud_name: str, image_name: str) -> None:
         image_name: The image name to upload as.
     """
     with OpenstackManager(cloud_name=cloud_name) as manager:
-        print(manager.get_latest_image_id(image_name=image_name))
+        sys.stdout.write(manager.get_latest_image_id(image_name=image_name))
 
 
 def _build_and_upload(

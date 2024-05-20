@@ -11,6 +11,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from github_runner_image_builder.upload import (
+    GetImageError,
+    Image,
     OpenstackConnectionError,
     OpenstackManager,
     UnauthorizedError,
@@ -182,3 +184,44 @@ def test_upload_image(connection: MagicMock, manager: OpenstackManager):
     connection.create_image.return_value = MockOpenstackImageFactory(id="1")
 
     assert manager.upload_image(config=MagicMock()) == "1"
+
+
+def test_get_latest_image_id_error(manager: OpenstackManager):
+    """
+    arrange: given a mocked _get_images_by_latest function that raises an exception.
+    act: when get_latest_image_id is called.
+    assert: GetImageError is raised.
+    """
+    manager._get_images_by_latest = MagicMock(side_effect=OpenstackConnectionError("Unauthorized"))
+
+    with pytest.raises(GetImageError) as exc:
+        manager.get_latest_image_id(image_name=MagicMock())
+
+    assert "Unauthorized" in str(exc.getrepr())
+
+
+@pytest.mark.parametrize(
+    "images, expected_id",
+    [
+        pytest.param([], None, id="No images"),
+        pytest.param(
+            [
+                MockOpenstackImageFactory(id="1", created_at="2024-01-01T00:00:00Z"),
+                MockOpenstackImageFactory(id="2", created_at="2024-02-02T00:00:00Z"),
+            ],
+            "1",
+            id="Multiple images",
+        ),
+    ],
+)
+def test_get_latest_image_id(
+    manager: OpenstackManager, images: list[Image], expected_id: str | None
+):
+    """
+    arrange: given a mocked _get_images_by_latest function that returns openstack images.
+    act: when get_latest_image_id is called.
+    assert: GetImageError is raised.
+    """
+    manager._get_images_by_latest = MagicMock(return_value=images)
+
+    assert manager.get_latest_image_id(image_name=MagicMock()) == expected_id
