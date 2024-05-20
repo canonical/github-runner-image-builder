@@ -26,4 +26,5 @@ header:
     - '.woke.yaml'
     - 'lib/**'
     - 'tests/integration/testdata/**'
+    - 'tests/integration/data/**'
   comment: on-failure
