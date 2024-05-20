@@ -101,7 +101,7 @@ async def test_openstack_upload(openstack_connection: Connection, openstack_imag
     act: when openstack images are listed.
     assert: the built image is uploaded in Openstack.
     """
-    assert len(openstack_connection.get_image(openstack_image_name))
+    assert len(openstack_connection.search_images(openstack_image_name))
 
 
 @pytest.mark.asyncio
