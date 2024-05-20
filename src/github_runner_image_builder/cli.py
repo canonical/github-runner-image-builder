@@ -46,6 +46,17 @@ def _install() -> None:
     builder.setup_builder()
 
 
+def _get(cloud_name: str, image_name: str) -> None:
+    """Get latest built image from OpenStack.
+
+    Args:
+        cloud_name: The Openstack cloud to upload the image to.
+        image_name: The image name to upload as.
+    """
+    with OpenstackManager(cloud_name=cloud_name) as manager:
+        print(manager.get_latest_image_id(image_name=image_name))
+
+
 def _build_and_upload(
     base: str,
     callback_script_path: Path,
@@ -101,6 +112,24 @@ def main(args: list[str] | None = None) -> None:
         required=True,
     )
     subparsers.add_parser("install")
+    get_parser = subparsers.add_parser("get")
+    get_parser.add_argument(
+        "-c",
+        "--cloud-name",
+        dest="cloud_name",
+        required=True,
+        help=(
+            "The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in paths "
+            "of the following order: current directory, ~/.config/openstack, /etc/openstack."
+        ),
+    )
+    get_parser.add_argument(
+        "-o",
+        "--output-image-name",
+        dest="image_name",
+        required=True,
+        help="The image name uploaded to Openstack.",
+    )
     build_parser = subparsers.add_parser("build")
     build_parser.add_argument(
         "-i",
@@ -155,6 +184,10 @@ def main(args: list[str] | None = None) -> None:
 
     if parsed.action == "install":
         _install()
+        return
+
+    if parsed.action == "get":
+        _get(cloud_name=parsed.cloud_name, image_name=parsed.image_name)
         return
 
     _build_and_upload(

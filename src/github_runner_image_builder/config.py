@@ -27,7 +27,7 @@ class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-me
         num_revisions: The maximum number of images to keep before deletion.
     """
 
-    action: Literal["install", "build"]
+    action: Literal["install", "build", "get"]
     base: Literal["22.04", "jammy", "24.04", "noble"]
     callback_script_path: Path
     cloud_name: str
