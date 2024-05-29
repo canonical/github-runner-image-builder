@@ -1,0 +1,9 @@
+# development cofig files
+.vscode
+.tox
+**/__pycache__
+.coverage
+# build artefacts
+build
+*.img
+**/*.egg-info

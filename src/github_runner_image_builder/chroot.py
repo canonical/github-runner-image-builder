@@ -59,6 +59,7 @@ class ChrootContextManager:
                 )
             except subprocess.CalledProcessError as exc:
                 raise MountError from exc
+
         os.chroot(self.chroot_path)
         os.chdir("/")
 
@@ -90,7 +91,8 @@ class ChrootContextManager:
 
         try:
             subprocess.run(  # nosec: B603
-                ["/usr/bin/umount", "-l", str(self.chroot_path / CHROOT_DEVICE_DIR)], check=True
+                ["/usr/bin/umount", "-l", str(self.chroot_path / CHROOT_DEVICE_DIR)],
+                check=True,
             )
         except subprocess.CalledProcessError as exc:
             raise MountError from exc

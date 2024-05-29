@@ -1,7 +1,7 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Utilities used by the charm."""
+"""Utilities used by the app."""
 
 import functools
 import logging
