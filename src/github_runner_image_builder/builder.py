@@ -95,6 +95,8 @@ IMAGE_DEFAULT_APT_PACKAGES = [
     "gh",
 ]
 
+print("ehllo")
+
 
 def _install_dependencies() -> None:
     """Install required dependencies to run qemu image build.
