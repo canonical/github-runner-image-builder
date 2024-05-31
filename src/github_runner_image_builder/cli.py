@@ -108,7 +108,6 @@ def main(args: list[str] | None = None) -> None:
         ),
     )
     options = cast(ActionsNamespace, parser.parse_args(args))
-    print(options)
     if options.action == "init":
         builder.initialize()
         return

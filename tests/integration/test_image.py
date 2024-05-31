@@ -130,7 +130,7 @@ async def test_get_image(
     act: when get image id is run.
     assert: the latest image matches the stdout output.
     """
-    main(["get", "-c", cloud_name, "-o", openstack_image_name])
+    main(["latest-build-id", cloud_name, openstack_image_name])
     image_id = openstack_connection.get_image_id(openstack_image_name)
 
     res = capsys.readouterr()

@@ -133,20 +133,18 @@ def cli_run_fixture(
     openstack_image_name: str,
 ):
     """A CLI run."""
-    main(["install"])
+    main(["init"])
     main(
         [
-            "build",
-            "-i",
-            image,
-            "-c",
+            "run",
             cloud_name,
-            "-n",
-            "2",
-            "-p",
-            str(callback_script),
-            "-o",
             openstack_image_name,
+            "--base-image",
+            image,
+            "--keep-revisions",
+            "2",
+            "--callback-script",
+            str(callback_script),
         ]
     )
 
