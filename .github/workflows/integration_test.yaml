@@ -21,9 +21,13 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.py }}
-      # need to run in sudo mode due to chroot
       - name: Install tox
-        run: sudo python -m pip install tox-gh
+        run: |
+          sudo apt-get update
+          sudo apt-get install pipx -y
+          pipx ensurepath
+          pipx install tox
+      # need to run in sudo mode due to chroot
       - name: Run integration tests
         run: sudo $(which tox) -e integration -- --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
   
@@ -40,8 +44,12 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.py }}
-      # need to run in sudo mode due to chroot
       - name: Install tox
-        run: sudo python -m pip install tox-gh
+        run: |
+          sudo apt-get update
+          sudo apt-get install pipx -y
+          pipx ensurepath
+          pipx install tox
+      # need to run in sudo mode due to chroot
       - name: Run integration tests
         run: sudo $(which tox) -e integration -- --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
