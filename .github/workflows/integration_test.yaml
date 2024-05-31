@@ -14,7 +14,9 @@ jobs:
     strategy:
       matrix:
         image: [jammy, noble]
-        py: ["3.10.11"] # The only 3.10 version w/ ARM64 support
+        # 2024.06.01 The only 3.10 version w/ ARM64 support is 3.10.11
+        # https://raw.githubusercontent.com/actions/python-versions/main/versions-manifest.json
+        py: ["3.10.11"]
     steps:
       - uses: actions/checkout@v3
       - uses: canonical/setup-lxd@v0.1.1
