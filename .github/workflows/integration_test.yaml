@@ -33,7 +33,6 @@ jobs:
     strategy:
       matrix:
         image: [jammy, noble]
-        py: ["3.10"]
     steps:
       - uses: actions/checkout@v3
       - uses: canonical/setup-lxd@v0.1.1
