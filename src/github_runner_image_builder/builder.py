@@ -199,6 +199,8 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
             _install_yarn()
     except ChrootBaseError as exc:
         raise BuildImageError from exc
+    finally:
+        _clean_build_state()
 
     try:
         logger.info("Compressing image.")
