@@ -10,7 +10,7 @@ concurrency:
 jobs:
   integration-tests-arm:
     name: Integration test (ARM64)
-    runs-on: [self-hosted, ARM64, jammy]
+    runs-on: [self-hosted, ARM64, jammy, stg-private-endpoint]
     strategy:
       matrix:
         image: [jammy, noble]
@@ -29,7 +29,7 @@ jobs:
   
   integration-tests-amd:
     name: Integration test (X64)
-    runs-on: [self-hosted, X64, jammy]
+    runs-on: [self-hosted, X64, jammy, stg-private-endpoint]
     strategy:
       matrix:
         image: [jammy, noble]
