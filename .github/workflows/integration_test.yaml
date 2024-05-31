@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   integration-tests-arm:
-    name: Integration test
+    name: Integration test (ARM64)
     runs-on: [self-hosted, ARM64]
     strategy:
       matrix:
@@ -28,7 +28,7 @@ jobs:
         run: sudo $(which tox) -e integration -- --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
   
   integration-tests-amd:
-    name: Integration test
+    name: Integration test (X64)
     runs-on: [self-hosted, X64]
     strategy:
       matrix:
