@@ -3,29 +3,24 @@
 
 """Module for interacting with qemu image builder."""
 
-import dataclasses
 import logging
-import os
 import shutil
 
 # Ignore B404:blacklist since all subprocesses are run with predefined executables.
 import subprocess  # nosec
-import sys
 import urllib.error
 import urllib.request
-from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Literal
 
 from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextManager
 from github_runner_image_builder.config import IMAGE_OUTPUT_PATH, Arch, BaseImage
 from github_runner_image_builder.errors import (
+    BaseImageDownloadError,
     BuilderSetupError,
     BuildImageError,
     CleanBuildStateError,
-    CloudImageDownloadError,
     DependencyInstallError,
-    ExternalPackageInstallError,
     ImageBuilderBaseError,
     ImageCompressError,
     ImageMountError,
@@ -35,13 +30,14 @@ from github_runner_image_builder.errors import (
     SystemUserConfigurationError,
     UnattendedUpgradeDisableError,
     UnsupportedArchitectureError,
+    YarnInstallError,
     YQBuildError,
 )
 from github_runner_image_builder.utils import retry
 
 logger = logging.getLogger(__name__)
 
-SupportedCloudImageArch = Literal["amd64", "arm64"]
+SupportedBaseImageArch = Literal["amd64", "arm64"]
 
 APT_DEPENDENCIES = [
     "qemu-utils",  # used for qemu utilities tools to build and resize image
@@ -54,7 +50,7 @@ SNAP_GO = "go"
 # Constants for mounting images
 IMAGE_MOUNT_DIR = Path("/mnt/ubuntu-image/")
 NETWORK_BLOCK_DEVICE_PATH = Path("/dev/nbd0")
-NETWORK_BLOCK_DEVICE_PARTITION_PATH = Path("/dev/nbd0p1")
+NETWORK_BLOCK_DEVICE_PARTITION_PATH = Path(f"{NETWORK_BLOCK_DEVICE_PATH}p1")
 
 # Constants for building image
 # This amount is the smallest increase that caters for the installations within this image.
@@ -86,14 +82,28 @@ HOST_YQ_BIN_PATH = Path("/usr/bin/yq")
 MOUNTED_YQ_BIN_PATH = IMAGE_MOUNT_DIR / "usr/bin/yq"
 IMAGE_DEFAULT_APT_PACKAGES = [
     "docker.io",
+    "gh",
+    "jq",
     "npm",
     "python3-pip",
+    "python-is-python3",
     "shellcheck",
-    "jq",
-    "wget",
     "unzip",
-    "gh",
+    "wget",
 ]
+
+
+def initialize() -> None:
+    """Configure the host machine to build images.
+
+    Raises:
+        BuilderSetupError: If there was an error setting up the host device for building images.
+    """
+    try:
+        _install_dependencies()
+        _enable_network_block_device()
+    except ImageBuilderBaseError as exc:
+        raise BuilderSetupError from exc
 
 
 def _install_dependencies() -> None:
@@ -103,24 +113,24 @@ def _install_dependencies() -> None:
         DependencyInstallError: If there was an error installing apt packages.
     """
     try:
-        subprocess.run(
-            ["/usr/bin/apt-get", "update", "-y"], check=True, timeout=30 * 60
+        subprocess.check_output(
+            ["/usr/bin/apt-get", "update", "-y"], encoding="utf-8", timeout=30 * 60
         )  # nosec: B603
-        subprocess.run(
+        subprocess.check_output(
             ["/usr/bin/apt-get", "install", "-y", "--no-install-recommends", *APT_DEPENDENCIES],
-            check=True,
+            encoding="utf-8",
             timeout=30 * 60,
         )  # nosec: B603
-        subprocess.run(
+        subprocess.check_output(
             ["/usr/bin/snap", "install", SNAP_GO, "--classic"],
-            check=True,
+            encoding="utf-8",
             timeout=30 * 60,
         )  # nosec: B603
     except subprocess.CalledProcessError as exc:
         raise DependencyInstallError from exc
 
 
-def _enable_nbd() -> None:
+def _enable_network_block_device() -> None:
     """Enable network block device module to mount and build chrooted image.
 
     Raises:
@@ -132,44 +142,69 @@ def _enable_nbd() -> None:
         raise NetworkBlockDeviceError from exc
 
 
-def setup_builder() -> None:
-    """Configure the host machine to build images.
-
-    Raises:
-        BuilderSetupError: If there was an error setting up the host device for building images.
-    """
-    try:
-        _install_dependencies()
-        _enable_nbd()
-    except ImageBuilderBaseError as exc:
-        raise BuilderSetupError from exc
-
-
-def _get_supported_runner_arch(arch: Arch) -> SupportedCloudImageArch:
-    """Validate and return supported runner architecture.
-
-    The supported runner architecture takes in arch value from Github supported
-    architecture and outputs architectures supported by ubuntu cloud images.
-    See: https://docs.github.com/en/actions/hosting-your-own-runners/managing-\
-        self-hosted-runners/about-self-hosted-runners#architectures
-    and https://cloud-images.ubuntu.com/jammy/current/
+def build_image(arch: Arch, base_image: BaseImage) -> None:
+    """Build and save the image locally.
 
     Args:
-        arch: The compute architecture to check support for.
+        arch: The CPU architecture to build the image for.
+        base_image: The ubuntu image to use as build base.
 
     Raises:
-        UnsupportedArchitectureError: If an unsupported architecture was passed.
-
-    Returns:
-        The supported architecture.
+        BuildImageError: If there was an error building the image.
     """
-    match arch:
-        case Arch.X64:
-            return "amd64"
-        case Arch.ARM64:
-            return "arm64"
-        case _:
-            raise UnsupportedArchitectureError(f"Detected system arch: {arch} is unsupported.")
+    IMAGE_MOUNT_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        logger.info("Cleaning build state.")
+        _clean_build_state()
+        logger.info("Downloading base image.")
+        base_image_path = _download_base_image(arch=arch, base_image=base_image)
+        logger.info("Resizing base image.")
+        _resize_image(image_path=base_image_path)
+        logger.info("Replacing resolv.conf.")
+        _replace_mounted_resolv_conf()
+        logger.info("Mounting network block device.")
+        _mount_image_to_network_block_device(image_path=base_image_path)
+        logger.info("Resizing partitions.")
+        _resize_mount_partitions()
+        logger.info("Installing YQ from source.")
+        _install_yq()
+    except ImageBuilderBaseError as exc:
+        raise BuildImageError from exc
+
+    try:
+        logger.info("Setting up chroot environment.")
+        with ChrootContextManager(IMAGE_MOUNT_DIR):
+            # operator_libs_linux apt package uses dpkg -l and that does not work well with
+            # chroot env, hence use subprocess run.
+            subprocess.run(
+                ["/usr/bin/apt-get", "update", "-y"],
+                check=True,
+                timeout=60 * 10,
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+            )  # nosec: B603
+            subprocess.run(  # nosec: B603
+                [
+                    "/usr/bin/apt-get",
+                    "install",
+                    "-y",
+                    "--no-install-recommends",
+                    *IMAGE_DEFAULT_APT_PACKAGES,
+                ],
+                check=True,
+                timeout=60 * 20,
+                env={"DEBIAN_FRONTEND": "noninteractive"},
+            )
+            _disable_unattended_upgrades()
+            _configure_system_users()
+            _install_yarn()
+    except ChrootBaseError as exc:
+        raise BuildImageError from exc
+
+    try:
+        logger.info("Compressing image.")
+        _compress_image(base_image_path)
+    except ImageBuilderBaseError as exc:
+        raise BuildImageError from exc
 
 
 def _clean_build_state() -> None:
@@ -180,7 +215,6 @@ def _clean_build_state() -> None:
     """
     # The commands will fail if artefacts do not exist and hence there is no need to check the
     # output of subprocess runs.
-    IMAGE_MOUNT_DIR.mkdir(parents=True, exist_ok=True)
     try:
         subprocess.run(
             ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "dev")], timeout=30, check=False
@@ -214,23 +248,23 @@ def _clean_build_state() -> None:
         raise CleanBuildStateError from exc
 
 
-def _download_cloud_image(arch: Arch, base_image: BaseImage) -> Path:
-    """Download the cloud image from cloud-images.ubuntu.com.
+def _download_base_image(arch: Arch, base_image: BaseImage) -> Path:
+    """Download the base image from cloud-images.ubuntu.com.
 
     Args:
-        arch: The cloud image architecture to download.
+        arch: The base image architecture to download.
         base_image: The ubuntu base image OS to download.
 
     Returns:
-        The downloaded cloud image path.
+        The downloaded image path.
 
     Raises:
-        CloudImageDownloadError: If there was an error downloading the image.
+        BaseImageDownloadError: If there was an error downloading the image.
     """
     try:
         bin_arch = _get_supported_runner_arch(arch)
     except UnsupportedArchitectureError as exc:
-        raise CloudImageDownloadError from exc
+        raise BaseImageDownloadError from exc
 
     try:
         # The ubuntu-cloud-images is a trusted source
@@ -244,21 +278,48 @@ def _download_cloud_image(arch: Arch, base_image: BaseImage) -> Path:
         )
         return Path(image_path)
     except urllib.error.URLError as exc:
-        raise CloudImageDownloadError from exc
+        raise BaseImageDownloadError from exc
 
 
-def _resize_cloud_img(cloud_image_path: Path) -> None:
-    """Resize cloud image to allow space for dependency installations.
+def _get_supported_runner_arch(arch: Arch) -> SupportedBaseImageArch:
+    """Validate and return supported runner architecture.
+
+    The supported runner architecture takes in arch value from Github supported
+    architecture and outputs architectures supported by ubuntu cloud images.
+    See: https://docs.github.com/en/actions/hosting-your-own-runners/managing-\
+        self-hosted-runners/about-self-hosted-runners#architectures
+    and https://cloud-images.ubuntu.com/jammy/current/
 
     Args:
-        cloud_image_path: The target cloud image file to resize.
+        arch: The compute architecture to check support for.
+
+    Raises:
+        UnsupportedArchitectureError: If an unsupported architecture was passed.
+
+    Returns:
+        The supported architecture.
+    """
+    match arch:
+        case Arch.X64:
+            return "amd64"
+        case Arch.ARM64:
+            return "arm64"
+        case _:
+            raise UnsupportedArchitectureError(f"Detected system arch: {arch} is unsupported.")
+
+
+def _resize_image(image_path: Path) -> None:
+    """Resize image to allow space for dependency installations.
+
+    Args:
+        image_path: The target image file to resize.
 
     Raises:
         ImageResizeError: If there was an error resizing the image.
     """
     try:
         subprocess.run(  # nosec: B603
-            ["/usr/bin/qemu-img", "resize", str(cloud_image_path), RESIZE_AMOUNT],
+            ["/usr/bin/qemu-img", "resize", str(image_path), RESIZE_AMOUNT],
             check=True,
             timeout=60,
         )
@@ -266,8 +327,14 @@ def _resize_cloud_img(cloud_image_path: Path) -> None:
         raise ImageResizeError from exc
 
 
+def _replace_mounted_resolv_conf() -> None:
+    """Replace resolv.conf to host resolv.conf to allow networking."""
+    MOUNTED_RESOLV_CONF_PATH.unlink(missing_ok=True)
+    shutil.copy(str(HOST_RESOLV_CONF_PATH), str(MOUNTED_RESOLV_CONF_PATH))
+
+
 @retry(tries=5, delay=5, max_delay=60, backoff=2, local_logger=logger)
-def _mount_nbd_partition() -> None:
+def _mount_network_block_device_partition() -> None:
     """Mount the network block device partition."""
     subprocess.run(  # nosec: B603
         [
@@ -282,30 +349,24 @@ def _mount_nbd_partition() -> None:
     )
 
 
-def _mount_image_to_network_block_device(cloud_image_path: Path) -> None:
+def _mount_image_to_network_block_device(image_path: Path) -> None:
     """Mount the image to network block device in preparation for chroot.
 
     Args:
-        cloud_image_path: The target cloud image file to mount.
+        image_path: The target image file to mount.
 
     Raises:
         ImageMountError: If there was an error mounting the image to network block device.
     """
     try:
         subprocess.run(  # nosec: B603
-            ["/usr/bin/qemu-nbd", f"--connect={NETWORK_BLOCK_DEVICE_PATH}", str(cloud_image_path)],
+            ["/usr/bin/qemu-nbd", f"--connect={NETWORK_BLOCK_DEVICE_PATH}", str(image_path)],
             check=True,
             timeout=60,
         )
-        _mount_nbd_partition()
+        _mount_network_block_device_partition()
     except subprocess.CalledProcessError as exc:
         raise ImageMountError from exc
-
-
-def _replace_mounted_resolv_conf() -> None:
-    """Replace resolv.conf to host resolv.conf to allow networking."""
-    MOUNTED_RESOLV_CONF_PATH.unlink(missing_ok=True)
-    shutil.copy(str(HOST_RESOLV_CONF_PATH), str(MOUNTED_RESOLV_CONF_PATH))
 
 
 def _resize_mount_partitions() -> None:
@@ -354,11 +415,6 @@ def _install_yq() -> None:
         shutil.copy(HOST_YQ_BIN_PATH, MOUNTED_YQ_BIN_PATH)
     except subprocess.CalledProcessError as exc:
         raise YQBuildError from exc
-
-
-def _create_python_symlinks() -> None:
-    """Create python3 symlinks."""
-    os.symlink(DEFAULT_PYTHON_PATH, SYM_LINK_PYTHON_PATH)
 
 
 def _disable_unattended_upgrades() -> None:
@@ -432,13 +488,11 @@ def _configure_system_users() -> None:
         raise SystemUserConfigurationError from exc
 
 
-def _install_external_packages() -> None:
-    """Install packages outside of apt.
-
-    Installs yarn.
+def _install_yarn() -> None:
+    """Install yarn using NPM.
 
     Raises:
-        ExternalPackageInstallError: If there was an error installing external package.
+        YarnInstallError: If there was an error installing external package.
     """
     try:
         # 2024/04/26 There's a potential security risk here, npm is subject to toolchain attacks.
@@ -449,12 +503,12 @@ def _install_external_packages() -> None:
             ["/usr/bin/npm", "cache", "clean", "--force"], check=True, timeout=60
         )  # nosec: B603
     except subprocess.SubprocessError as exc:
-        raise ExternalPackageInstallError from exc
+        raise YarnInstallError from exc
 
 
 @retry(tries=5, delay=5, max_delay=60, backoff=2, local_logger=logger)
 def _compress_image(image: Path) -> None:
-    """Compress the cloud image.
+    """Compress the image.
 
     Args:
         image: The image to compress.
@@ -470,84 +524,3 @@ def _compress_image(image: Path) -> None:
         )
     except subprocess.CalledProcessError as exc:
         raise ImageCompressError from exc
-
-
-@dataclasses.dataclass
-class BuildImageConfig:
-    """Configuration for building the image.
-
-    Attributes:
-        arch: The CPU architecture to build the image for.
-        base_image: The ubuntu image to use as build base.
-    """
-
-    arch: Arch
-    base_image: BaseImage
-
-
-def build_image(config: BuildImageConfig) -> None:
-    """Build and save the image locally.
-
-    Args:
-        config: The configuration values to build the image with.
-
-    Raises:
-        BuildImageError: If there was an error building the image.
-    """
-    logger.info("Clean build state.")
-    with redirect_stdout(sys.stderr):
-        try:
-            _clean_build_state()
-            logger.info("Downloading cloud image.")
-            cloud_image_path = _download_cloud_image(
-                arch=config.arch, base_image=config.base_image
-            )
-            logger.info("Resizing cloud image.")
-            _resize_cloud_img(cloud_image_path=cloud_image_path)
-            logger.info("Mounting network block device.")
-            _mount_image_to_network_block_device(cloud_image_path=cloud_image_path)
-            logger.info("Replacing resolv.conf.")
-            _replace_mounted_resolv_conf()
-            logger.info("Resizing partitions.")
-            _resize_mount_partitions()
-            logger.info("Building YQ from source.")
-            _install_yq()
-        except ImageBuilderBaseError as exc:
-            raise BuildImageError from exc
-
-        try:
-            logger.info("Setting up chroot environment.")
-            with ChrootContextManager(IMAGE_MOUNT_DIR):
-                # operator_libs_linux apt package uses dpkg -l and that does not work well with
-                # chroot env, hence use subprocess run.
-                subprocess.run(
-                    ["/usr/bin/apt-get", "update", "-y"],
-                    check=True,
-                    timeout=60 * 10,
-                    env={"DEBIAN_FRONTEND": "noninteractive"},
-                )  # nosec: B603
-                subprocess.run(  # nosec: B603
-                    [
-                        "/usr/bin/apt-get",
-                        "install",
-                        "-y",
-                        "--no-install-recommends",
-                        *IMAGE_DEFAULT_APT_PACKAGES,
-                    ],
-                    check=True,
-                    timeout=60 * 20,
-                    env={"DEBIAN_FRONTEND": "noninteractive"},
-                )
-                _create_python_symlinks()
-                _disable_unattended_upgrades()
-                _configure_system_users()
-                _install_external_packages()
-        except (ImageBuilderBaseError, ChrootBaseError) as exc:
-            raise BuildImageError from exc
-
-        try:
-            _clean_build_state()
-            logger.info("Compressing image")
-            _compress_image(cloud_image_path)
-        except ImageBuilderBaseError as exc:
-            raise BuildImageError from exc

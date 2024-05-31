@@ -29,8 +29,8 @@ class CleanBuildStateError(ImageBuilderBaseError):
     """Represents an error cleaning up build state."""
 
 
-class CloudImageDownloadError(ImageBuilderBaseError):
-    """Represents an error downloading cloud image."""
+class BaseImageDownloadError(ImageBuilderBaseError):
+    """Represents an error downloading base image."""
 
 
 class ImageResizeError(ImageBuilderBaseError):
@@ -57,8 +57,8 @@ class YQBuildError(ImageBuilderBaseError):
     """Represents an error while building yq binary from source."""
 
 
-class ExternalPackageInstallError(ImageBuilderBaseError):
-    """Represents an error installilng external packages."""
+class YarnInstallError(ImageBuilderBaseError):
+    """Represents an error installilng Yarn."""
 
 
 class ImageCompressError(ImageBuilderBaseError):
@@ -85,5 +85,5 @@ class GetImageError(OpenstackBaseError):
     """Represents an error when fetching images from Openstack."""
 
 
-class OpenstackConnectionError(OpenstackBaseError):
+class OpenstackError(OpenstackBaseError):
     """Represents an error while communicating with Openstack."""

@@ -12,6 +12,10 @@ from typing import Literal
 
 logger = logging.getLogger(__name__)
 
+ACTION_INIT = "init"
+ACTION_RUN = "run"
+ACTION_LATEST_BUILD_ID = "latest-build-id"
+
 
 # This is a class used for type hinting argparse.
 class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-methods
@@ -24,15 +28,15 @@ class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-me
         cloud_name: The Openstack cloud to interact with. The CLI assumes clouds.yaml is written
             to the default path, i.e. current directory or ~/.config/openstack or /etc/openstack.
         image_name: The image name to upload as.
-        num_revisions: The maximum number of images to keep before deletion.
+        keep_revisions: The maximum number of images to keep before deletion.
     """
 
-    action: Literal["install", "build", "get"]
+    action: Literal["init", "run", "latest-build-id"]
     base: Literal["22.04", "jammy", "24.04", "noble"]
-    callback_script_path: Path
+    callback_script_path: Path | None
     cloud_name: str
     image_name: str
-    num_revisions: int
+    keep_revisions: int
 
 
 class Arch(str, Enum):

@@ -8,9 +8,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  integration-tests:
+  integration-tests-arm:
     name: Integration test
-    runs-on: [self-hosted, stg-private-endpoint]
+    runs-on: [self-hosted, ARM64]
+    strategy:
+      matrix:
+        image: [jammy, noble]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: canonical/setup-lxd@v0.1.1
+      - name: Setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.py }}
+      # need to run in sudo mode due to chroot
+      - name: Install tox
+        run: sudo python -m pip install tox-gh
+      - name: Run integration tests
+        run: sudo $(which tox) -e integration -- --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
+  
+  integration-tests-amd:
+    name: Integration test
+    runs-on: [self-hosted, X64]
     strategy:
       matrix:
         image: [jammy, noble]

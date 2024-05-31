@@ -24,15 +24,15 @@ def callback_path_fixture(tmp_path: Path):
     return test_path
 
 
-@pytest.fixture(scope="function", name="build_image_inputs")
-def build_image_inputs_fixture(callback_path: Path):
-    """Valid CLI inputs."""
+@pytest.fixture(scope="function", name="run_inputs")
+def run_inputs_fixture(callback_path: Path):
+    """Valid CLI run mode inputs."""
     return {
-        "-i": "jammy",
-        "-c": "test-cloud-name",
-        "-n": "5",
-        "-p": str(callback_path),
-        "-o": "test-image",
+        "": "test-cloud-name",
+        " ": "test-image-name",
+        "--base-image": "noble",
+        "--keep-revisions": "5",
+        "--callback-script": str(callback_path),
     }
 
 
@@ -49,57 +49,32 @@ def test__existing_path(tmp_path: Path):
     assert f"Given path {not_exists_path} not found." in str(exc.getrepr())
 
 
-def test__install(monkeypatch: pytest.MonkeyPatch):
-    """
-    arrange: given a monkeypatched builder.setup_builder function.
-    act: when _install is called.
-    assert: the mock function is called.
-    """
-    monkeypatch.setattr(cli.builder, "setup_builder", (setup_mock := MagicMock()))
-
-    cli._install()
-
-    setup_mock.assert_called_once()
-
-
-def test__get(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
-    """
-    arrange: given a monkeypatched OpenstackManager.get_latest_image_id.
-    act: when _get is called.
-    assert: the image id is captured in stdout.
-    """
-    openstack_manager_mock = MagicMock()
-    openstack_manager_mock.__enter__.return_value = (openstack_mock := MagicMock())
-    openstack_mock.get_latest_image_id.return_value = "testing_id"
-    monkeypatch.setattr(cli, "OpenstackManager", MagicMock(return_value=openstack_manager_mock))
-
-    cli._get(cloud_name=MagicMock(), image_name=MagicMock())
-
-    res = capsys.readouterr()
-    assert "testing_id" in res.out
-
-
-def test__build_and_upload(monkeypatch: pytest.MonkeyPatch, callback_path: Path):
+@pytest.mark.parametrize(
+    "callback_script",
+    [
+        pytest.param(None, id="No callback script"),
+        pytest.param(Path("tmp_path"), id="Callback script"),
+    ],
+)
+def test__build_and_upload(monkeypatch: pytest.MonkeyPatch, callback_script: Path | None):
     """
     arrange: given a monkeypatched builder.setup_builder function.
     act: when _build is called.
     assert: the mock function is called.
     """
     monkeypatch.setattr(cli.builder, "build_image", (builder_mock := MagicMock()))
-    monkeypatch.setattr(
-        cli, "OpenstackManager", MagicMock(return_value=(openstack_manager := MagicMock()))
-    )
+    monkeypatch.setattr(cli.store, "upload_image", MagicMock(return_value="test-image-id"))
+    monkeypatch.setattr(cli.subprocess, "check_call", MagicMock())
 
     cli._build_and_upload(
         base="jammy",
-        callback_script_path=callback_path,
         cloud_name=MagicMock(),
         image_name=MagicMock(),
-        num_revisions=MagicMock(),
+        keep_revisions=MagicMock(),
+        callback_script_path=callback_script,
     )
 
     builder_mock.assert_called_once()
-    openstack_manager.__enter__.return_value.upload_image.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -115,48 +90,48 @@ def test_main_invalid_choice(monkeypatch: pytest.MonkeyPatch, choice: str):
     act: when main is called.
     assert: SystemExit is raised and mocked builder functions are not called.
     """
-    monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
-    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
+    monkeypatch.setattr(cli.builder, "initialize", (initialize_mock := MagicMock()))
+    monkeypatch.setattr(cli.store, "get_latest_build_id", (get_mock := MagicMock()))
     monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
 
     with pytest.raises(SystemExit):
         main([choice])
 
-    install_mock.assert_not_called()
+    initialize_mock.assert_not_called()
     get_mock.assert_not_called()
     build_mock.assert_not_called()
 
 
-def test_main_install(monkeypatch: pytest.MonkeyPatch):
+def test_main_init(monkeypatch: pytest.MonkeyPatch):
     """
-    arrange: given install argument and mocked builder functions.
+    arrange: given init argument and mocked builder functions.
     act: when main is called.
-    assert: install builder mock function is called.
+    assert: initialize builder mock function is called.
     """
-    monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
-    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
+    monkeypatch.setattr(cli.builder, "initialize", (initialize_mock := MagicMock()))
+    monkeypatch.setattr(cli.store, "get_latest_build_id", (get_mock := MagicMock()))
     monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
 
-    main(["install"])
+    main(["init"])
 
-    install_mock.assert_called()
+    initialize_mock.assert_called()
     get_mock.assert_not_called()
     build_mock.assert_not_called()
 
 
-def test_main_get(monkeypatch: pytest.MonkeyPatch):
+def test_main_latest_build_id(monkeypatch: pytest.MonkeyPatch):
     """
-    arrange: given install argument and mocked builder functions.
+    arrange: given latest-build-id argument and mocked builder functions.
     act: when main is called.
     assert: get mock function is called.
     """
-    monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
-    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
+    monkeypatch.setattr(cli.builder, "initialize", (initialize_mock := MagicMock()))
+    monkeypatch.setattr(cli.store, "get_latest_build_id", (get_mock := MagicMock()))
     monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
 
-    main(["get", "-c", "test-cloud", "-o", "test-output-image-name"])
+    main(["latest-build-id", "test-cloud", "test-image"])
 
-    install_mock.assert_not_called()
+    initialize_mock.assert_not_called()
     get_mock.assert_called()
     build_mock.assert_not_called()
 
@@ -164,34 +139,37 @@ def test_main_get(monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.parametrize(
     "invalid_patch",
     [
-        pytest.param({"-i": ""}, id="no base-image"),
-        pytest.param({"-i": "test"}, id="invalid base-image"),
+        pytest.param({"--base-image": ""}, id="no base-image"),
+        pytest.param({"--base-image": "test"}, id="invalid base-image"),
+        pytest.param({"": ""}, id="empty cloud name positional argument"),
+        pytest.param({" ": ""}, id="empty image name positional argument"),
     ],
 )
-def test_main_invalid_build_inputs(
+def test_main_invalid_run_inputs(
     monkeypatch: pytest.MonkeyPatch,
-    build_image_inputs: dict[str, str],
+    run_inputs: dict[str, str],
     invalid_patch: dict[str, str],
 ):
     """
-    arrange: given invalid build arguments and mocked builder functions.
+    arrange: given invalid run arguments and mocked builder functions.
     act: when main is called.
     assert: SystemExit is raised.
     """
-    monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
-    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
+    monkeypatch.setattr(cli.builder, "initialize", (initialize_mock := MagicMock()))
+    monkeypatch.setattr(cli.store, "get_latest_build_id", (get_mock := MagicMock()))
     monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
-    build_image_inputs.update(invalid_patch)
+    run_inputs.update(invalid_patch)
     inputs = list(
+        # if flag does not exist, append it as a positional argument.
         itertools.chain.from_iterable(
-            (flag, value) for (flag, value) in build_image_inputs.items()
+            (flag, value) if flag.strip() else (value,) for (flag, value) in run_inputs.items()
         )
     )
 
     with pytest.raises(SystemExit):
-        main(["build", *inputs])
+        main(["run", *inputs])
 
-    install_mock.assert_not_called()
+    initialize_mock.assert_not_called()
     get_mock.assert_not_called()
     build_mock.assert_not_called()
 
@@ -205,26 +183,25 @@ def test_main_invalid_build_inputs(
         pytest.param("24.04", id="noble tag"),
     ],
 )
-def test_main_base_image(
-    monkeypatch: pytest.MonkeyPatch, image: str, build_image_inputs: dict[str, str]
-):
+def test_main_run(monkeypatch: pytest.MonkeyPatch, image: str, run_inputs: dict[str, str]):
     """
-    arrange: given invalid base_image argument and mocked builder functions.
+    arrange: given invalid run argument and mocked builder functions.
     act: when main is called.
-    assert: build image is called.
+    assert: run is called.
     """
-    monkeypatch.setattr(cli, "_install", (install_mock := MagicMock()))
-    monkeypatch.setattr(cli, "_get", (get_mock := MagicMock()))
+    monkeypatch.setattr(cli.builder, "initialize", (initialize_mock := MagicMock()))
+    monkeypatch.setattr(cli.store, "get_latest_build_id", (get_mock := MagicMock()))
     monkeypatch.setattr(cli, "_build_and_upload", (build_mock := MagicMock()))
-    build_image_inputs.update({"-i": image})
+    run_inputs.update({"--base-image": image})
     inputs = list(
+        # if flag does not exist, append it as a positional argument.
         itertools.chain.from_iterable(
-            (flag, value) for (flag, value) in build_image_inputs.items()
+            (flag, value) if flag.strip() else (value,) for (flag, value) in run_inputs.items()
         )
     )
 
-    main(["build", *inputs])
+    main(["run", *inputs])
 
-    install_mock.assert_not_called()
+    initialize_mock.assert_not_called()
     get_mock.assert_not_called()
     build_mock.assert_called()

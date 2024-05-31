@@ -3,14 +3,14 @@
 
 [project]
 name = "github-runner-image-builder"
-version = "0.0.1"
-authors = [{ name = "Yanks Yoon", email = "yangsoo.yoon@canonical.com" }]
+version = "0.1"
+authors = [{ name = "Canonical IS DevOps", email = "is-devops-team@canonical.com" }]
 description = "A github runner image builder package"
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache License",
     "Operating System :: OS Independent",
 ]
 dynamic = ["dependencies"]
@@ -18,8 +18,8 @@ dynamic = ["dependencies"]
 dependencies = { file = ["requirements.txt"] }
 
 [project.urls]
-Homepage = "https://github.com/canonical/github-runner-image-builder-snap"
-Issues = "https://github.com/canonical/github-runner-image-builder-snap/issues"
+Homepage = "https://github.com/canonical/github-runner-image-builder"
+Issues = "https://github.com/canonical/github-runner-image-builder/issues"
 
 [project.scripts]
 github-runner-image-builder = "github_runner_image_builder.cli:main"
@@ -41,7 +41,6 @@ fail_under = 100
 show_missing = true
 
 [tool.pytest.ini_options]
-minversion = "6.0"
 log_cli_level = "INFO"
 
 # Formatting tools configuration
@@ -63,8 +62,8 @@ select = ["E", "W", "F", "C", "N", "R", "D", "H"]
 # Ignore W503 because using black creates errors with this
 # Ignore D107 Missing docstring in __init__
 ignore = ["W503", "D107"]
-# D100, D101, D102, D103, D104, DCO020, DCO030: Ignore docstring style issues in tests
-per-file-ignores = ["tests/*:D100,D101,D102,D103,D104,D205,D212,DCO020,DCO030"]
+# D100, D101, D102, D103, D104: Ignore docstring style issues in tests
+per-file-ignores = ["tests/*:D100,D101,D102,D103,D104,D205,D212"]
 docstring-convention = "google"
 # Check for properly formatted copyright header in each file
 copyright-check = "True"

@@ -71,6 +71,9 @@ def _create_metadata_tar_gz(image: str, tmp_path: Path) -> Path:
     Args:
         image: The ubuntu LTS image name.
         tmp_path: Temporary dir.
+
+    Returns:
+        The path to created metadata.tar.
     """
     # Create metadata.yaml
     template = Template(
@@ -107,6 +110,9 @@ def _post_vm_img(
         image_data: Image qcow2 (.img) file contents in bytes.
         metadata: The metadata.tar.gz contents in bytes.
         public: Whether the image should be publicly available.
+
+    Returns:
+        The created LXD Image instance.
     """
     headers = {}
     if public:
