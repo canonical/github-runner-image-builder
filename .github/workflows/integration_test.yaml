@@ -10,20 +10,13 @@ concurrency:
 jobs:
   integration-tests-arm:
     name: Integration test (ARM64)
-    runs-on: [self-hosted, ARM64]
+    runs-on: [self-hosted, ARM64, jammy]
     strategy:
       matrix:
         image: [jammy, noble]
-        # 2024.06.01 The only 3.10 version w/ ARM64 support is 3.10.11
-        # https://raw.githubusercontent.com/actions/python-versions/main/versions-manifest.json
-        py: ["3.10.11"]
     steps:
       - uses: actions/checkout@v3
       - uses: canonical/setup-lxd@v0.1.1
-      - name: Setup python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.py }}
       - name: Install tox
         run: |
           sudo apt-get update
@@ -36,7 +29,7 @@ jobs:
   
   integration-tests-amd:
     name: Integration test (X64)
-    runs-on: [self-hosted, X64]
+    runs-on: [self-hosted, X64, jammy]
     strategy:
       matrix:
         image: [jammy, noble]
@@ -44,10 +37,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: canonical/setup-lxd@v0.1.1
-      - name: Setup python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.py }}
       - name: Install tox
         run: |
           sudo apt-get update
