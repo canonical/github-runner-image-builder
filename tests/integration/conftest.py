@@ -116,6 +116,7 @@ echo $IMAGE_ID | tee {callback_result_path}
 """,
         encoding="utf-8",
     )
+    callback_script.chmod(0o775)
     return callback_script
 
 
