@@ -18,7 +18,6 @@ from github_runner_image_builder.builder import (
     Arch,
     BaseImage,
     BaseImageDownloadError,
-    BuilderSetupError,
     BuildImageError,
     ChrootBaseError,
     CleanBuildStateError,
@@ -27,6 +26,7 @@ from github_runner_image_builder.builder import (
     ImageMountError,
     ImageResizeError,
     NetworkBlockDeviceError,
+    PermissionConfigurationError,
     ResizePartitionError,
     SupportedBaseImageArch,
     SystemUserConfigurationError,
@@ -48,6 +48,7 @@ from github_runner_image_builder.builder import (
         pytest.param("_resize_mount_partitions", [], id="resize mount partitions"),
         pytest.param("_disable_unattended_upgrades", [], id="disable unattended upgrades"),
         pytest.param("_configure_system_users", [], id="configure system users"),
+        pytest.param("_configure_usr_local_bin", [], id="configure /usr/local/bin"),
         pytest.param("_compress_image", [MagicMock()], id="compress image"),
     ],
 )
@@ -66,6 +67,21 @@ def test_subprocess_call_funcs(
     monkeypatch.setattr(time, "sleep", MagicMock())
 
     assert getattr(builder, func)(*args) is None
+
+
+def test_initialize(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given sub functions of initialize.
+    act: when initialize is called.
+    assert: the subfunctions are called.
+    """
+    monkeypatch.setattr(builder, "_install_dependencies", (install_mock := MagicMock()))
+    monkeypatch.setattr(builder, "_enable_network_block_device", (enable_nbd_mock := MagicMock()))
+
+    builder.initialize()
+
+    install_mock.assert_called()
+    enable_nbd_mock.assert_called()
 
 
 def test__install_dependencies_error(monkeypatch: pytest.MonkeyPatch):
@@ -104,48 +120,6 @@ def test__enable_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
         builder._enable_network_block_device()
 
     assert "Module nbd not found" in str(exc.getrepr())
-
-
-@pytest.mark.parametrize(
-    "patch_obj, sub_func, exception, expected_message",
-    [
-        pytest.param(
-            builder,
-            "_install_dependencies",
-            DependencyInstallError("Dependency not found"),
-            "Dependency not found",
-            id="Dependency not found",
-        ),
-        pytest.param(
-            builder,
-            "_enable_network_block_device",
-            NetworkBlockDeviceError("Unable to enable nbd"),
-            "Unable to enable nbd",
-            id="Failed to enable nbd",
-        ),
-    ],
-)
-def test_setup_builder_fail(
-    patch_obj: Any,
-    sub_func: str,
-    exception: Exception,
-    expected_message: str,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """
-    arrange: given a monkeypatched sub functions of setup_builder that raises given exceptions.
-    act: when setup_builder is called.
-    assert: A BuilderSetupError is raised.
-    """
-    mock_func = MagicMock(side_effect=exception)
-    monkeypatch.setattr(builder, "_install_dependencies", MagicMock)
-    monkeypatch.setattr(builder, "_enable_network_block_device", MagicMock)
-    monkeypatch.setattr(patch_obj, sub_func, mock_func)
-
-    with pytest.raises(BuilderSetupError) as exc:
-        builder.initialize()
-
-    assert expected_message in str(exc.getrepr())
 
 
 def test__get_supported_runner_arch_unsupported_error():
@@ -457,7 +431,7 @@ def test__configure_system_users(monkeypatch: pytest.MonkeyPatch):
         "check_output",
         MagicMock(
             side_effect=[
-                *([None] * 5),
+                *([None] * 2),
                 subprocess.CalledProcessError(1, [], "Failed to add group.", ""),
             ]
         ),
@@ -467,6 +441,26 @@ def test__configure_system_users(monkeypatch: pytest.MonkeyPatch):
         builder._configure_system_users()
 
     assert "Failed to add group." in str(exc.getrepr())
+
+
+def test__configure_usr_local_bin(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched subprocess run calls that raises an exception.
+    act: when _configure_usr_local_bin is called.
+    assert: PermissionConfigurationError is raised.
+    """
+    monkeypatch.setattr(
+        builder.subprocess,
+        "check_output",
+        MagicMock(
+            side_effect=subprocess.CalledProcessError(1, [], "Failed change permissions.", ""),
+        ),
+    )
+
+    with pytest.raises(PermissionConfigurationError) as exc:
+        builder._configure_usr_local_bin()
+
+    assert "Failed change permissions." in str(exc.getrepr())
 
 
 def test__install_yarn_error(monkeypatch: pytest.MonkeyPatch):

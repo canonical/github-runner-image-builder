@@ -12,13 +12,7 @@ import pytest
 from openstack.connection import Connection
 
 from github_runner_image_builder import store
-from github_runner_image_builder.store import (
-    GetImageError,
-    Image,
-    OpenstackError,
-    UploadImageError,
-    openstack,
-)
+from github_runner_image_builder.store import Image, OpenstackError, UploadImageError, openstack
 from tests.unit.factories import MockOpenstackImageFactory
 
 
@@ -157,25 +151,6 @@ def test_upload_image(mock_connection: MagicMock):
         )
         == "1"
     )
-
-
-@pytest.mark.usefixtures("mock_connection")
-def test_get_latest_image_id_error(monkeypatch: pytest.MonkeyPatch):
-    """
-    arrange: given a mocked _get_images_by_latest function that raises an exception.
-    act: when get_latest_image_id is called.
-    assert: GetImageError is raised.
-    """
-    monkeypatch.setattr(
-        store,
-        "_get_sorted_images_by_created_at",
-        MagicMock(side_effect=OpenstackError("Unauthorized")),
-    )
-
-    with pytest.raises(GetImageError) as exc:
-        store.get_latest_build_id(cloud_name=MagicMock(), image_name=MagicMock())
-
-    assert "Unauthorized" in str(exc.getrepr())
 
 
 @pytest.mark.usefixtures("mock_connection")

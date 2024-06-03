@@ -10,6 +10,7 @@ import openstack
 import pytest
 import yaml
 from openstack.connection import Connection
+from openstack.image.v2.image import Image
 
 from github_runner_image_builder.cli import main
 
@@ -150,4 +151,6 @@ def cli_run_fixture(
 
     yield
 
-    openstack_connection.delete_image(openstack_image_name)
+    openstack_image: Image
+    for openstack_image in openstack_connection.search_images(openstack_image_name):
+        openstack_connection.delete_image(openstack_image.id)

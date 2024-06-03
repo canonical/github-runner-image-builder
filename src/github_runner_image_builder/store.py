@@ -12,7 +12,7 @@ import openstack.connection
 import openstack.exceptions
 from openstack.image.v2.image import Image
 
-from github_runner_image_builder.errors import GetImageError, OpenstackError, UploadImageError
+from github_runner_image_builder.errors import OpenstackError, UploadImageError
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,8 @@ def _prune_old_images(
         num_revisions: The number of revisions to keep.
     """
     images = _get_sorted_images_by_created_at(connection=connection, image_name=image_name)
+    if not images:
+        return
     images_to_prune = images[num_revisions:]
     for image in images_to_prune:
         try:
@@ -67,6 +69,23 @@ def _prune_old_images(
         except openstack.exceptions.OpenStackCloudException as exc:
             logger.error("Failed to prune old image, %s", exc)
             continue
+
+
+def get_latest_build_id(cloud_name: str, image_name: str) -> str | None:
+    """Fetch the latest image id.
+
+    Args:
+        cloud_name: The Openstack cloud to use from clouds.yaml.
+        image_name: The image name to search for.
+
+    Returns:
+        The image ID if exists, None otherwise.
+    """
+    with openstack.connect(cloud=cloud_name) as connection:
+        images = _get_sorted_images_by_created_at(connection=connection, image_name=image_name)
+        if not images:
+            return None
+        return images[0].id
 
 
 def _get_sorted_images_by_created_at(
@@ -90,26 +109,3 @@ def _get_sorted_images_by_created_at(
         raise OpenstackError from exc
 
     return sorted(images, key=lambda image: image.created_at, reverse=True)
-
-
-def get_latest_build_id(cloud_name: str, image_name: str) -> str | None:
-    """Fetch the latest image id.
-
-    Args:
-        cloud_name: The Openstack cloud to use from clouds.yaml.
-        image_name: The image name to search for.
-
-    Raises:
-        GetImageError: If there was an error fetching image from Openstack.
-
-    Returns:
-        The image ID if exists, None otherwise.
-    """
-    with openstack.connect(cloud=cloud_name) as connection:
-        try:
-            images = _get_sorted_images_by_created_at(connection=connection, image_name=image_name)
-        except OpenstackError as exc:
-            raise GetImageError from exc
-        if not images:
-            return None
-        return images[0].id

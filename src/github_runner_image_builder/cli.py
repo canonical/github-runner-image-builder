@@ -193,4 +193,4 @@ def _build_and_upload(
     )
     if callback_script_path:
         # The callback script is a user trusted script.
-        subprocess.check_call(["/bin/bash", str(callback_script_path), image_id])  # nosec: B603
+        subprocess.check_call([str(callback_script_path), image_id])  # nosec: B603

@@ -17,7 +17,6 @@ from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextMan
 from github_runner_image_builder.config import IMAGE_OUTPUT_PATH, Arch, BaseImage
 from github_runner_image_builder.errors import (
     BaseImageDownloadError,
-    BuilderSetupError,
     BuildImageError,
     CleanBuildStateError,
     DependencyInstallError,
@@ -26,6 +25,7 @@ from github_runner_image_builder.errors import (
     ImageMountError,
     ImageResizeError,
     NetworkBlockDeviceError,
+    PermissionConfigurationError,
     ResizePartitionError,
     SystemUserConfigurationError,
     UnattendedUpgradeDisableError,
@@ -45,6 +45,7 @@ APT_DEPENDENCIES = [
     "cloud-utils",  # used for growpart.
     "golang-go",  # used to build yq from source.
 ]
+APT_NONINTERACTIVE_ENV = {"DEBIAN_FRONTEND": "noninteractive"}
 SNAP_GO = "go"
 
 # Constants for mounting images
@@ -57,10 +58,6 @@ NETWORK_BLOCK_DEVICE_PARTITION_PATH = Path(f"{NETWORK_BLOCK_DEVICE_PATH}p1")
 RESIZE_AMOUNT = "+1.5G"
 MOUNTED_RESOLV_CONF_PATH = IMAGE_MOUNT_DIR / "etc/resolv.conf"
 HOST_RESOLV_CONF_PATH = Path("/etc/resolv.conf")
-
-# Constants for chroot environment Python symmlinks
-DEFAULT_PYTHON_PATH = Path("/usr/bin/python3")
-SYM_LINK_PYTHON_PATH = Path("/usr/bin/python")
 
 # Constants for disabling automatic apt updates
 APT_TIMER = "apt-daily.timer"
@@ -94,18 +91,11 @@ IMAGE_DEFAULT_APT_PACKAGES = [
 
 
 def initialize() -> None:
-    """Configure the host machine to build images.
-
-    Raises:
-        BuilderSetupError: If there was an error setting up the host device for building images.
-    """
-    try:
-        logger.info("Installing dependencies.")
-        _install_dependencies()
-        logger.info("Enabling network block device.")
-        _enable_network_block_device()
-    except ImageBuilderBaseError as exc:
-        raise BuilderSetupError from exc
+    """Configure the host machine to build images."""
+    logger.info("Installing dependencies.")
+    _install_dependencies()
+    logger.info("Enabling network block device.")
+    _enable_network_block_device()
 
 
 def _install_dependencies() -> None:
@@ -116,12 +106,16 @@ def _install_dependencies() -> None:
     """
     try:
         output = subprocess.check_output(
-            ["/usr/bin/apt-get", "update", "-y"], encoding="utf-8", timeout=30 * 60
+            ["/usr/bin/apt-get", "update", "-y"],
+            encoding="utf-8",
+            env=APT_NONINTERACTIVE_ENV,
+            timeout=30 * 60,
         )  # nosec: B603
         logger.info("apt-get update out: %s", output)
         output = subprocess.check_output(
             ["/usr/bin/apt-get", "install", "-y", "--no-install-recommends", *APT_DEPENDENCIES],
             encoding="utf-8",
+            env=APT_NONINTERACTIVE_ENV,
             timeout=30 * 60,
         )  # nosec: B603
         logger.info("apt-get install out: %s", output)
@@ -130,7 +124,7 @@ def _install_dependencies() -> None:
             encoding="utf-8",
             timeout=30 * 60,
         )  # nosec: B603
-        logger.info("apt-get snap install go out: %s", output)
+        logger.info("snap install go out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error installing dependencies, cmd: %s, code: %s, err: %s",
@@ -180,8 +174,6 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
         _resize_image(image_path=base_image_path)
         logger.info("Mounting network block device.")
         _mount_image_to_network_block_device(image_path=base_image_path)
-        logger.info("Replacing resolv.conf.")
-        _replace_mounted_resolv_conf()
         logger.info("Resizing partitions.")
         _resize_mount_partitions()
         logger.info("Installing YQ from source.")
@@ -191,13 +183,15 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
 
     try:
         logger.info("Setting up chroot environment.")
+        logger.info("Replacing resolv.conf.")
+        _replace_mounted_resolv_conf()
         with ChrootContextManager(IMAGE_MOUNT_DIR):
             # operator_libs_linux apt package uses dpkg -l and that does not work well with
             # chroot env, hence use subprocess run.
             output = subprocess.check_output(
                 ["/usr/bin/apt-get", "update", "-y"],
                 timeout=60 * 10,
-                env={"DEBIAN_FRONTEND": "noninteractive"},
+                env=APT_NONINTERACTIVE_ENV,
             )  # nosec: B603
             logger.info("apt-get update out: %s", output)
             output = subprocess.check_output(  # nosec: B603
@@ -209,11 +203,12 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
                     *IMAGE_DEFAULT_APT_PACKAGES,
                 ],
                 timeout=60 * 20,
-                env={"DEBIAN_FRONTEND": "noninteractive"},
+                env=APT_NONINTERACTIVE_ENV,
             )
             logger.info("apt-get install out: %s", output)
             _disable_unattended_upgrades()
             _configure_system_users()
+            _configure_usr_local_bin()
             _install_yarn()
     except ChrootBaseError as exc:
         raise BuildImageError from exc
@@ -223,7 +218,7 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
     try:
         logger.info("Compressing image.")
         _compress_image(base_image_path)
-    except ImageBuilderBaseError as exc:
+    except ImageCompressError as exc:
         raise BuildImageError from exc
 
 
@@ -288,7 +283,7 @@ def _clean_build_state() -> None:
             capture_output=True,
         )
         logger.info("qemu-nbd disconnect nbdp1 out: %s", output)
-    except subprocess.CalledProcessError as exc:
+    except subprocess.SubprocessError as exc:
         raise CleanBuildStateError from exc
 
 
@@ -377,28 +372,6 @@ def _resize_image(image_path: Path) -> None:
         raise ImageResizeError from exc
 
 
-def _replace_mounted_resolv_conf() -> None:
-    """Replace resolv.conf to host resolv.conf to allow networking."""
-    MOUNTED_RESOLV_CONF_PATH.unlink(missing_ok=True)
-    shutil.copy(str(HOST_RESOLV_CONF_PATH), str(MOUNTED_RESOLV_CONF_PATH))
-
-
-@retry(tries=5, delay=5, max_delay=60, backoff=2, local_logger=logger)
-def _mount_network_block_device_partition() -> None:
-    """Mount the network block device partition."""
-    output = subprocess.check_output(  # nosec: B603
-        [
-            "/usr/bin/mount",
-            "-o",
-            "rw",
-            str(NETWORK_BLOCK_DEVICE_PARTITION_PATH),
-            str(IMAGE_MOUNT_DIR),
-        ],
-        timeout=60,
-    )
-    logger.info("mount nbd0p1 out: %s", output)
-
-
 def _mount_image_to_network_block_device(image_path: Path) -> None:
     """Mount the image to network block device in preparation for chroot.
 
@@ -423,6 +396,23 @@ def _mount_image_to_network_block_device(image_path: Path) -> None:
             exc.output,
         )
         raise ImageMountError from exc
+
+
+# Network block device may fail to mount, retrying will usually fix this.
+@retry(tries=5, delay=5, max_delay=60, backoff=2, local_logger=logger)
+def _mount_network_block_device_partition() -> None:
+    """Mount the network block device partition."""
+    output = subprocess.check_output(  # nosec: B603
+        [
+            "/usr/bin/mount",
+            "-o",
+            "rw",
+            str(NETWORK_BLOCK_DEVICE_PARTITION_PATH),
+            str(IMAGE_MOUNT_DIR),
+        ],
+        timeout=60,
+    )
+    logger.info("mount nbd0p1 out: %s", output)
 
 
 def _resize_mount_partitions() -> None:
@@ -486,6 +476,12 @@ def _install_yq() -> None:
         raise YQBuildError from exc
 
 
+def _replace_mounted_resolv_conf() -> None:
+    """Replace resolv.conf to host resolv.conf to allow networking."""
+    MOUNTED_RESOLV_CONF_PATH.unlink(missing_ok=True)
+    shutil.copy(str(HOST_RESOLV_CONF_PATH), str(MOUNTED_RESOLV_CONF_PATH))
+
+
 def _disable_unattended_upgrades() -> None:
     """Disable unatteneded upgrades to prevent apt locks.
 
@@ -525,7 +521,9 @@ def _disable_unattended_upgrades() -> None:
         )  # nosec: B603
         logger.info("systemctl daemon-reload out: %s", output)
         output = subprocess.check_output(  # nosec: B603
-            ["/usr/bin/apt-get", "remove", "-y", "unattended-upgrades"], timeout=30
+            ["/usr/bin/apt-get", "remove", "-y", "unattended-upgrades"],
+            env=APT_NONINTERACTIVE_ENV,
+            timeout=30,
         )
         logger.info("apt-get remove unattended-upgrades out: %s", output)
     except subprocess.CalledProcessError as exc:
@@ -558,21 +556,15 @@ def _configure_system_users() -> None:
         )  # nosec: B603
         logger.info("groupadd microk8s out: %s", output)
         output = subprocess.check_output(  # nosec: B603
-            ["/usr/sbin/usermod", "-aG", DOCKER_GROUP, UBUNTU_USER], timeout=30
+            [
+                "/usr/sbin/usermod",
+                "-aG",
+                f"{DOCKER_GROUP},{MICROK8S_GROUP},{LXD_GROUP}",
+                UBUNTU_USER,
+            ],
+            timeout=30,
         )
-        logger.info("groupadd add ubuntu to docker group out: %s", output)
-        output = subprocess.check_output(  # nosec: B603
-            ["/usr/sbin/usermod", "-aG", MICROK8S_GROUP, UBUNTU_USER], timeout=30
-        )
-        logger.info("groupadd add ubuntu to microk8s group out: %s", output)
-        output = subprocess.check_output(  # nosec: B603
-            ["/usr/sbin/usermod", "-aG", LXD_GROUP, UBUNTU_USER], timeout=30
-        )
-        logger.info("groupadd add ubuntu to lxd group out: %s", output)
-        output = subprocess.check_output(  # nosec: B603
-            ["/usr/bin/chmod", "777", "/usr/local/bin"], timeout=30
-        )
-        logger.info("chmod /usr/local/bin out: %s", output)
+        logger.info("usrmod to ubuntu user out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error disabling unattended upgrades, cmd: %s, code: %s, err: %s",
@@ -581,6 +573,28 @@ def _configure_system_users() -> None:
             exc.output,
         )
         raise SystemUserConfigurationError from exc
+
+
+def _configure_usr_local_bin() -> None:
+    """Change the permissions of /usr/local/bin dir to match GH hosted runners permissions.
+
+    Raises:
+        PermissionConfigurationError: if there was an error changing permissions.
+    """
+    try:
+        # The 777 is to match the behavior of GitHub hosted runners
+        output = subprocess.check_output(  # nosec: B603
+            ["/usr/bin/chmod", "777", "/usr/local/bin"], timeout=30
+        )
+        logger.info("chmod /usr/local/bin out: %s", output)
+    except subprocess.CalledProcessError as exc:
+        logger.exception(
+            "Error changing /usr/local/bin/ permissions, cmd: %s, code: %s, err: %s",
+            exc.cmd,
+            exc.returncode,
+            exc.output,
+        )
+        raise PermissionConfigurationError from exc
 
 
 def _install_yarn() -> None:
@@ -609,6 +623,7 @@ def _install_yarn() -> None:
         raise YarnInstallError from exc
 
 
+# Image compression might fail for arbitrary reasons - retrying usually solves this.
 @retry(tries=5, delay=5, max_delay=60, backoff=2, local_logger=logger)
 def _compress_image(image: Path) -> None:
     """Compress the image.

@@ -10,6 +10,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Literal
 
+from github_runner_image_builder.errors import UnsupportedArchitectureError
+
 logger = logging.getLogger(__name__)
 
 ACTION_INIT = "init"
@@ -51,30 +53,6 @@ class Arch(str, Enum):
     X64 = "x64"
 
 
-class UnsupportedArchitectureError(Exception):
-    """Raised when given machine architecture is unsupported.
-
-    Attributes:
-        arch: The current machine architecture.
-    """
-
-    def __str__(self) -> str:
-        """Represent the error in string format.
-
-        Returns:
-            The error in string format.
-        """
-        return f"UnsupportedArchitectureError: {self.arch}"
-
-    def __init__(self, arch: str) -> None:
-        """Initialize a new instance of the UnsupportedArchitectureError exception.
-
-        Args:
-            arch: The current machine architecture.
-        """
-        self.arch = arch
-
-
 ARCHITECTURES_ARM64 = {"aarch64", "arm64"}
 ARCHITECTURES_X86 = {"x86_64"}
 
@@ -95,7 +73,7 @@ def get_supported_arch() -> Arch:
         case arch if arch in ARCHITECTURES_X86:
             return Arch.X64
         case _:
-            raise UnsupportedArchitectureError(arch=arch)
+            raise UnsupportedArchitectureError()
 
 
 class BaseImage(str, Enum):

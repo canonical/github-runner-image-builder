@@ -8,17 +8,17 @@ class ImageBuilderBaseError(Exception):
     """Represents an error with any builder related executions."""
 
 
+class BuilderSetupError(ImageBuilderBaseError):
+    """Represents an error while setting up host machine as builder."""
+
+
 # nosec: B603: All subprocess runs are run with trusted executables.
-class DependencyInstallError(ImageBuilderBaseError):
+class DependencyInstallError(BuilderSetupError):
     """Represents an error while installing required dependencies."""
 
 
-class NetworkBlockDeviceError(ImageBuilderBaseError):
+class NetworkBlockDeviceError(BuilderSetupError):
     """Represents an error while enabling network block device."""
-
-
-class BuilderSetupError(ImageBuilderBaseError):
-    """Represents an error while setting up host machine as builder."""
 
 
 class UnsupportedArchitectureError(ImageBuilderBaseError):
@@ -53,6 +53,10 @@ class SystemUserConfigurationError(ImageBuilderBaseError):
     """Represents an error while adding user to chroot env."""
 
 
+class PermissionConfigurationError(ImageBuilderBaseError):
+    """Represents an error while modifying dir permissions."""
+
+
 class YQBuildError(ImageBuilderBaseError):
     """Represents an error while building yq binary from source."""
 
@@ -79,10 +83,6 @@ class UnauthorizedError(OpenstackBaseError):
 
 class UploadImageError(OpenstackBaseError):
     """Represents an error when uploading image to Openstack."""
-
-
-class GetImageError(OpenstackBaseError):
-    """Represents an error when fetching images from Openstack."""
 
 
 class OpenstackError(OpenstackBaseError):
