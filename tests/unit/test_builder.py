@@ -39,9 +39,38 @@ from github_runner_image_builder.builder import (
 )
 
 
-def test__install_dependencies_package_not_found(monkeypatch: pytest.MonkeyPatch):
+@pytest.mark.parametrize(
+    "func, args",
+    [
+        pytest.param("_install_dependencies", [], id="install dependencies"),
+        pytest.param("_enable_network_block_device", [], id="enable network block device"),
+        pytest.param("_resize_image", [MagicMock()], id="resize image"),
+        pytest.param("_resize_mount_partitions", [], id="resize mount partitions"),
+        pytest.param("_disable_unattended_upgrades", [], id="disable unattended upgrades"),
+        pytest.param("_configure_system_users", [], id="configure system users"),
+        pytest.param("_compress_image", [MagicMock()], id="compress image"),
+    ],
+)
+def test_subprocess_call_funcs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, func: str, args: list[Any]
+):
     """
-    arrange: given apt.add_package that raises PackageNotFoundError.
+    arrange: given functions that consist of subprocess calls only with mocked subprocess calls.
+    act: when the functions are called.
+    assert: no errors are raised.
+    """
+    monkeypatch.setattr(subprocess, "check_output", MagicMock())
+    monkeypatch.setattr(subprocess, "run", MagicMock())
+    monkeypatch.setattr(builder, "UBUNTU_HOME", tmp_path)
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
+
+    assert getattr(builder, func)(*args) is None
+
+
+def test__install_dependencies_error(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given mocked subprocess.check_output calls that raises CalledProcessError.
     act: when _install_dependencies is called.
     assert: DependencyInstallError is raised.
     """
@@ -67,7 +96,7 @@ def test__enable_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
     """
     monkeypatch.setattr(
         subprocess,
-        "run",
+        "check_output",
         MagicMock(side_effect=subprocess.CalledProcessError(1, [], "Module nbd not found")),
     )
 
@@ -248,7 +277,7 @@ def test__resize_image_fail(monkeypatch: pytest.MonkeyPatch):
     )
     monkeypatch.setattr(
         subprocess,
-        "run",
+        "check_output",
         mock_run,
     )
 
@@ -264,7 +293,7 @@ def test__mount_network_block_device_partition(monkeypatch: pytest.MonkeyPatch):
     act: when _mount_network_block_device_partition is called.
     assert: subprocess run call is made.
     """
-    monkeypatch.setattr(subprocess, "run", (mock_run_call := MagicMock()))
+    monkeypatch.setattr(subprocess, "check_output", (mock_run_call := MagicMock()))
 
     builder._mount_network_block_device_partition()
 
@@ -279,7 +308,7 @@ def test__mount_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPat
     """
     monkeypatch.setattr(
         subprocess,
-        "run",
+        "check_output",
         MagicMock(side_effect=subprocess.CalledProcessError(1, [], "", "error mounting")),
     )
 
@@ -296,7 +325,7 @@ def test__mount_image_to_network_block_device(monkeypatch: pytest.MonkeyPatch):
     act: when _mount_image_to_network_block_device is called.
     assert: expected calls are made.
     """
-    monkeypatch.setattr(subprocess, "run", (run_mock := MagicMock()))
+    monkeypatch.setattr(subprocess, "check_output", (run_mock := MagicMock()))
     monkeypatch.setattr(
         builder, "_mount_network_block_device_partition", (mount_mock := MagicMock())
     )
@@ -332,7 +361,7 @@ def test__resize_mount_partitions(monkeypatch: pytest.MonkeyPatch):
     """
     monkeypatch.setattr(
         subprocess,
-        "run",
+        "check_output",
         MagicMock(side_effect=[None, subprocess.CalledProcessError(1, [], "", "resize error")]),
     )
 
@@ -350,7 +379,7 @@ def test__install_yq_error(monkeypatch: pytest.MonkeyPatch):
     """
     monkeypatch.setattr(
         subprocess,
-        "run",
+        "check_output",
         MagicMock(side_effect=[None, subprocess.CalledProcessError(1, [], "", "Go build error.")]),
     )
 
@@ -367,7 +396,7 @@ def test__install_yq_already_exists(monkeypatch: pytest.MonkeyPatch):
     assert: Mock functions are called.
     """
     monkeypatch.setattr(builder, "YQ_REPOSITORY_PATH", MagicMock(return_value=True))
-    monkeypatch.setattr(subprocess, "run", (run_mock := MagicMock()))
+    monkeypatch.setattr(subprocess, "check_output", (run_mock := MagicMock()))
     monkeypatch.setattr(shutil, "copy", (copy_mock := MagicMock()))
 
     builder._install_yq()
@@ -382,7 +411,7 @@ def test__install_yq(monkeypatch: pytest.MonkeyPatch):
     act: when _install_yq is called.
     assert: Mock functions are called.
     """
-    monkeypatch.setattr(subprocess, "run", (run_mock := MagicMock()))
+    monkeypatch.setattr(subprocess, "check_output", (run_mock := MagicMock()))
     monkeypatch.setattr(shutil, "copy", (copy_mock := MagicMock()))
 
     builder._install_yq()
@@ -401,11 +430,11 @@ def test__disable_unattended_upgrades_subprocess_fail(monkeypatch: pytest.Monkey
     # pylint: disable=duplicate-code
     monkeypatch.setattr(
         subprocess,
-        "run",
+        "check_output",
         MagicMock(
             side_effect=[
                 *([None] * 7),
-                subprocess.SubprocessError("Failed to disable unattended upgrades"),
+                subprocess.CalledProcessError(1, [], "Failed to disable unattended upgrades", ""),
             ]
         ),
     )
@@ -425,8 +454,13 @@ def test__configure_system_users(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(builder, "UBUNTU_HOME", MagicMock())
     monkeypatch.setattr(
         builder.subprocess,
-        "run",
-        MagicMock(side_effect=[*([None] * 5), subprocess.SubprocessError("Failed to add group.")]),
+        "check_output",
+        MagicMock(
+            side_effect=[
+                *([None] * 5),
+                subprocess.CalledProcessError(1, [], "Failed to add group.", ""),
+            ]
+        ),
     )
 
     with pytest.raises(SystemUserConfigurationError) as exc:
@@ -444,11 +478,11 @@ def test__install_yarn_error(monkeypatch: pytest.MonkeyPatch):
     # The test mocks use similar codes.
     monkeypatch.setattr(  # pylint: disable=duplicate-code
         subprocess,
-        "run",
+        "check_output",
         MagicMock(
             side_effect=[
                 None,
-                subprocess.CalledProcessError(1, [], "", "Failed to clean npm cache."),
+                subprocess.CalledProcessError(1, [], "Failed to clean npm cache.", ""),
             ]
         ),
     )
@@ -465,7 +499,7 @@ def test__install_yarn(monkeypatch: pytest.MonkeyPatch):
     act: when _install_yarn is called.
     assert: The function exists without raising an error.
     """
-    monkeypatch.setattr(subprocess, "run", MagicMock())
+    monkeypatch.setattr(subprocess, "check_output", MagicMock())
 
     assert builder._install_yarn() is None
 
@@ -480,7 +514,7 @@ def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(time, "sleep", MagicMock())
     monkeypatch.setattr(
         subprocess,
-        "run",
+        "check_output",
         MagicMock(side_effect=subprocess.CalledProcessError(1, [], "Compression error")),
     )
 
@@ -537,7 +571,7 @@ def test_build_image_error(
     monkeypatch.setattr(builder, "_replace_mounted_resolv_conf", MagicMock())
     monkeypatch.setattr(builder, "_install_yq", MagicMock())
     monkeypatch.setattr(builder, "ChrootContextManager", MagicMock())
-    monkeypatch.setattr(builder.subprocess, "run", MagicMock())
+    monkeypatch.setattr(builder.subprocess, "check_output", MagicMock())
     monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
     monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
     monkeypatch.setattr(builder, "_install_yarn", MagicMock())
