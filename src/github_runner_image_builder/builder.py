@@ -115,19 +115,22 @@ def _install_dependencies() -> None:
         DependencyInstallError: If there was an error installing apt packages.
     """
     try:
-        subprocess.check_output(
+        output = subprocess.check_output(
             ["/usr/bin/apt-get", "update", "-y"], encoding="utf-8", timeout=30 * 60
         )  # nosec: B603
-        subprocess.check_output(
+        logger.info("apt-get update out: %s", output)
+        output = subprocess.check_output(
             ["/usr/bin/apt-get", "install", "-y", "--no-install-recommends", *APT_DEPENDENCIES],
             encoding="utf-8",
             timeout=30 * 60,
         )  # nosec: B603
-        subprocess.check_output(
+        logger.info("apt-get install out: %s", output)
+        output = subprocess.check_output(
             ["/usr/bin/snap", "install", SNAP_GO, "--classic"],
             encoding="utf-8",
             timeout=30 * 60,
         )  # nosec: B603
+        logger.info("apt-get snap install go out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error installing dependencies, cmd: %s, code: %s, err: %s",
@@ -145,7 +148,8 @@ def _enable_network_block_device() -> None:
         NetworkBlockDeviceError: If there was an error enable nbd kernel.
     """
     try:
-        subprocess.check_output(["/usr/sbin/modprobe", "nbd"], timeout=10)  # nosec: B603
+        output = subprocess.check_output(["/usr/sbin/modprobe", "nbd"], timeout=10)  # nosec: B603
+        logger.info("modprobe nbd out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error enabling network block device, cmd: %s, code: %s, err: %s",
@@ -190,14 +194,13 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
         with ChrootContextManager(IMAGE_MOUNT_DIR):
             # operator_libs_linux apt package uses dpkg -l and that does not work well with
             # chroot env, hence use subprocess run.
-            subprocess.run(
+            output = subprocess.check_output(
                 ["/usr/bin/apt-get", "update", "-y"],
                 timeout=60 * 10,
                 env={"DEBIAN_FRONTEND": "noninteractive"},
-                check=True,
-                capture_output=True,
             )  # nosec: B603
-            subprocess.run(  # nosec: B603
+            logger.info("apt-get update out: %s", output)
+            output = subprocess.check_output(  # nosec: B603
                 [
                     "/usr/bin/apt-get",
                     "install",
@@ -207,9 +210,8 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
                 ],
                 timeout=60 * 20,
                 env={"DEBIAN_FRONTEND": "noninteractive"},
-                check=True,
-                capture_output=True,
             )
+            logger.info("apt-get install out: %s", output)
             _disable_unattended_upgrades()
             _configure_system_users()
             _install_yarn()
@@ -234,51 +236,58 @@ def _clean_build_state() -> None:
     # The commands will fail if artefacts do not exist and hence there is no need to check the
     # output of subprocess runs.
     try:
-        subprocess.run(
+        output = subprocess.run(
             ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "dev")],
             timeout=30,
             check=False,
-            capture_output=True,
         )  # nosec: B603
-        subprocess.run(
+        logger.info("umount dev out: %s", output)
+        output = subprocess.run(
             ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "proc")],
             timeout=30,
             check=False,
             capture_output=True,
         )  # nosec: B603
-        subprocess.run(
+        logger.info("umount proc out: %s", output)
+        output = subprocess.run(
             ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "sys")],
             timeout=30,
             check=False,
             capture_output=True,
         )  # nosec: B603
-        subprocess.run(
+        logger.info("umount sys out: %s", output)
+        output = subprocess.run(
             ["/usr/bin/umount", str(IMAGE_MOUNT_DIR)], timeout=30, check=False, capture_output=True
         )  # nosec: B603
-        subprocess.run(
+        logger.info("umount ubuntu-image out: %s", output)
+        output = subprocess.run(
             ["/usr/bin/umount", str(NETWORK_BLOCK_DEVICE_PATH)],
             timeout=30,
             check=False,
             capture_output=True,
         )  # nosec: B603
-        subprocess.run(  # nosec: B603
+        logger.info("umount nbd out: %s", output)
+        output = subprocess.run(  # nosec: B603
             ["/usr/bin/umount", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
             timeout=30,
             check=False,
             capture_output=True,
         )
-        subprocess.run(  # nosec: B603
+        logger.info("umount nbdp1 out: %s", output)
+        output = subprocess.run(  # nosec: B603
             ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PATH)],
             timeout=30,
             check=False,
             capture_output=True,
         )
-        subprocess.run(  # nosec: B603
+        logger.info("qemu-nbd disconnect nbd out: %s", output)
+        output = subprocess.run(  # nosec: B603
             ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
             timeout=30,
             check=False,
             capture_output=True,
         )
+        logger.info("qemu-nbd disconnect nbdp1 out: %s", output)
     except subprocess.CalledProcessError as exc:
         raise CleanBuildStateError from exc
 
@@ -353,10 +362,11 @@ def _resize_image(image_path: Path) -> None:
         ImageResizeError: If there was an error resizing the image.
     """
     try:
-        subprocess.check_output(  # nosec: B603
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/qemu-img", "resize", str(image_path), RESIZE_AMOUNT],
             timeout=60,
         )
+        logger.info("qemu-img resize out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error resizing image, cmd: %s, code: %s, err: %s",
@@ -376,7 +386,7 @@ def _replace_mounted_resolv_conf() -> None:
 @retry(tries=5, delay=5, max_delay=60, backoff=2, local_logger=logger)
 def _mount_network_block_device_partition() -> None:
     """Mount the network block device partition."""
-    subprocess.check_output(  # nosec: B603
+    output = subprocess.check_output(  # nosec: B603
         [
             "/usr/bin/mount",
             "-o",
@@ -386,6 +396,7 @@ def _mount_network_block_device_partition() -> None:
         ],
         timeout=60,
     )
+    logger.info("mount nbd0p1 out: %s", output)
 
 
 def _mount_image_to_network_block_device(image_path: Path) -> None:
@@ -398,10 +409,11 @@ def _mount_image_to_network_block_device(image_path: Path) -> None:
         ImageMountError: If there was an error mounting the image to network block device.
     """
     try:
-        subprocess.check_output(  # nosec: B603
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/qemu-nbd", f"--connect={NETWORK_BLOCK_DEVICE_PATH}", str(image_path)],
             timeout=60,
         )
+        logger.info("qemu-nbd connect out: %s", output)
         _mount_network_block_device_partition()
     except subprocess.CalledProcessError as exc:
         logger.exception(
@@ -420,13 +432,15 @@ def _resize_mount_partitions() -> None:
         ResizePartitionError: If there was an error resizing network block device partitions.
     """
     try:
-        subprocess.check_output(  # nosec: B603
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/growpart", str(NETWORK_BLOCK_DEVICE_PATH), "1"], timeout=10 * 60
         )
-        subprocess.check_output(  # nosec: B603
+        logger.info("growpart out: %s", output)
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/sbin/resize2fs", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
             timeout=10 * 60,
         )
+        logger.info("resize2fs out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error resizing mount partitions, cmd: %s, code: %s, err: %s",
@@ -445,19 +459,22 @@ def _install_yq() -> None:
     """
     try:
         if not YQ_REPOSITORY_PATH.exists():
-            subprocess.check_output(  # nosec: B603
+            output = subprocess.check_output(  # nosec: B603
                 ["/usr/bin/git", "clone", str(YQ_REPOSITORY_URL), str(YQ_REPOSITORY_PATH)],
                 timeout=60 * 10,
             )
+            logger.info("git clone out: %s", output)
         else:
-            subprocess.check_output(  # nosec: B603
+            output = subprocess.check_output(  # nosec: B603
                 ["/usr/bin/git", "-C", str(YQ_REPOSITORY_PATH), "pull"],
                 timeout=60 * 10,
             )
-        subprocess.check_output(  # nosec: B603
+            logger.info("git pull out: %s", output)
+        output = subprocess.check_output(  # nosec: B603
             ["/snap/bin/go", "build", "-C", str(YQ_REPOSITORY_PATH), "-o", str(HOST_YQ_BIN_PATH)],
             timeout=20 * 60,
         )
+        logger.info("go build out: %s", output)
         shutil.copy(HOST_YQ_BIN_PATH, MOUNTED_YQ_BIN_PATH)
     except subprocess.CalledProcessError as exc:
         logger.exception(
@@ -479,26 +496,38 @@ def _disable_unattended_upgrades() -> None:
     try:
         # use subprocess run rather than operator-libs-linux's systemd library since the library
         # does not provide full features like mask.
-        subprocess.check_output(
+        output = subprocess.check_output(
             ["/usr/bin/systemctl", "stop", APT_TIMER], timeout=30
         )  # nosec: B603
-        subprocess.check_output(
+        logger.info("systemctl stop apt timer out: %s", output)
+        output = subprocess.check_output(
             ["/usr/bin/systemctl", "disable", APT_TIMER], timeout=30
         )  # nosec: B603
-        subprocess.check_output(["/usr/bin/systemctl", "mask", APT_SVC], timeout=30)  # nosec: B603
-        subprocess.check_output(
+        logger.info("systemctl disable apt timer out: %s", output)
+        output = subprocess.check_output(
+            ["/usr/bin/systemctl", "mask", APT_SVC], timeout=30
+        )  # nosec: B603
+        logger.info("systemctl mask apt timer out: %s", output)
+        output = subprocess.check_output(
             ["/usr/bin/systemctl", "stop", APT_UPGRADE_TIMER], timeout=30
         )  # nosec: B603
-        subprocess.check_output(  # nosec: B603
+        logger.info("systemctl stop apt upgrade timer out: %s", output)
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/systemctl", "disable", APT_UPGRADE_TIMER], timeout=30
         )
-        subprocess.check_output(
+        logger.info("systemctl disable apt upgrade timer out: %s", output)
+        output = subprocess.check_output(
             ["/usr/bin/systemctl", "mask", APT_UPGRAD_SVC], timeout=30
         )  # nosec: B603
-        subprocess.check_output(["/usr/bin/systemctl", "daemon-reload"], timeout=30)  # nosec: B603
-        subprocess.check_output(  # nosec: B603
+        logger.info("systemctl mask apt upgrade timer out: %s", output)
+        output = subprocess.check_output(
+            ["/usr/bin/systemctl", "daemon-reload"], timeout=30
+        )  # nosec: B603
+        logger.info("systemctl daemon-reload out: %s", output)
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/apt-get", "remove", "-y", "unattended-upgrades"], timeout=30
         )
+        logger.info("apt-get remove unattended-upgrades out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error disabling unattended upgrades, cmd: %s, code: %s, err: %s",
@@ -516,26 +545,34 @@ def _configure_system_users() -> None:
         SystemUserConfigurationError: If there was an error configuring ubuntu user.
     """
     try:
-        subprocess.check_output(  # nosec: B603
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/sbin/useradd", "-m", UBUNTU_USER], timeout=30
         )
+        logger.info("useradd ubunutu out: %s", output)
         with (UBUNTU_HOME / ".profile").open("a") as profile_file:
             profile_file.write(f"PATH=$PATH:{UBUNTU_HOME}/.local/bin\n")
         with (UBUNTU_HOME / ".bashrc").open("a") as bashrc_file:
             bashrc_file.write(f"PATH=$PATH:{UBUNTU_HOME}/.local/bin\n")
-        subprocess.check_output(["/usr/sbin/groupadd", MICROK8S_GROUP], timeout=30)  # nosec: B603
-        subprocess.check_output(  # nosec: B603
+        output = subprocess.check_output(
+            ["/usr/sbin/groupadd", MICROK8S_GROUP], timeout=30
+        )  # nosec: B603
+        logger.info("groupadd microk8s out: %s", output)
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/sbin/usermod", "-aG", DOCKER_GROUP, UBUNTU_USER], timeout=30
         )
-        subprocess.check_output(  # nosec: B603
+        logger.info("groupadd add ubuntu to docker group out: %s", output)
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/sbin/usermod", "-aG", MICROK8S_GROUP, UBUNTU_USER], timeout=30
         )
-        subprocess.check_output(  # nosec: B603
+        logger.info("groupadd add ubuntu to microk8s group out: %s", output)
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/sbin/usermod", "-aG", LXD_GROUP, UBUNTU_USER], timeout=30
         )
-        subprocess.check_output(  # nosec: B603
+        logger.info("groupadd add ubuntu to lxd group out: %s", output)
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/chmod", "777", "/usr/local/bin"], timeout=30
         )
+        logger.info("chmod /usr/local/bin out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error disabling unattended upgrades, cmd: %s, code: %s, err: %s",
@@ -554,12 +591,14 @@ def _install_yarn() -> None:
     """
     try:
         # 2024/04/26 There's a potential security risk here, npm is subject to toolchain attacks.
-        subprocess.check_output(
+        output = subprocess.check_output(
             ["/usr/bin/npm", "install", "--global", "yarn"], timeout=60 * 5
         )  # nosec: B603
-        subprocess.check_output(
+        logger.info("npm install yarn out: %s", output)
+        output = subprocess.check_output(
             ["/usr/bin/npm", "cache", "clean", "--force"], timeout=60
         )  # nosec: B603
+        logger.info("npm cache clean out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error installing Yarn, cmd: %s, code: %s, err: %s",
@@ -581,10 +620,11 @@ def _compress_image(image: Path) -> None:
         ImageCompressError: If there was something wrong compressing the image.
     """
     try:
-        subprocess.check_output(  # nosec: B603
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/virt-sparsify", "--compress", str(image), str(IMAGE_OUTPUT_PATH)],
             timeout=60 * 10,
         )
+        logger.info("virt-sparsify compress out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error compressing image, cmd: %s, code: %s, err: %s",
