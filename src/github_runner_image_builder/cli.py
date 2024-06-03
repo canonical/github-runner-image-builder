@@ -117,7 +117,7 @@ def main(args: list[str] | None = None) -> None:
             store.get_latest_build_id(
                 cloud_name=options.cloud_name, image_name=options.image_name
             ),
-            end=None,
+            end="",
         )
         return
 

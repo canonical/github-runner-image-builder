@@ -134,6 +134,4 @@ async def test_get_image(
     image_id = openstack_connection.get_image_id(openstack_image_name)
 
     res = capsys.readouterr()
-    assert (
-        res.out.strip() == image_id
-    ), f"Openstack image not matching, {res.out} {res.err}, {image_id}"
+    assert res.out == image_id, f"Openstack image not matching, {res.out} {res.err}, {image_id}"
