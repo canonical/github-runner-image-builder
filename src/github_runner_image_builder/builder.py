@@ -50,6 +50,8 @@ APT_DEPENDENCIES = [
 APT_NONINTERACTIVE_ENV = {"DEBIAN_FRONTEND": "noninteractive"}
 SNAP_GO = "go"
 
+CHECKSUM_BUF_SIZE = 65536  # 65kb
+
 # Constants for mounting images
 IMAGE_MOUNT_DIR = Path("/mnt/ubuntu-image/")
 NETWORK_BLOCK_DEVICE_PATH = Path("/dev/nbd0")
@@ -410,7 +412,12 @@ def _validate_checksum(file: Path, expected_checksum: str) -> bool:
         True if the checksums match. False otherwise.
     """
     sha256 = hashlib.sha256()
-    sha256.update(file.read_bytes())
+    with open(file=file, mode="rb") as target_file:
+        while True:
+            data = target_file.read(CHECKSUM_BUF_SIZE)
+            if not data:
+                break
+            sha256.update(data)
     return sha256.hexdigest() == expected_checksum
 
 
