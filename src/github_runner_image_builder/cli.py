@@ -7,7 +7,6 @@ import itertools
 
 # Subprocess module is used to execute trusted commands
 import subprocess  # nosec: B404
-import sys
 from pathlib import Path
 from typing import cast
 
@@ -29,11 +28,43 @@ def main(args: list[str] | None = None) -> None:
 
     Args:
         args: Command line arguments.
-    """
-    # The following line is used for unit testing.
-    if args is None:  # pragma: nocover
-        args = sys.argv[1:]
 
+    Raises:
+        ValueError: If invalid action argument was supplied.
+    """
+    options = _parse_args(args)
+    if options.action == "init":
+        builder.initialize()
+        return
+    if options.action == "latest-build-id":
+        print(
+            store.get_latest_build_id(
+                cloud_name=options.cloud_name, image_name=options.image_name
+            ),
+            end="",
+        )
+        return
+    if options.action == "run":
+        _build_and_upload(
+            base=options.base,
+            cloud_name=options.cloud_name,
+            image_name=options.image_name,
+            keep_revisions=options.keep_revisions,
+            callback_script_path=options.callback_script_path,
+        )
+        return
+    raise ValueError("Invalid CLI action argument.")
+
+
+def _parse_args(args: list[str] | None = None) -> ActionsNamespace:
+    """Parse CLI arguments.
+
+    Args:
+        args: Command line arguments.
+
+    Returns:
+        An object with parsed user inputs.
+    """
     parser = argparse.ArgumentParser(
         prog="Github runner image builder CLI",
         description="Builds github runner image and uploads it to openstack.",
@@ -55,12 +86,12 @@ def main(args: list[str] | None = None) -> None:
             "The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in paths "
             "of the following order: current directory, ~/.config/openstack, /etc/openstack."
         ),
-        type=non_empty_string,
+        type=_non_empty_string,
     )
     get_latest_id_parser.add_argument(
         dest="image_name",
         help="The image name uploaded to Openstack.",
-        type=non_empty_string,
+        type=_non_empty_string,
     )
     run_parser.add_argument(
         dest="cloud_name",
@@ -68,12 +99,12 @@ def main(args: list[str] | None = None) -> None:
             "The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in paths "
             "of the following order: current directory, ~/.config/openstack, /etc/openstack."
         ),
-        type=non_empty_string,
+        type=_non_empty_string,
     )
     run_parser.add_argument(
         dest="image_name",
         help="The image name to upload to Openstack.",
-        type=non_empty_string,
+        type=_non_empty_string,
     )
     run_parser.add_argument(
         "-b",
@@ -108,26 +139,7 @@ def main(args: list[str] | None = None) -> None:
         ),
     )
     options = cast(ActionsNamespace, parser.parse_args(args))
-    if options.action == "init":
-        builder.initialize()
-        return
-
-    if options.action == "latest-build-id":
-        print(
-            store.get_latest_build_id(
-                cloud_name=options.cloud_name, image_name=options.image_name
-            ),
-            end="",
-        )
-        return
-
-    _build_and_upload(
-        base=options.base,
-        cloud_name=options.cloud_name,
-        image_name=options.image_name,
-        keep_revisions=options.keep_revisions,
-        callback_script_path=options.callback_script_path,
-    )
+    return options
 
 
 def _existing_path(value: str) -> Path:
@@ -148,7 +160,7 @@ def _existing_path(value: str) -> Path:
     return path
 
 
-def non_empty_string(arg: str) -> str:
+def _non_empty_string(arg: str) -> str:
     """Check that the argument is non-empty.
 
     Args:

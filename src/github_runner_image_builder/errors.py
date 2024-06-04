@@ -8,16 +8,16 @@ class ImageBuilderBaseError(Exception):
     """Represents an error with any builder related executions."""
 
 
-class BuilderSetupError(ImageBuilderBaseError):
+class BuilderInitializeError(ImageBuilderBaseError):
     """Represents an error while setting up host machine as builder."""
 
 
 # nosec: B603: All subprocess runs are run with trusted executables.
-class DependencyInstallError(BuilderSetupError):
+class DependencyInstallError(BuilderInitializeError):
     """Represents an error while installing required dependencies."""
 
 
-class NetworkBlockDeviceError(BuilderSetupError):
+class NetworkBlockDeviceError(BuilderInitializeError):
     """Represents an error while enabling network block device."""
 
 
@@ -25,52 +25,52 @@ class UnsupportedArchitectureError(ImageBuilderBaseError):
     """Raised when given machine architecture is unsupported."""
 
 
-class CleanBuildStateError(ImageBuilderBaseError):
+class BuildImageError(ImageBuilderBaseError):
+    """Represents an error while building the image."""
+
+
+class CleanBuildStateError(BuildImageError):
     """Represents an error cleaning up build state."""
 
 
-class BaseImageDownloadError(ImageBuilderBaseError):
+class BaseImageDownloadError(BuildImageError):
     """Represents an error downloading base image."""
 
 
-class ImageResizeError(ImageBuilderBaseError):
+class ImageResizeError(BuildImageError):
     """Represents an error while resizing the image."""
 
 
-class ImageMountError(ImageBuilderBaseError):
+class ImageMountError(BuildImageError):
     """Represents an error while mounting the image to network block device."""
 
 
-class ResizePartitionError(ImageBuilderBaseError):
+class ResizePartitionError(BuildImageError):
     """Represents an error while resizing network block device partitions."""
 
 
-class UnattendedUpgradeDisableError(ImageBuilderBaseError):
+class UnattendedUpgradeDisableError(BuildImageError):
     """Represents an error while disabling unattended-upgrade related services."""
 
 
-class SystemUserConfigurationError(ImageBuilderBaseError):
+class SystemUserConfigurationError(BuildImageError):
     """Represents an error while adding user to chroot env."""
 
 
-class PermissionConfigurationError(ImageBuilderBaseError):
+class PermissionConfigurationError(BuildImageError):
     """Represents an error while modifying dir permissions."""
 
 
-class YQBuildError(ImageBuilderBaseError):
+class YQBuildError(BuildImageError):
     """Represents an error while building yq binary from source."""
 
 
-class YarnInstallError(ImageBuilderBaseError):
+class YarnInstallError(BuildImageError):
     """Represents an error installilng Yarn."""
 
 
-class ImageCompressError(ImageBuilderBaseError):
+class ImageCompressError(BuildImageError):
     """Represents an error while compressing cloud-img."""
-
-
-class BuildImageError(ImageBuilderBaseError):
-    """Represents an error while building the image."""
 
 
 class OpenstackBaseError(Exception):

@@ -20,7 +20,6 @@ from github_runner_image_builder.errors import (
     BuildImageError,
     CleanBuildStateError,
     DependencyInstallError,
-    ImageBuilderBaseError,
     ImageCompressError,
     ImageMountError,
     ImageResizeError,
@@ -165,26 +164,23 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
         BuildImageError: If there was an error building the image.
     """
     IMAGE_MOUNT_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        logger.info("Cleaning build state.")
-        _clean_build_state()
-        logger.info("Downloading base image.")
-        base_image_path = _download_base_image(arch=arch, base_image=base_image)
-        logger.info("Resizing base image.")
-        _resize_image(image_path=base_image_path)
-        logger.info("Mounting network block device.")
-        _mount_image_to_network_block_device(image_path=base_image_path)
-        logger.info("Resizing partitions.")
-        _resize_mount_partitions()
-        logger.info("Installing YQ from source.")
-        _install_yq()
-    except ImageBuilderBaseError as exc:
-        raise BuildImageError from exc
+    logger.info("Cleaning build state.")
+    _clean_build_state()
+    logger.info("Downloading base image.")
+    base_image_path = _download_base_image(arch=arch, base_image=base_image)
+    logger.info("Resizing base image.")
+    _resize_image(image_path=base_image_path)
+    logger.info("Mounting network block device.")
+    _mount_image_to_network_block_device(image_path=base_image_path)
+    logger.info("Resizing partitions.")
+    _resize_mount_partitions()
+    logger.info("Installing YQ from source.")
+    _install_yq()
 
+    logger.info("Setting up chroot environment.")
+    logger.info("Replacing resolv.conf.")
+    _replace_mounted_resolv_conf()
     try:
-        logger.info("Setting up chroot environment.")
-        logger.info("Replacing resolv.conf.")
-        _replace_mounted_resolv_conf()
         with ChrootContextManager(IMAGE_MOUNT_DIR):
             # operator_libs_linux apt package uses dpkg -l and that does not work well with
             # chroot env, hence use subprocess run.
@@ -215,11 +211,8 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
     finally:
         _clean_build_state()
 
-    try:
-        logger.info("Compressing image.")
-        _compress_image(base_image_path)
-    except ImageCompressError as exc:
-        raise BuildImageError from exc
+    logger.info("Compressing image.")
+    _compress_image(base_image_path)
 
 
 def _clean_build_state() -> None:
