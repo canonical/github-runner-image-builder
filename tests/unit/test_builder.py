@@ -8,7 +8,7 @@
 
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Type
 from unittest.mock import MagicMock
 
 import pytest
@@ -57,7 +57,7 @@ def test_subprocess_call_funcs(
 ):
     """
     arrange: given functions that consist of subprocess calls only with mocked subprocess calls.
-    act: when the functions are called.
+    act: when the function is called.
     assert: no errors are raised.
     """
     monkeypatch.setattr(subprocess, "check_output", MagicMock())
@@ -67,6 +67,80 @@ def test_subprocess_call_funcs(
     monkeypatch.setattr(time, "sleep", MagicMock())
 
     assert getattr(builder, func)(*args) is None
+
+
+@pytest.mark.parametrize(
+    "func, args, exc",
+    [
+        pytest.param(
+            "_clean_build_state", [], builder.CleanBuildStateError, id="clean build state"
+        ),
+        pytest.param("_resize_image", [MagicMock()], builder.ImageResizeError, id="resize image"),
+        pytest.param(
+            "_mount_image_to_network_block_device",
+            [MagicMock()],
+            builder.ImageMountError,
+            id="mount image to nbd",
+        ),
+        pytest.param(
+            "_resize_mount_partitions", [], builder.ResizePartitionError, id="resize mount parts"
+        ),
+        pytest.param("_install_yq", [], builder.YQBuildError, id="install yq"),
+        pytest.param(
+            "_disable_unattended_upgrades",
+            [],
+            builder.UnattendedUpgradeDisableError,
+            id="disable unattende upgrades",
+        ),
+        pytest.param(
+            "_configure_system_users",
+            [],
+            builder.SystemUserConfigurationError,
+            id="configure system users",
+        ),
+        pytest.param(
+            "_configure_usr_local_bin",
+            [],
+            builder.PermissionConfigurationError,
+            id="configure system users",
+        ),
+        pytest.param(
+            "_install_yarn",
+            [],
+            builder.YarnInstallError,
+            id="install yarn",
+        ),
+        pytest.param(
+            "_compress_image",
+            [MagicMock()],
+            builder.ImageCompressError,
+            id="compress image",
+        ),
+    ],
+)
+def test_subprocess_func_errors(
+    monkeypatch: pytest.MonkeyPatch, func: str, args: list[Any], exc: Type[Exception]
+):
+    """
+    arrange: given functions with subprocess calls that is monkeypatched to raise exceptions.
+    act: when the function is called.
+    assert: subprocess error is wrapped to expected error.
+    """
+    monkeypatch.setattr(
+        subprocess,
+        "check_output",
+        MagicMock(side_effect=subprocess.SubprocessError("Test subprocess error")),
+    )
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        MagicMock(side_effect=subprocess.SubprocessError("Test subprocess error")),
+    )
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
+
+    with pytest.raises(exc):
+        getattr(builder, func)(*args)
 
 
 def test_initialize(monkeypatch: pytest.MonkeyPatch):

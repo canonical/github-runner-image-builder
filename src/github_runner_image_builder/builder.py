@@ -444,6 +444,8 @@ def _resize_image(image_path: Path) -> None:
             exc.output,
         )
         raise ImageResizeError from exc
+    except subprocess.SubprocessError as exc:
+        raise ImageResizeError from exc
 
 
 def _mount_image_to_network_block_device(image_path: Path) -> None:
@@ -469,6 +471,8 @@ def _mount_image_to_network_block_device(image_path: Path) -> None:
             exc.returncode,
             exc.output,
         )
+        raise ImageMountError from exc
+    except subprocess.SubprocessError as exc:
         raise ImageMountError from exc
 
 
@@ -513,6 +517,8 @@ def _resize_mount_partitions() -> None:
             exc.output,
         )
         raise ResizePartitionError from exc
+    except subprocess.SubprocessError as exc:
+        raise ResizePartitionError from exc
 
 
 def _install_yq() -> None:
@@ -547,6 +553,8 @@ def _install_yq() -> None:
             exc.returncode,
             exc.output,
         )
+        raise YQBuildError from exc
+    except subprocess.SubprocessError as exc:
         raise YQBuildError from exc
 
 
@@ -608,6 +616,8 @@ def _disable_unattended_upgrades() -> None:
             exc.output,
         )
         raise UnattendedUpgradeDisableError from exc
+    except subprocess.SubprocessError as exc:
+        raise UnattendedUpgradeDisableError from exc
 
 
 def _configure_system_users() -> None:
@@ -647,6 +657,8 @@ def _configure_system_users() -> None:
             exc.output,
         )
         raise SystemUserConfigurationError from exc
+    except subprocess.SubprocessError as exc:
+        raise SystemUserConfigurationError from exc
 
 
 def _configure_usr_local_bin() -> None:
@@ -668,6 +680,8 @@ def _configure_usr_local_bin() -> None:
             exc.returncode,
             exc.output,
         )
+        raise PermissionConfigurationError from exc
+    except subprocess.SubprocessError as exc:
         raise PermissionConfigurationError from exc
 
 
@@ -695,6 +709,8 @@ def _install_yarn() -> None:
             exc.output,
         )
         raise YarnInstallError from exc
+    except subprocess.SubprocessError as exc:
+        raise YarnInstallError from exc
 
 
 # Image compression might fail for arbitrary reasons - retrying usually solves this.
@@ -721,4 +737,6 @@ def _compress_image(image: Path) -> None:
             exc.returncode,
             exc.output,
         )
+        raise ImageCompressError from exc
+    except subprocess.SubprocessError as exc:
         raise ImageCompressError from exc
