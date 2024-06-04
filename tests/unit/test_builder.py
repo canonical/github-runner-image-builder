@@ -20,7 +20,6 @@ from github_runner_image_builder.builder import (
     BaseImageDownloadError,
     BuildImageError,
     ChrootBaseError,
-    CleanBuildStateError,
     DependencyInstallError,
     ImageCompressError,
     ImageConnectError,
@@ -72,15 +71,12 @@ def test_subprocess_call_funcs(
 @pytest.mark.parametrize(
     "func, args, exc",
     [
-        pytest.param(
-            "_clean_build_state", [], builder.CleanBuildStateError, id="clean build state"
-        ),
         pytest.param("_resize_image", [MagicMock()], builder.ImageResizeError, id="resize image"),
         pytest.param(
-            "_mount_image_to_network_block_device",
+            "_connect_image_to_network_block_device",
             [MagicMock()],
             builder.ImageConnectError,
-            id="mount image to nbd",
+            id="connect image to nbd",
         ),
         pytest.param(
             "_resize_mount_partitions", [], builder.ResizePartitionError, id="resize mount parts"
@@ -109,6 +105,12 @@ def test_subprocess_call_funcs(
             [],
             builder.YarnInstallError,
             id="install yarn",
+        ),
+        pytest.param(
+            "_disconnect_image_to_network_block_device",
+            [],
+            builder.ImageConnectError,
+            id="disconnect image to nbd",
         ),
         pytest.param(
             "_compress_image",
@@ -235,10 +237,9 @@ def test_build_image_error(
     assert: BuildImageError is raised.
     """
     monkeypatch.setattr(builder, "IMAGE_MOUNT_DIR", MagicMock())
-    monkeypatch.setattr(builder, "_clean_build_state", MagicMock())
     monkeypatch.setattr(builder, "_download_and_validate_image", MagicMock())
     monkeypatch.setattr(builder, "_resize_image", MagicMock())
-    monkeypatch.setattr(builder, "_mount_image_to_network_block_device", MagicMock())
+    monkeypatch.setattr(builder, "_connect_image_to_network_block_device", MagicMock())
     monkeypatch.setattr(builder, "_resize_mount_partitions", MagicMock())
     monkeypatch.setattr(builder, "_replace_mounted_resolv_conf", MagicMock())
     monkeypatch.setattr(builder, "_install_yq", MagicMock())
@@ -247,6 +248,7 @@ def test_build_image_error(
     monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
     monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
     monkeypatch.setattr(builder, "_install_yarn", MagicMock())
+    monkeypatch.setattr(builder, "_disconnect_image_to_network_block_device", MagicMock())
     monkeypatch.setattr(builder, "_compress_image", MagicMock())
     monkeypatch.setattr(patch_obj, sub_func, mock)
 
@@ -254,39 +256,6 @@ def test_build_image_error(
         builder.build_image(arch=MagicMock(), base_image=MagicMock())
 
     assert expected_message in str(exc.getrepr())
-
-
-def test__clean_build_state_error(monkeypatch: pytest.MonkeyPatch):
-    """
-    arrange: given a magic mocked IMAGE_MOUNT_DIR and subprocess call that raises exceptions.
-    act: when _clean_build_state is called.
-    assert: CleanBuildStateError is raised.
-    """
-    mock_mount_dir = MagicMock()
-    mock_subprocess_run = MagicMock(
-        side_effect=subprocess.CalledProcessError(1, [], "", "qemu-nbd error")
-    )
-    monkeypatch.setattr(builder, "IMAGE_MOUNT_DIR", mock_mount_dir)
-    monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
-
-    with pytest.raises(CleanBuildStateError) as exc:
-        builder._clean_build_state()
-
-    assert "qemu-nbd error" in str(exc.getrepr())
-
-
-def test__clean_build_state(monkeypatch: pytest.MonkeyPatch):
-    """
-    arrange: given a magic mocked IMAGE_MOUNT_DIR and qemu-nbd subprocess call.
-    act: when _clean_build_state is called.
-    assert: the mocks are called.
-    """
-    mock_subprocess_run = MagicMock()
-    monkeypatch.setattr(builder.subprocess, "run", mock_subprocess_run)
-
-    builder._clean_build_state()
-
-    mock_subprocess_run.assert_called()
 
 
 @pytest.mark.parametrize(
@@ -568,10 +537,10 @@ def test__mount_network_block_device_partition(monkeypatch: pytest.MonkeyPatch):
     mock_run_call.assert_called_once()
 
 
-def test__mount_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
+def test__connect_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched process calls that fails.
-    act: when _mount_image_to_network_block_device is called.
+    act: when _connect_image_to_network_block_device is called.
     assert: ImageMountError is raised.
     """
     monkeypatch.setattr(
@@ -586,22 +555,18 @@ def test__mount_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPat
     assert "error mounting" in str(exc.getrepr())
 
 
-def test__mount_image_to_network_block_device(monkeypatch: pytest.MonkeyPatch):
+def test__connect_image_to_network_block_device(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched mock process run calls and \
         _mount_network_block_device_partition call.
-    act: when _mount_image_to_network_block_device is called.
+    act: when _connect_image_to_network_block_device is called.
     assert: expected calls are made.
     """
     monkeypatch.setattr(subprocess, "check_output", (run_mock := MagicMock()))
-    monkeypatch.setattr(
-        builder, "_mount_network_block_device_partition", (mount_mock := MagicMock())
-    )
 
     builder._connect_image_to_network_block_device(image_path=MagicMock())
 
-    run_mock.assert_called_once()
-    mount_mock.assert_called_once()
+    run_mock.assert_called()
 
 
 def test__replace_mounted_resolv_conf(monkeypatch: pytest.MonkeyPatch):
@@ -790,6 +755,38 @@ def test__install_yarn(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(subprocess, "check_output", MagicMock())
 
     assert builder._install_yarn() is None
+
+
+def test__disconnect_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched process calls that fails.
+    act: when _disconnect_image_to_network_block_device is called.
+    assert: ImageMountError is raised.
+    """
+    monkeypatch.setattr(
+        subprocess,
+        "check_output",
+        MagicMock(side_effect=subprocess.CalledProcessError(1, [], "", "error mounting")),
+    )
+
+    with pytest.raises(ImageConnectError) as exc:
+        builder._disconnect_image_to_network_block_device()
+
+    assert "error mounting" in str(exc.getrepr())
+
+
+def test__disconnect_image_to_network_block_device(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched mock process run calls and \
+        _mount_network_block_device_partition call.
+    act: when _disconnect_image_to_network_block_device is called.
+    assert: expected calls are made.
+    """
+    monkeypatch.setattr(subprocess, "check_output", (check_mock := MagicMock()))
+
+    builder._disconnect_image_to_network_block_device()
+
+    check_mock.assert_called()
 
 
 def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):

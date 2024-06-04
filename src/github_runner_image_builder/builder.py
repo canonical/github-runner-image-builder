@@ -646,25 +646,21 @@ def _install_yarn() -> None:
         raise YarnInstallError from exc
 
 
-def _disconnect_image_to_network_block_device():
+def _disconnect_image_to_network_block_device() -> None:
     """Disconnect the image to network block device in cleanup for chroot.
 
     Raises:
         ImageConnectError: If there was an error disconnecting the image from network block device.
     """
     try:
-        output = subprocess.run(  # nosec: B603
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PATH)],
             timeout=30,
-            check=True,
-            capture_output=True,
         )
         logger.info("qemu-nbd disconnect nbd out: %s", output)
-        output = subprocess.run(  # nosec: B603
+        output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
             timeout=30,
-            check=True,
-            capture_output=True,
         )
         logger.info("qemu-nbd disconnect nbdp1 out: %s", output)
     except subprocess.CalledProcessError as exc:
