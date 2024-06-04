@@ -122,31 +122,64 @@ def test__enable_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
     assert "Module nbd not found" in str(exc.getrepr())
 
 
-def test__get_supported_runner_arch_unsupported_error():
-    """
-    arrange: given an architecture value that isn't supported.
-    act: when _get_supported_runner_arch is called.
-    assert: UnsupportedArchitectureError is raised.
-    """
-    arch = MagicMock()
-    with pytest.raises(UnsupportedArchitectureError):
-        builder._get_supported_runner_arch(arch)
-
-
 @pytest.mark.parametrize(
-    "arch, expected",
+    "patch_obj, sub_func, mock, expected_message",
     [
-        pytest.param(Arch.ARM64, "arm64", id="ARM64"),
-        pytest.param(Arch.X64, "amd64", id="AMD64"),
+        pytest.param(
+            builder,
+            "_resize_mount_partitions",
+            MagicMock(side_effect=ResizePartitionError("Partition resize failed")),
+            "Partition resize failed",
+            id="Partition resize failed",
+        ),
+        pytest.param(
+            builder,
+            "ChrootContextManager",
+            MagicMock(side_effect=ChrootBaseError("Failed to chroot into dir")),
+            "Failed to chroot into dir",
+            id="Failed to chroot into dir",
+        ),
+        pytest.param(
+            builder,
+            "_compress_image",
+            MagicMock(side_effect=ImageCompressError("Failed to compress image")),
+            "Failed to compress image",
+            id="Failed to compress image",
+        ),
     ],
 )
-def test__get_supported_runner_arch(arch: Arch, expected: SupportedBaseImageArch):
+def test_build_image_error(
+    patch_obj: Any,
+    sub_func: str,
+    mock: MagicMock,
+    expected_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+):
     """
-    arrange: given an architecture value that is supported.
-    act: when _get_supported_runner_arch is called.
-    assert: Expected architecture in cloud_images format is returned.
+    arrange: given a monkeypatched functions of build_image that raises exceptions.
+    act: when build_image is called.
+    assert: BuildImageError is raised.
     """
-    assert builder._get_supported_runner_arch(arch) == expected
+    monkeypatch.setattr(builder, "IMAGE_MOUNT_DIR", MagicMock())
+    monkeypatch.setattr(builder, "_clean_build_state", MagicMock())
+    monkeypatch.setattr(builder, "_download_and_validate_image", MagicMock())
+    monkeypatch.setattr(builder, "_resize_image", MagicMock())
+    monkeypatch.setattr(builder, "_mount_image_to_network_block_device", MagicMock())
+    monkeypatch.setattr(builder, "_resize_mount_partitions", MagicMock())
+    monkeypatch.setattr(builder, "_replace_mounted_resolv_conf", MagicMock())
+    monkeypatch.setattr(builder, "_install_yq", MagicMock())
+    monkeypatch.setattr(builder, "ChrootContextManager", MagicMock())
+    monkeypatch.setattr(builder.subprocess, "check_output", MagicMock())
+    monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
+    monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
+    monkeypatch.setattr(builder, "_install_yarn", MagicMock())
+    monkeypatch.setattr(builder, "_compress_image", MagicMock())
+    monkeypatch.setattr(patch_obj, sub_func, mock)
+
+    with pytest.raises(BuildImageError) as exc:
+        builder.build_image(arch=MagicMock(), base_image=MagicMock())
+
+    assert expected_message in str(exc.getrepr())
 
 
 def test__clean_build_state_error(monkeypatch: pytest.MonkeyPatch):
@@ -193,15 +226,22 @@ def test__clean_build_state(monkeypatch: pytest.MonkeyPatch):
             id="Unsupported architecture",
         ),
         pytest.param(
-            builder.urllib.request,
-            "urlretrieve",
-            builder.urllib.error.ContentTooShortError("Network interrupted", ""),
-            "Network interrupted",
+            builder,
+            "_download_base_image",
+            BaseImageDownloadError("Content too short"),
+            "Content too short",
             id="Network interrupted",
+        ),
+        pytest.param(
+            builder,
+            "_fetch_shasums",
+            BaseImageDownloadError("Content too short"),
+            "Content too short",
+            id="Network interrupted (SHASUM)",
         ),
     ],
 )
-def test__download_base_image_fail(
+def test__download_and_validate_image_error(
     patch_obj: Any,
     sub_func: str,
     exception: Exception,
@@ -209,33 +249,213 @@ def test__download_base_image_fail(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """
-    arrange: given monkeypatched sub functions of _download_base_image that raises exceptions.
-    act: when _download_base_image is called.
-    assert: A CloudImageDownloadError is raised.
+    arrange: given monkeypatched sub functions of _download_and_validate_image that raises \
+        exceptions.
+    act: when _download_and_validate_image is called.
+    assert: A BaseImageDownloadError is raised.
     """
     mock_func = MagicMock(side_effect=exception)
     monkeypatch.setattr(builder, "_get_supported_runner_arch", MagicMock)
-    monkeypatch.setattr(builder.urllib.request, "urlretrieve", MagicMock)
+    monkeypatch.setattr(builder, "_download_base_image", MagicMock)
+    monkeypatch.setattr(builder, "_fetch_shasums", MagicMock)
+    monkeypatch.setattr(builder, "_validate_checksum", MagicMock)
     monkeypatch.setattr(patch_obj, sub_func, mock_func)
 
     with pytest.raises(BaseImageDownloadError) as exc:
-        builder._download_base_image(arch=MagicMock(), base_image=MagicMock())
+        builder._download_and_validate_image(arch=MagicMock(), base_image=MagicMock())
 
     assert expected_message in str(exc.getrepr())
 
 
+def test__download_and_validate_image_no_shasum(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """
+    arrange: given monkeypatched _fetch_shasums that returns empty shasums.
+    act: when _download_and_validate_image is called.
+    assert: A BaseImageDownloadError is raised.
+    """
+    monkeypatch.setattr(builder, "_get_supported_runner_arch", MagicMock())
+    monkeypatch.setattr(builder, "_download_base_image", MagicMock())
+    monkeypatch.setattr(builder, "_fetch_shasums", MagicMock(return_value={}))
+
+    with pytest.raises(BaseImageDownloadError) as exc:
+        builder._download_and_validate_image(arch=MagicMock(), base_image=MagicMock())
+
+    assert "Corresponding checksum not found." in str(exc.getrepr())
+
+
+def test__download_and_validate_image_invalid_checksum(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """
+    arrange: given monkeypatched _validate_checksum that returns false.
+    act: when _download_and_validate_image is called.
+    assert: A BaseImageDownloadError is raised.
+    """
+    monkeypatch.setattr(builder, "_get_supported_runner_arch", MagicMock(return_value="x64"))
+    monkeypatch.setattr(builder, "_download_base_image", MagicMock())
+    monkeypatch.setattr(
+        builder,
+        "_fetch_shasums",
+        MagicMock(return_value={"jammy-server-cloudimg-x64.img": "test"}),
+    )
+    monkeypatch.setattr(builder, "_validate_checksum", MagicMock(return_value=False))
+
+    with pytest.raises(BaseImageDownloadError) as exc:
+        builder._download_and_validate_image(arch=Arch.X64, base_image=BaseImage.JAMMY)
+
+    assert "Invalid checksum." in str(exc.getrepr())
+
+
+def test__download_and_validate_image(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given monkeypatched sub functions of _download_and_validate_image.
+    act: when _download_and_validate_image is called.
+    assert: the mocked subfunctions are called.
+    """
+    monkeypatch.setattr(
+        builder, "_get_supported_runner_arch", get_arch_mock := MagicMock(return_value="x64")
+    )
+    monkeypatch.setattr(builder, "_download_base_image", download_base_mock := MagicMock())
+    monkeypatch.setattr(
+        builder,
+        "_fetch_shasums",
+        fetch_shasums_mock := MagicMock(return_value={"jammy-server-cloudimg-x64.img": "test"}),
+    )
+    monkeypatch.setattr(builder, "_validate_checksum", validate_checksum_mock := MagicMock())
+
+    builder._download_and_validate_image(arch=Arch.X64, base_image=BaseImage.JAMMY)
+
+    get_arch_mock.assert_called_once()
+    download_base_mock.assert_called_once()
+    fetch_shasums_mock.assert_called_once()
+    validate_checksum_mock.assert_called_once()
+
+
+def test__get_supported_runner_arch_unsupported_error():
+    """
+    arrange: given an architecture value that isn't supported.
+    act: when _get_supported_runner_arch is called.
+    assert: UnsupportedArchitectureError is raised.
+    """
+    arch = MagicMock()
+    with pytest.raises(UnsupportedArchitectureError):
+        builder._get_supported_runner_arch(arch)
+
+
+@pytest.mark.parametrize(
+    "arch, expected",
+    [
+        pytest.param(Arch.ARM64, "arm64", id="ARM64"),
+        pytest.param(Arch.X64, "amd64", id="AMD64"),
+    ],
+)
+def test__get_supported_runner_arch(arch: Arch, expected: SupportedBaseImageArch):
+    """
+    arrange: given an architecture value that is supported.
+    act: when _get_supported_runner_arch is called.
+    assert: Expected architecture in cloud_images format is returned.
+    """
+    assert builder._get_supported_runner_arch(arch) == expected
+
+
+def test__download_base_image_error(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given monkeypatched urlretrieve function that raises an error.
+    act: when _download_base_image is called.
+    assert: BaseImageDownloadError is raised.
+    """
+    monkeypatch.setattr(
+        builder.urllib.request,
+        "urlretrieve",
+        MagicMock(side_effect=builder.urllib.error.URLError(reason="Content too short")),
+    )
+
+    with pytest.raises(BaseImageDownloadError) as exc:
+        builder._download_base_image(
+            base_image=MagicMock(), bin_arch=MagicMock(), output_filename=MagicMock()
+        )
+
+    assert "Content too short" in str(exc.getrepr())
+
+
 def test__download_base_image(monkeypatch: pytest.MonkeyPatch):
     """
-    arrange: given monkeypatched sub functions of _download_base_image.
+    arrange: given monkeypatched urlretrieve function.
     act: when _download_base_image is called.
-    assert: the downloaded path is returned.
+    assert: Path from output_filename input is returned.
     """
-    monkeypatch.setattr(builder, "_get_supported_runner_arch", MagicMock(return_value="amd64"))
     monkeypatch.setattr(builder.urllib.request, "urlretrieve", MagicMock())
+    test_file_name = "test_file_name"
 
-    assert builder._download_base_image(arch=Arch.X64, base_image=BaseImage.JAMMY) == Path(
-        "jammy-server-cloudimg-amd64.img"
+    assert Path("test_file_name") == builder._download_base_image(
+        base_image=MagicMock(), bin_arch=MagicMock(), output_filename=test_file_name
     )
+
+
+def test__fetch_shasums_error(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given monkeypatched requests function that raises an error.
+    act: when _fetch_shasums is called.
+    assert: BaseImageDownloadError is raised.
+    """
+    monkeypatch.setattr(
+        builder.requests,
+        "get",
+        MagicMock(side_effect=builder.requests.RequestException("Content too short")),
+    )
+
+    with pytest.raises(BaseImageDownloadError) as exc:
+        builder._fetch_shasums(base_image=MagicMock())
+
+    assert "Content too short" in str(exc.getrepr())
+
+
+def test__fetch_shasums(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given monkeypatched requests function that returns mocked contents of SHA256SUMS.
+    act: when _fetch_shasums is called.
+    assert: a dictionary with filename to shasum is created.
+    """
+    mock_response = MagicMock()
+    mock_response.content = bytes(
+        """test_shasum1 *file1
+test_shasum2 *file2
+test_shasum3 *file3
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(builder.requests, "get", MagicMock(return_value=mock_response))
+
+    assert {
+        "file1": "test_shasum1",
+        "file2": "test_shasum2",
+        "file3": "test_shasum3",
+    } == builder._fetch_shasums(base_image=MagicMock())
+
+
+@pytest.mark.parametrize(
+    "content, checksum, expected",
+    [
+        pytest.param(
+            "sha256sumteststring",
+            "52b60ec50ea69cd09d5f25b75c295b93181eaba18444fdbc537beee4653bad7e",
+            True,
+        ),
+        pytest.param("test", "test", False),
+    ],
+)
+def test__validate_checksum(tmp_path: Path, content: str, checksum: str, expected: bool):
+    """
+    arrange: given a file content and a checksum pair.
+    act: when _validate_checksum is called.
+    assert: expected result is returned.
+    """
+    test_path = tmp_path / "test"
+    test_path.write_text(content, encoding="utf-8")
+
+    assert expected == builder._validate_checksum(test_path, checksum)
 
 
 def test__resize_image_fail(monkeypatch: pytest.MonkeyPatch):
@@ -516,63 +736,3 @@ def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):
         builder._compress_image(image=MagicMock())
 
     assert "Compression error" in str(exc.getrepr())
-
-
-@pytest.mark.parametrize(
-    "patch_obj, sub_func, mock, expected_message",
-    [
-        pytest.param(
-            builder,
-            "_resize_mount_partitions",
-            MagicMock(side_effect=ResizePartitionError("Partition resize failed")),
-            "Partition resize failed",
-            id="Partition resize failed",
-        ),
-        pytest.param(
-            builder,
-            "ChrootContextManager",
-            MagicMock(side_effect=ChrootBaseError("Failed to chroot into dir")),
-            "Failed to chroot into dir",
-            id="Failed to chroot into dir",
-        ),
-        pytest.param(
-            builder,
-            "_compress_image",
-            MagicMock(side_effect=ImageCompressError("Failed to compress image")),
-            "Failed to compress image",
-            id="Failed to compress image",
-        ),
-    ],
-)
-def test_build_image_error(
-    patch_obj: Any,
-    sub_func: str,
-    mock: MagicMock,
-    expected_message: str,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """
-    arrange: given a monkeypatched functions of build_image that raises exceptions.
-    act: when build_image is called.
-    assert: BuildImageError is raised.
-    """
-    monkeypatch.setattr(builder, "IMAGE_MOUNT_DIR", MagicMock())
-    monkeypatch.setattr(builder, "_clean_build_state", MagicMock())
-    monkeypatch.setattr(builder, "_download_base_image", MagicMock())
-    monkeypatch.setattr(builder, "_resize_image", MagicMock())
-    monkeypatch.setattr(builder, "_mount_image_to_network_block_device", MagicMock())
-    monkeypatch.setattr(builder, "_resize_mount_partitions", MagicMock())
-    monkeypatch.setattr(builder, "_replace_mounted_resolv_conf", MagicMock())
-    monkeypatch.setattr(builder, "_install_yq", MagicMock())
-    monkeypatch.setattr(builder, "ChrootContextManager", MagicMock())
-    monkeypatch.setattr(builder.subprocess, "check_output", MagicMock())
-    monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
-    monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
-    monkeypatch.setattr(builder, "_install_yarn", MagicMock())
-    monkeypatch.setattr(builder, "_compress_image", MagicMock())
-    monkeypatch.setattr(patch_obj, sub_func, mock)
-
-    with pytest.raises(BuildImageError) as exc:
-        builder.build_image(arch=MagicMock(), base_image=MagicMock())
-
-    assert expected_message in str(exc.getrepr())

@@ -3,6 +3,7 @@
 
 """Module for interacting with qemu image builder."""
 
+import hashlib
 import logging
 import shutil
 
@@ -12,6 +13,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Literal
+
+import requests
 
 from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextManager
 from github_runner_image_builder.config import IMAGE_OUTPUT_PATH, Arch, BaseImage
@@ -167,7 +170,7 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
     logger.info("Cleaning build state.")
     _clean_build_state()
     logger.info("Downloading base image.")
-    base_image_path = _download_base_image(arch=arch, base_image=base_image)
+    base_image_path = _download_and_validate_image(arch=arch, base_image=base_image)
     logger.info("Resizing base image.")
     _resize_image(image_path=base_image_path)
     logger.info("Mounting network block device.")
@@ -280,8 +283,8 @@ def _clean_build_state() -> None:
         raise CleanBuildStateError from exc
 
 
-def _download_base_image(arch: Arch, base_image: BaseImage) -> Path:
-    """Download the base image from cloud-images.ubuntu.com.
+def _download_and_validate_image(arch: Arch, base_image: BaseImage) -> Path:
+    """Download and verify the base image from cloud-images.ubuntu.com.
 
     Args:
         arch: The base image architecture to download.
@@ -291,26 +294,23 @@ def _download_base_image(arch: Arch, base_image: BaseImage) -> Path:
         The downloaded image path.
 
     Raises:
-        BaseImageDownloadError: If there was an error downloading the image.
+        BaseImageDownloadError: If there was an error with downloading/verifying the image.
     """
     try:
         bin_arch = _get_supported_runner_arch(arch)
     except UnsupportedArchitectureError as exc:
         raise BaseImageDownloadError from exc
 
-    try:
-        # The ubuntu-cloud-images is a trusted source
-        image_path = f"{base_image.value}-server-cloudimg-{bin_arch}.img"
-        urllib.request.urlretrieve(  # nosec: B310
-            (
-                f"https://cloud-images.ubuntu.com/{base_image.value}/current/{base_image.value}"
-                f"-server-cloudimg-{bin_arch}.img"
-            ),
-            image_path,
-        )
-        return Path(image_path)
-    except urllib.error.URLError as exc:
-        raise BaseImageDownloadError from exc
+    image_path_str = f"{base_image.value}-server-cloudimg-{bin_arch}.img"
+    image_path = _download_base_image(
+        base_image=base_image, bin_arch=bin_arch, output_filename=image_path_str
+    )
+    shasums = _fetch_shasums(base_image=base_image)
+    if image_path_str not in shasums:
+        raise BaseImageDownloadError("Corresponding checksum not found.")
+    if not _validate_checksum(image_path, shasums[image_path_str]):
+        raise BaseImageDownloadError("Invalid checksum.")
+    return image_path
 
 
 def _get_supported_runner_arch(arch: Arch) -> SupportedBaseImageArch:
@@ -338,6 +338,80 @@ def _get_supported_runner_arch(arch: Arch) -> SupportedBaseImageArch:
             return "arm64"
         case _:
             raise UnsupportedArchitectureError(f"Detected system arch: {arch} is unsupported.")
+
+
+def _download_base_image(base_image: BaseImage, bin_arch: str, output_filename: str) -> Path:
+    """Download the base image.
+
+    Args:
+        bin_arch: The ubuntu cloud-image supported arch.
+        base_image: The ubuntu base image OS to download.
+        output_filename: The output filename of the downloaded image.
+
+    Raises:
+        BaseImageDownloadError: If there was an error downloaded from cloud-images.ubuntu.com
+
+    Returns:
+        The downloaded image path.
+    """
+    # The ubuntu-cloud-images is a trusted source
+    try:
+        urllib.request.urlretrieve(  # nosec: B310
+            (
+                f"https://cloud-images.ubuntu.com/{base_image.value}/current/{base_image.value}"
+                f"-server-cloudimg-{bin_arch}.img"
+            ),
+            output_filename,
+        )
+    except urllib.error.URLError as exc:
+        raise BaseImageDownloadError from exc
+    return Path(output_filename)
+
+
+def _fetch_shasums(base_image: BaseImage) -> dict[str, str]:
+    """Fetch SHA256SUM for given base image.
+
+    Args:
+        base_image: The ubuntu base image OS to fetch SHA256SUMs for.
+
+    Raises:
+        BaseImageDownloadError: If there was an error downloading SHA256SUMS file from \
+            cloud-images.ubuntu.com
+
+    Returns:
+        A map of image file name to SHA256SUM.
+    """
+    try:
+        # bandit does not detect that the timeout parameter exists.
+        response = requests.get(  # nosec: request_without_timeout
+            f"https://cloud-images.ubuntu.com/{base_image.value}/current/SHA256SUMS",
+            timeout=60 * 5,
+        )
+    except requests.RequestException as exc:
+        raise BaseImageDownloadError from exc
+    # file consisting of lines <SHA256SUM> *<filename>
+    shasum_contents = str(response.content, encoding="utf-8")
+    imagefile_to_shasum = {
+        sha256_and_file[1].strip("*"): sha256_and_file[0]
+        for shasum_line in shasum_contents.strip().splitlines()
+        if (sha256_and_file := shasum_line.split())
+    }
+    return imagefile_to_shasum
+
+
+def _validate_checksum(file: Path, expected_checksum: str) -> bool:
+    """Validate the checksum of a given file.
+
+    Args:
+        file: The file to calculate checksum for.
+        expected_checksum: The expected file checksum.
+
+    Returns:
+        True if the checksums match. False otherwise.
+    """
+    sha256 = hashlib.sha256()
+    sha256.update(file.read_bytes())
+    return sha256.hexdigest() == expected_checksum
 
 
 def _resize_image(image_path: Path) -> None:
