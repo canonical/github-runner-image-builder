@@ -29,6 +29,10 @@ class BuildImageError(ImageBuilderBaseError):
     """Represents an error while building the image."""
 
 
+class UnmountBuildPathError(BuildImageError):
+    """Represents an error while unmounting build path."""
+
+
 class BaseImageDownloadError(BuildImageError):
     """Represents an error downloading base image."""
 

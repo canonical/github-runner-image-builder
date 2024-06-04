@@ -41,6 +41,7 @@ from github_runner_image_builder.builder import (
 @pytest.mark.parametrize(
     "func, args",
     [
+        pytest.param("_unmount_build_path", [], id="unmount build path"),
         pytest.param("_install_dependencies", [], id="install dependencies"),
         pytest.param("_enable_network_block_device", [], id="enable network block device"),
         pytest.param("_resize_image", [MagicMock()], id="resize image"),
@@ -71,6 +72,9 @@ def test_subprocess_call_funcs(
 @pytest.mark.parametrize(
     "func, args, exc",
     [
+        pytest.param(
+            "_unmount_build_path", [], builder.UnmountBuildPathError, id="unmount build path"
+        ),
         pytest.param("_resize_image", [MagicMock()], builder.ImageResizeError, id="resize image"),
         pytest.param(
             "_connect_image_to_network_block_device",
@@ -765,7 +769,7 @@ def test__disconnect_image_to_network_block_device_fail(monkeypatch: pytest.Monk
     """
     monkeypatch.setattr(
         subprocess,
-        "check_output",
+        "run",
         MagicMock(side_effect=subprocess.CalledProcessError(1, [], "", "error mounting")),
     )
 
@@ -782,7 +786,7 @@ def test__disconnect_image_to_network_block_device(monkeypatch: pytest.MonkeyPat
     act: when _disconnect_image_to_network_block_device is called.
     assert: expected calls are made.
     """
-    monkeypatch.setattr(subprocess, "check_output", (check_mock := MagicMock()))
+    monkeypatch.setattr(subprocess, "run", (check_mock := MagicMock()))
 
     builder._disconnect_image_to_network_block_device()
 
