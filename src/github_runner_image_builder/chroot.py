@@ -35,6 +35,7 @@ class ChrootContextManager:
 
         Args:
             chroot_path: The path to set as new root.
+            mount_dir: Path to chroot mount dir.
         """
         self.chroot_path = chroot_path
         self.root: None | int = None

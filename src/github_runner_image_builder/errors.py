@@ -29,10 +29,6 @@ class BuildImageError(ImageBuilderBaseError):
     """Represents an error while building the image."""
 
 
-class CleanBuildStateError(BuildImageError):
-    """Represents an error cleaning up build state."""
-
-
 class BaseImageDownloadError(BuildImageError):
     """Represents an error downloading base image."""
 
@@ -41,8 +37,8 @@ class ImageResizeError(BuildImageError):
     """Represents an error while resizing the image."""
 
 
-class ImageMountError(BuildImageError):
-    """Represents an error while mounting the image to network block device."""
+class ImageConnectError(BuildImageError):
+    """Represents an error while connecting the image to network block device."""
 
 
 class ResizePartitionError(BuildImageError):

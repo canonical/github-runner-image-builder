@@ -21,10 +21,9 @@ from github_runner_image_builder.config import IMAGE_OUTPUT_PATH, Arch, BaseImag
 from github_runner_image_builder.errors import (
     BaseImageDownloadError,
     BuildImageError,
-    CleanBuildStateError,
     DependencyInstallError,
     ImageCompressError,
-    ImageMountError,
+    ImageConnectError,
     ImageResizeError,
     NetworkBlockDeviceError,
     PermissionConfigurationError,
@@ -169,14 +168,12 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
         BuildImageError: If there was an error building the image.
     """
     IMAGE_MOUNT_DIR.mkdir(parents=True, exist_ok=True)
-    logger.info("Cleaning build state.")
-    _clean_build_state()
     logger.info("Downloading base image.")
     base_image_path = _download_and_validate_image(arch=arch, base_image=base_image)
     logger.info("Resizing base image.")
     _resize_image(image_path=base_image_path)
-    logger.info("Mounting network block device.")
-    _mount_image_to_network_block_device(image_path=base_image_path)
+    logger.info("Connecting image to network block device.")
+    _connect_image_to_network_block_device(image_path=base_image_path)
     logger.info("Resizing partitions.")
     _resize_mount_partitions()
     logger.info("Installing YQ from source.")
@@ -213,76 +210,12 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
             _install_yarn()
     except ChrootBaseError as exc:
         raise BuildImageError from exc
-    finally:
-        _clean_build_state()
+
+    logger.info("Disconnecting image to network block device.")
+    _disconnect_image_to_network_block_device()
 
     logger.info("Compressing image.")
     _compress_image(base_image_path)
-
-
-def _clean_build_state() -> None:
-    """Remove any artefacts left by previous build.
-
-    Raises:
-        CleanBuildStateError: if there was an error cleaning up the build state.
-    """
-    # The commands will fail if artefacts do not exist and hence there is no need to check the
-    # output of subprocess runs.
-    try:
-        output = subprocess.run(
-            ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "dev")],
-            timeout=30,
-            check=False,
-        )  # nosec: B603
-        logger.info("umount dev out: %s", output)
-        output = subprocess.run(
-            ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "proc")],
-            timeout=30,
-            check=False,
-            capture_output=True,
-        )  # nosec: B603
-        logger.info("umount proc out: %s", output)
-        output = subprocess.run(
-            ["/usr/bin/umount", str(IMAGE_MOUNT_DIR / "sys")],
-            timeout=30,
-            check=False,
-            capture_output=True,
-        )  # nosec: B603
-        logger.info("umount sys out: %s", output)
-        output = subprocess.run(
-            ["/usr/bin/umount", str(IMAGE_MOUNT_DIR)], timeout=30, check=False, capture_output=True
-        )  # nosec: B603
-        logger.info("umount ubuntu-image out: %s", output)
-        output = subprocess.run(
-            ["/usr/bin/umount", str(NETWORK_BLOCK_DEVICE_PATH)],
-            timeout=30,
-            check=False,
-            capture_output=True,
-        )  # nosec: B603
-        logger.info("umount nbd out: %s", output)
-        output = subprocess.run(  # nosec: B603
-            ["/usr/bin/umount", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
-            timeout=30,
-            check=False,
-            capture_output=True,
-        )
-        logger.info("umount nbdp1 out: %s", output)
-        output = subprocess.run(  # nosec: B603
-            ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PATH)],
-            timeout=30,
-            check=False,
-            capture_output=True,
-        )
-        logger.info("qemu-nbd disconnect nbd out: %s", output)
-        output = subprocess.run(  # nosec: B603
-            ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
-            timeout=30,
-            check=False,
-            capture_output=True,
-        )
-        logger.info("qemu-nbd disconnect nbdp1 out: %s", output)
-    except subprocess.SubprocessError as exc:
-        raise CleanBuildStateError from exc
 
 
 def _download_and_validate_image(arch: Arch, base_image: BaseImage) -> Path:
@@ -448,14 +381,14 @@ def _resize_image(image_path: Path) -> None:
         raise ImageResizeError from exc
 
 
-def _mount_image_to_network_block_device(image_path: Path) -> None:
-    """Mount the image to network block device in preparation for chroot.
+def _connect_image_to_network_block_device(image_path: Path) -> None:
+    """Connect the image to network block device in preparation for chroot.
 
     Args:
-        image_path: The target image file to mount.
+        image_path: The target image file to connect.
 
     Raises:
-        ImageMountError: If there was an error mounting the image to network block device.
+        ImageConnectError: If there was an error connecting the image to network block device.
     """
     try:
         output = subprocess.check_output(  # nosec: B603
@@ -466,14 +399,14 @@ def _mount_image_to_network_block_device(image_path: Path) -> None:
         _mount_network_block_device_partition()
     except subprocess.CalledProcessError as exc:
         logger.exception(
-            "Error mounting image to network block device, cmd: %s, code: %s, err: %s",
+            "Error connecting image to network block device, cmd: %s, code: %s, err: %s",
             exc.cmd,
             exc.returncode,
             exc.output,
         )
-        raise ImageMountError from exc
+        raise ImageConnectError from exc
     except subprocess.SubprocessError as exc:
-        raise ImageMountError from exc
+        raise ImageConnectError from exc
 
 
 # Network block device may fail to mount, retrying will usually fix this.
@@ -711,6 +644,39 @@ def _install_yarn() -> None:
         raise YarnInstallError from exc
     except subprocess.SubprocessError as exc:
         raise YarnInstallError from exc
+
+
+def _disconnect_image_to_network_block_device():
+    """Disconnect the image to network block device in cleanup for chroot.
+
+    Raises:
+        ImageConnectError: If there was an error disconnecting the image from network block device.
+    """
+    try:
+        output = subprocess.run(  # nosec: B603
+            ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PATH)],
+            timeout=30,
+            check=True,
+            capture_output=True,
+        )
+        logger.info("qemu-nbd disconnect nbd out: %s", output)
+        output = subprocess.run(  # nosec: B603
+            ["/usr/bin/qemu-nbd", "--disconnect", str(NETWORK_BLOCK_DEVICE_PARTITION_PATH)],
+            timeout=30,
+            check=True,
+            capture_output=True,
+        )
+        logger.info("qemu-nbd disconnect nbdp1 out: %s", output)
+    except subprocess.CalledProcessError as exc:
+        logger.exception(
+            "Error disconnecting image to network block device, cmd: %s, code: %s, err: %s",
+            exc.cmd,
+            exc.returncode,
+            exc.output,
+        )
+        raise ImageConnectError from exc
+    except subprocess.SubprocessError as exc:
+        raise ImageConnectError from exc
 
 
 # Image compression might fail for arbitrary reasons - retrying usually solves this.

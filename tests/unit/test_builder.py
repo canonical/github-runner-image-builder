@@ -23,7 +23,7 @@ from github_runner_image_builder.builder import (
     CleanBuildStateError,
     DependencyInstallError,
     ImageCompressError,
-    ImageMountError,
+    ImageConnectError,
     ImageResizeError,
     NetworkBlockDeviceError,
     PermissionConfigurationError,
@@ -79,7 +79,7 @@ def test_subprocess_call_funcs(
         pytest.param(
             "_mount_image_to_network_block_device",
             [MagicMock()],
-            builder.ImageMountError,
+            builder.ImageConnectError,
             id="mount image to nbd",
         ),
         pytest.param(
@@ -580,8 +580,8 @@ def test__mount_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPat
         MagicMock(side_effect=subprocess.CalledProcessError(1, [], "", "error mounting")),
     )
 
-    with pytest.raises(ImageMountError) as exc:
-        builder._mount_image_to_network_block_device(image_path=MagicMock())
+    with pytest.raises(ImageConnectError) as exc:
+        builder._connect_image_to_network_block_device(image_path=MagicMock())
 
     assert "error mounting" in str(exc.getrepr())
 
@@ -598,7 +598,7 @@ def test__mount_image_to_network_block_device(monkeypatch: pytest.MonkeyPatch):
         builder, "_mount_network_block_device_partition", (mount_mock := MagicMock())
     )
 
-    builder._mount_image_to_network_block_device(image_path=MagicMock())
+    builder._connect_image_to_network_block_device(image_path=MagicMock())
 
     run_mock.assert_called_once()
     mount_mock.assert_called_once()
