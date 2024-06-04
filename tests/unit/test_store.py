@@ -60,7 +60,7 @@ def test__get_sorted_images_by_created_at(mock_connection: MagicMock):
     ) == [third, second, first]
 
 
-def test__prune_old_images_error(caplog: pytest.LogCaptureFixture, mock_connection: MagicMock):
+def test__prune_old_images_error(mock_connection: MagicMock):
     """
     arrange: given a mocked delete function that raises an exception.
     act: when _prune_old_images is called.
@@ -74,12 +74,13 @@ def test__prune_old_images_error(caplog: pytest.LogCaptureFixture, mock_connecti
         "Delete error"
     )
 
-    store._prune_old_images(connection=mock_connection, image_name=MagicMock(), num_revisions=0)
+    with pytest.raises(OpenstackError):
+        store._prune_old_images(
+            connection=mock_connection, image_name=MagicMock(), num_revisions=0
+        )
 
-    assert all("Failed to prune old image" in log for log in caplog.messages)
 
-
-def test__prune_old_images_fail(caplog: pytest.LogCaptureFixture, mock_connection: MagicMock):
+def test__prune_old_images_fail(mock_connection: MagicMock):
     """
     arrange: given a mocked delete function that returns false.
     act: when _prune_old_images is called.
@@ -91,9 +92,10 @@ def test__prune_old_images_fail(caplog: pytest.LogCaptureFixture, mock_connectio
     ]
     mock_connection.delete_image.return_value = False
 
-    store._prune_old_images(connection=mock_connection, image_name=MagicMock(), num_revisions=0)
-
-    assert all("Failed to delete old image" in log for log in caplog.messages)
+    with pytest.raises(OpenstackError):
+        store._prune_old_images(
+            connection=mock_connection, image_name=MagicMock(), num_revisions=0
+        )
 
 
 def test__prune_old_images(mock_connection: MagicMock):

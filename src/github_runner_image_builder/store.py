@@ -57,6 +57,9 @@ def _prune_old_images(
         connection: The connected openstack cloud instance.
         image_name: The image name to search for.
         num_revisions: The number of revisions to keep.
+
+    Raises:
+        OpenstackError: if there was an error deleting the images.
     """
     images = _get_sorted_images_by_created_at(connection=connection, image_name=image_name)
     if not images:
@@ -65,10 +68,9 @@ def _prune_old_images(
     for image in images_to_prune:
         try:
             if not connection.delete_image(image.id, wait=True):
-                logger.error("Failed to delete old image, %s", image.id)
+                raise OpenstackError(f"Failed to delete image: {image.id}")
         except openstack.exceptions.OpenStackCloudException as exc:
-            logger.error("Failed to prune old image, %s", exc)
-            continue
+            raise OpenstackError from exc
 
 
 def get_latest_build_id(cloud_name: str, image_name: str) -> str | None:
