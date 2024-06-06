@@ -378,6 +378,7 @@ def _get_supported_runner_arch(arch: Arch) -> SupportedBaseImageArch:
             raise UnsupportedArchitectureError(f"Detected system arch: {arch} is unsupported.")
 
 
+@retry(tries=3, delay=5, max_delay=30, backoff=2, local_logger=logger)
 def _download_base_image(base_image: BaseImage, bin_arch: str, output_filename: str) -> Path:
     """Download the base image.
 
@@ -406,6 +407,7 @@ def _download_base_image(base_image: BaseImage, bin_arch: str, output_filename: 
     return Path(output_filename)
 
 
+@retry(tries=3, delay=5, max_delay=30, backoff=2, local_logger=logger)
 def _fetch_shasums(base_image: BaseImage) -> dict[str, str]:
     """Fetch SHA256SUM for given base image.
 
@@ -557,6 +559,7 @@ def _resize_mount_partitions() -> None:
         raise ResizePartitionError from exc
 
 
+@retry(tries=3, delay=5, max_delay=30, backoff=2, local_logger=logger)
 def _install_yq() -> None:
     """Build and install yq from source.
 
