@@ -72,7 +72,6 @@ def retry(  # pylint: disable=too-many-arguments
 
             for _ in range(tries):
                 try:
-                    print("Trying")
                     return func(*args, **kwargs)
                 # Error caught is set by the input of the function.
                 except exception as err:  # pylint: disable=broad-exception-caught

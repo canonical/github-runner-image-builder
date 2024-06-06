@@ -413,6 +413,8 @@ def test__download_base_image_error(monkeypatch: pytest.MonkeyPatch):
     act: when _download_base_image is called.
     assert: BaseImageDownloadError is raised.
     """
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
     monkeypatch.setattr(
         builder.urllib.request,
         "urlretrieve",
@@ -447,6 +449,8 @@ def test__fetch_shasums_error(monkeypatch: pytest.MonkeyPatch):
     act: when _fetch_shasums is called.
     assert: BaseImageDownloadError is raised.
     """
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
     monkeypatch.setattr(
         builder.requests,
         "get",
@@ -465,6 +469,8 @@ def test__fetch_shasums(monkeypatch: pytest.MonkeyPatch):
     act: when _fetch_shasums is called.
     assert: a dictionary with filename to shasum is created.
     """
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
     mock_response = MagicMock()
     mock_response.content = bytes(
         """test_shasum1 *file1
@@ -614,10 +620,16 @@ def test__install_yq_error(monkeypatch: pytest.MonkeyPatch):
     act: when _install_yq is called.
     assert: YQBuildError is raised.
     """
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
     monkeypatch.setattr(
         subprocess,
         "check_output",
-        MagicMock(side_effect=[None, subprocess.CalledProcessError(1, [], "", "Go build error.")]),
+        MagicMock(
+            # tried 3 times via retry
+            side_effect=[None, subprocess.CalledProcessError(1, [], "", "Go build error.")]
+            * 3
+        ),
     )
 
     with pytest.raises(YQBuildError) as exc:
@@ -632,6 +644,8 @@ def test__install_yq_already_exists(monkeypatch: pytest.MonkeyPatch):
     act: when _install_yq is called.
     assert: Mock functions are called.
     """
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
     monkeypatch.setattr(builder, "YQ_REPOSITORY_PATH", MagicMock(return_value=True))
     monkeypatch.setattr(subprocess, "check_output", (run_mock := MagicMock()))
     monkeypatch.setattr(shutil, "copy", (copy_mock := MagicMock()))
@@ -648,6 +662,8 @@ def test__install_yq(monkeypatch: pytest.MonkeyPatch):
     act: when _install_yq is called.
     assert: Mock functions are called.
     """
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
     monkeypatch.setattr(subprocess, "check_output", (run_mock := MagicMock()))
     monkeypatch.setattr(shutil, "copy", (copy_mock := MagicMock()))
 
