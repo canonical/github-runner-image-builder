@@ -2,6 +2,8 @@
 # See LICENSE file for licensing details.
 
 """Module for interacting with qemu image builder."""
+# nosec: B603 is added throughout subprocess calls, make sure that they are running trusted user
+# inputs.
 
 import hashlib
 import logging
@@ -43,10 +45,8 @@ SupportedBaseImageArch = Literal["amd64", "arm64"]
 
 APT_DEPENDENCIES = [
     "qemu-utils",  # used for qemu utilities tools to build and resize image
-    "libguestfs-tools",  # used to modify VM images.
     "cloud-utils",  # used for growpart.
     "golang-go",  # used to build yq from source.
-    "cpu-checker",  # used to check KVM capabilities for image compression
 ]
 APT_NONINTERACTIVE_ENV = {"DEBIAN_FRONTEND": "noninteractive"}
 SNAP_GO = "go"
@@ -765,24 +765,22 @@ def _compress_image(image: Path) -> None:
         ImageCompressError: If there was something wrong compressing the image.
     """
     try:
-        subprocess.run(["/usr/sbin/kvm-ok"], check=True, encoding="utf-8")  # nosec: B603
-    except subprocess.SubprocessError:
-        logger.info("KVM capability not found, skipping compression.")
-        image.rename(str(IMAGE_OUTPUT_PATH))
-        return
-
-    try:
         output = subprocess.check_output(  # nosec: B603
             [
                 "/usr/bin/sudo",
-                "/usr/bin/virt-sparsify",
-                "--compress",
+                "/usr/bin/qemu-img",
+                "convert",
+                "-c",  # compress
+                "-f",  # input format
+                "qcow2",
+                "-O",  # output format
+                "qcow2",
                 str(image),
                 str(IMAGE_OUTPUT_PATH),
             ],
             timeout=60 * 10,
         )
-        logger.info("virt-sparsify compress out: %s", output)
+        logger.info("qemu-img convert compress out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error compressing image, cmd: %s, code: %s, err: %s",

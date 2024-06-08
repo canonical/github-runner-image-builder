@@ -826,25 +826,6 @@ def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):
     assert "Compression error" in str(exc.getrepr())
 
 
-def test__compress_image_no_kvm(monkeypatch: pytest.MonkeyPatch):
-    """
-    arrange: given subprocess run for kvm-ok that raises an error.
-    act: when _compress_image is called.
-    assert: image is renamed.
-    """
-    # Bypass decorated retry sleep
-    monkeypatch.setattr(time, "sleep", MagicMock())
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        MagicMock(side_effect=subprocess.CalledProcessError(1, [], "kvm module not enabled")),
-    )
-    image_mock = MagicMock()
-
-    builder._compress_image(image=image_mock)
-    image_mock.rename.assert_called_once()
-
-
 def test__compress_image_subprocess_error(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given subprocess check_output raises an error.
