@@ -116,12 +116,6 @@ def test_subprocess_call_funcs(
             builder.ImageConnectError,
             id="disconnect image to nbd",
         ),
-        pytest.param(
-            "_compress_image",
-            [MagicMock()],
-            builder.ImageCompressError,
-            id="compress image",
-        ),
     ],
 )
 def test_subprocess_func_errors(
@@ -818,6 +812,9 @@ def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):
     # Bypass decorated retry sleep
     monkeypatch.setattr(time, "sleep", MagicMock())
     monkeypatch.setattr(
+        subprocess, "run", MagicMock(return_value=subprocess.CompletedProcess([], 0, "", ""))
+    )
+    monkeypatch.setattr(
         subprocess,
         "check_output",
         MagicMock(side_effect=subprocess.CalledProcessError(1, [], "Compression error")),
@@ -827,3 +824,44 @@ def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):
         builder._compress_image(image=MagicMock())
 
     assert "Compression error" in str(exc.getrepr())
+
+
+def test__compress_image_no_kvm(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given subprocess run for kvm-ok that raises an error.
+    act: when _compress_image is called.
+    assert: image is renamed.
+    """
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        MagicMock(side_effect=subprocess.CalledProcessError(1, [], "kvm module not enabled")),
+    )
+    image_mock = MagicMock()
+
+    builder._compress_image(image=image_mock)
+    image_mock.rename.assert_called_once()
+
+
+def test__compress_image_subprocess_error(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given subprocess check_output raises an error.
+    act: when _compress_image is called.
+    assert: ImageCompressError is raised.
+    """
+    # Bypass decorated retry sleep
+    monkeypatch.setattr(time, "sleep", MagicMock())
+    monkeypatch.setattr(subprocess, "run", MagicMock())
+    monkeypatch.setattr(
+        subprocess,
+        "check_output",
+        MagicMock(side_effect=subprocess.SubprocessError("Image subprocess err")),
+    )
+    image_mock = MagicMock()
+
+    with pytest.raises(builder.ImageCompressError) as exc:
+        builder._compress_image(image=image_mock)
+
+    assert "Image subprocess err" in str(exc.getrepr())

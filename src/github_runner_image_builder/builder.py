@@ -46,6 +46,7 @@ APT_DEPENDENCIES = [
     "libguestfs-tools",  # used to modify VM images.
     "cloud-utils",  # used for growpart.
     "golang-go",  # used to build yq from source.
+    "cpu-checker",  # used to check KVM capabilities for image compression
 ]
 APT_NONINTERACTIVE_ENV = {"DEBIAN_FRONTEND": "noninteractive"}
 SNAP_GO = "go"
@@ -764,8 +765,21 @@ def _compress_image(image: Path) -> None:
         ImageCompressError: If there was something wrong compressing the image.
     """
     try:
+        subprocess.run(["/usr/sbin/kvm-ok"], check=True, encoding="utf-8")  # nosec: B603
+    except subprocess.SubprocessError:
+        logger.info("KVM capability not found, skipping compression.")
+        image.rename(str(IMAGE_OUTPUT_PATH))
+        return
+
+    try:
         output = subprocess.check_output(  # nosec: B603
-            ["/usr/bin/virt-sparsify", "--compress", str(image), str(IMAGE_OUTPUT_PATH)],
+            [
+                "/usr/bin/sudo",
+                "/usr/bin/virt-sparsify",
+                "--compress",
+                str(image),
+                str(IMAGE_OUTPUT_PATH),
+            ],
             timeout=60 * 10,
         )
         logger.info("virt-sparsify compress out: %s", output)
