@@ -198,6 +198,7 @@ async def create_lxd_instance(lxd_client: Client, image: str) -> Instance:
     instance_config = {
         "name": f"test-{image}",
         "source": {"type": "image", "alias": image},
+        "type": "virtual-machine",
         "config": {"limits.cpu": "3", "limits.memory": "8192MiB"},
     }
     instance: Instance = lxd_client.instances.create(  # pylint: disable=no-member
