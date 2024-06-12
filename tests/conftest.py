@@ -15,6 +15,16 @@ def pytest_addoption(parser: Parser):
     """
     parser.addoption("--image", action="store", help="The Ubuntu LTS base image to build.")
     parser.addoption(
+        "--openstack-network-name",
+        action="store",
+        help="The Openstack network to create testing instances under.",
+    )
+    parser.addoption(
+        "--openstack-flavor-name",
+        action="store",
+        help="The Openstack flavor to create testing instances with.",
+    )
+    parser.addoption(
         "--openstack-clouds-yaml",
         action="store",
         help="The OpenStack clouds yaml contents the charm uses to connect to Openstack.",

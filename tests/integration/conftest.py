@@ -86,6 +86,14 @@ def network_name_fixture(pytestconfig: pytest.Config) -> str:
     return network_name
 
 
+@pytest.fixture(scope="module", name="flavor_name")
+def flavor_name_fixture(pytestconfig: pytest.Config) -> str:
+    """Flavor to create testing instances with."""
+    flavor_name = pytestconfig.getoption("--openstack-flavor-name")
+    assert flavor_name, "Please specify the --openstack-flavor-name command line option"
+    return flavor_name
+
+
 @pytest.fixture(scope="module", name="clouds_yaml_contents")
 def clouds_yaml_contents_fixture(
     openstack_clouds_yaml: typing.Optional[str], private_endpoint_clouds_yaml: typing.Optional[str]
