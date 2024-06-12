@@ -19,6 +19,22 @@ from github_runner_image_builder.config import (
 
 
 @pytest.mark.parametrize(
+    "arch, expected",
+    [
+        pytest.param(Arch.ARM64, "aarch64", id="arm64"),
+        pytest.param(Arch.X64, "x86_64", id="amd64"),
+    ],
+)
+def test_arch_openstack_conversion(arch: Arch, expected: str):
+    """
+    arrange: given platform architecture.
+    act: when arch.to_openstack is called.
+    assert: expected Openstack architecture is returned.
+    """
+    assert arch.to_openstack() == expected
+
+
+@pytest.mark.parametrize(
     "arch",
     [
         pytest.param("ppc64le", id="ppc64le"),

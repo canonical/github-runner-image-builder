@@ -12,15 +12,19 @@ import openstack.connection
 import openstack.exceptions
 from openstack.image.v2.image import Image
 
+from github_runner_image_builder.config import Arch
 from github_runner_image_builder.errors import OpenstackError, UploadImageError
 
 logger = logging.getLogger(__name__)
 
 
-def upload_image(cloud_name: str, image_name: str, image_path: Path, keep_revisions: int) -> str:
+def upload_image(
+    arch: Arch, cloud_name: str, image_name: str, image_path: Path, keep_revisions: int
+) -> str:
     """Upload image to openstack glance.
 
     Args:
+        arch: The image architecture.
         cloud_name: The Openstack cloud to use from clouds.yaml.
         image_name: The image name to upload as.
         image_path: The path to image to upload.
@@ -38,6 +42,7 @@ def upload_image(cloud_name: str, image_name: str, image_path: Path, keep_revisi
                 name=image_name,
                 filename=str(image_path),
                 allow_duplicates=True,
+                properties={"architecture": arch.to_openstack()},
                 wait=True,
             )
             _prune_old_images(

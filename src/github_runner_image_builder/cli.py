@@ -198,6 +198,7 @@ def _build_and_upload(
     base_image = BaseImage.from_str(base)
     builder.build_image(arch=arch, base_image=base_image)
     image_id = store.upload_image(
+        arch=arch,
         cloud_name=cloud_name,
         image_name=image_name,
         image_path=IMAGE_OUTPUT_PATH,

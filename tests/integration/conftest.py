@@ -202,10 +202,10 @@ def openstack_metadata_fixture(
 @pytest.fixture(scope="module", name="openstack_security_group")
 def openstack_security_group_fixture(openstack_connection: Connection):
     """An ssh-connectable security group."""
-    security_group_name = "github-runner-image-builder-operator-test-security-group"
+    security_group_name = "github-runner-image-builder-test-security-group"
     security_group: SecurityGroup = openstack_connection.create_security_group(
         name=security_group_name,
-        description="For servers managed by the github-runner-image-builder charm.",
+        description="For servers managed by the github-runner-image-builder app.",
     )
     # For ping
     openstack_connection.create_security_group_rule(

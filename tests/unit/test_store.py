@@ -127,6 +127,7 @@ def test_upload_image_error(mock_connection: MagicMock):
 
     with pytest.raises(UploadImageError) as exc:
         store.upload_image(
+            arch=MagicMock(),
             cloud_name=MagicMock(),
             image_name=MagicMock(),
             image_path=MagicMock(),
@@ -146,6 +147,7 @@ def test_upload_image(mock_connection: MagicMock):
 
     assert (
         store.upload_image(
+            arch=MagicMock(),
             cloud_name=MagicMock(),
             image_name=MagicMock(),
             image_path=MagicMock(),

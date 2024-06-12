@@ -52,6 +52,19 @@ class Arch(str, Enum):
     ARM64 = "arm64"
     X64 = "x64"
 
+    def to_openstack(self) -> str:
+        """Convert the architecture to OpenStack compatible arch string.
+
+        Returns:
+            The architecture string.
+        """  # noqa: DCO050 the ValueError is an unreachable code.
+        match self:
+            case Arch.ARM64:
+                return "aarch64"
+            case Arch.X64:
+                return "x86_64"
+        raise ValueError  # pragma: nocover
+
 
 ARCHITECTURES_ARM64 = {"aarch64", "arm64"}
 ARCHITECTURES_X86 = {"x86_64"}
