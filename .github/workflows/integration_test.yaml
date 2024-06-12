@@ -25,7 +25,7 @@ jobs:
           pipx install tox
       # need to run in sudo mode due to chroot
       - name: Run integration tests
-        run: sudo $(which tox) -e integration -- --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
+        run: sudo $(which tox) -e integration -- -m arm64 --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
   
   integration-tests-amd:
     name: Integration test (X64)
@@ -44,4 +44,4 @@ jobs:
           pipx install tox
       # need to run in sudo mode due to chroot
       - name: Run integration tests
-        run: sudo $(which tox) -e integration -- --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
+        run: sudo $(which tox) -e integration -- -m amd64 --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}

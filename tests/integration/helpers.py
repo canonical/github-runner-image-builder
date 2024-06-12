@@ -5,6 +5,7 @@
 
 import collections
 import inspect
+import logging
 import platform
 import tarfile
 import time
@@ -13,10 +14,19 @@ from pathlib import Path
 from string import Template
 from typing import Awaitable, Callable, ParamSpec, TypeVar, cast
 
+from fabric import Connection as SSHConnection
+from fabric import Result
+from openstack.compute.v2.server import Server
+from openstack.connection import Connection
+from paramiko.ssh_exception import NoValidConnectionsError
 from pylxd import Client
 from pylxd.models.image import Image
 from pylxd.models.instance import Instance, InstanceState
 from requests_toolbelt import MultipartEncoder
+
+from tests.integration import types
+
+logger = logging.getLogger(__name__)
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -60,6 +70,31 @@ async def wait_for(
         if result := func():
             return cast(R, result)
     raise TimeoutError()
+
+
+def create_lxd_vm_image(lxd_client: Client, img_path: Path, image: str, tmp_path: Path) -> Image:
+    """Create LXD VM image.
+
+    1. Creates the metadata.tar.gz file with the corresponding Ubuntu OS image and a pre-defined
+    templates directory. See testdata/templates.
+    2. Uploads the created VM image to LXD - metadata and image of qcow2 format is required.
+    3. Tags the uploaded image with an alias for test use.
+
+    Args:
+        lxd_client: PyLXD client.
+        img_path: qcow2 (.img) file path to upload.
+        tmp_path: Temporary dir.
+        image: The Ubuntu image name.
+
+    Returns:
+        The created LXD image.
+    """
+    metadata_tar = _create_metadata_tar_gz(image=image, tmp_path=tmp_path)
+    lxd_image = _post_vm_img(
+        lxd_client, img_path.read_bytes(), metadata_tar.read_bytes(), public=True
+    )
+    lxd_image.add_alias(image, f"Ubuntu {image} {IMAGE_TO_TAG[image]} image.")
+    return lxd_image
 
 
 IMAGE_TO_TAG = {"jammy": "22.04", "noble": "24.04"}
@@ -139,52 +174,6 @@ def _post_vm_img(
     return Image(client, fingerprint=operation.metadata["fingerprint"])
 
 
-def create_lxd_vm_image(lxd_client: Client, img_path: Path, image: str, tmp_path: Path) -> Image:
-    """Create LXD VM image.
-
-    1. Creates the metadata.tar.gz file with the corresponding Ubuntu OS image and a pre-defined
-    templates directory. See testdata/templates.
-    2. Uploads the created VM image to LXD - metadata and image of qcow2 format is required.
-    3. Tags the uploaded image with an alias for test use.
-
-    Args:
-        lxd_client: PyLXD client.
-        img_path: qcow2 (.img) file path to upload.
-        tmp_path: Temporary dir.
-        image: The Ubuntu image name.
-
-    Returns:
-        The created LXD image.
-    """
-    metadata_tar = _create_metadata_tar_gz(image=image, tmp_path=tmp_path)
-    lxd_image = _post_vm_img(
-        lxd_client, img_path.read_bytes(), metadata_tar.read_bytes(), public=True
-    )
-    lxd_image.add_alias(image, f"Ubuntu {image} {IMAGE_TO_TAG[image]} image.")
-    return lxd_image
-
-
-def _instance_running(instance: Instance) -> bool:
-    """Check if the instance is running.
-
-    Args:
-        instance: The lxd instance.
-
-    Returns:
-        Whether the instance is running.
-    """
-    state: InstanceState = instance.state()
-    if state.status != "Running":
-        return False
-    try:
-        result = instance.execute(
-            ["sudo", "--user", "ubuntu", "sudo", "systemctl", "is-active", "snapd.seeded.service"]
-        )
-    except BrokenPipeError:
-        return False
-    return result.exit_code == 0
-
-
 async def create_lxd_instance(lxd_client: Client, image: str) -> Instance:
     """Create and wait for LXD instance to become active.
 
@@ -208,3 +197,118 @@ async def create_lxd_instance(lxd_client: Client, image: str) -> Instance:
     await wait_for(partial(_instance_running, instance))
 
     return instance
+
+
+def _instance_running(instance: Instance) -> bool:
+    """Check if the instance is running.
+
+    Args:
+        instance: The lxd instance.
+
+    Returns:
+        Whether the instance is running.
+    """
+    state: InstanceState = instance.state()
+    if state.status != "Running":
+        return False
+    try:
+        result = instance.execute(
+            ["sudo", "--user", "ubuntu", "sudo", "systemctl", "is-active", "snapd.seeded.service"]
+        )
+    except BrokenPipeError:
+        return False
+    return result.exit_code == 0
+
+
+# All the arguments are necessary
+def wait_for_valid_connection(  # pylint: disable=too-many-arguments
+    connection: Connection,
+    server_name: str,
+    network: str,
+    ssh_key: Path,
+    timeout: int = 30 * 60,
+    proxy: types.ProxyConfig | None = None,
+) -> SSHConnection:
+    """Wait for a valid SSH connection from Openstack server.
+
+    Args:
+        connection: The openstack connection client to communicate with Openstack.
+        server_name: Openstack server to find the valid connection from.
+        network: The network to find valid connection from.
+        ssh_key: The path to public ssh_key to create connection with.
+        timeout: Number of seconds to wait before raising a timeout error.
+        proxy: The proxy to configure on host runner.
+
+    Raises:
+        TimeoutError: If no valid connections were found.
+
+    Returns:
+        SSHConnection.
+    """
+    start_time = time.time()
+    while time.time() - start_time <= timeout:
+        server: Server | None = connection.get_server(name_or_id=server_name)
+        if not server or not server.addresses:
+            time.sleep(10)
+            continue
+        for address in server.addresses[network]:
+            ip = address["addr"]
+            logger.info("Trying SSH into %s using key: %s...", ip, str(ssh_key.absolute()))
+            ssh_connection = SSHConnection(
+                host=ip,
+                user="ubuntu",
+                connect_kwargs={"key_filename": str(ssh_key.absolute())},
+                connect_timeout=10,
+            )
+            try:
+                result: Result = ssh_connection.run("echo 'hello world'")
+                if result.ok:
+                    _install_proxy(conn=ssh_connection, proxy=proxy)
+                    return ssh_connection
+            except NoValidConnectionsError as exc:
+                logger.warning("Connection not yet ready, %s.", str(exc))
+        time.sleep(10)
+    raise TimeoutError("No valid ssh connections found.")
+
+
+def _install_proxy(conn: SSHConnection, proxy: types.ProxyConfig | None = None):
+    """Run commands to install proxy.
+
+    Args:
+        conn: The SSH connection instance.
+        proxy: The proxy to apply if available.
+    """
+    if not proxy or not proxy.http:
+        return
+    command = "sudo snap install aproxy --edge"
+    logger.info("Running command: %s", command)
+    result: Result = conn.run(command)
+    assert result.ok, "Failed to install aproxy"
+
+    proxy_str = proxy.http.replace("http://", "").replace("https://", "")
+    command = f"sudo snap set aproxy proxy={proxy_str}"
+    logger.info("Running command: %s", command)
+    result = conn.run(command)
+    assert result.ok, "Failed to setup aproxy"
+
+    # ignore line too long since it is better read without line breaks
+    command = """/usr/bin/sudo nft -f - << EOF
+define default-ip = $(ip route get $(ip route show 0.0.0.0/0 | grep -oP 'via \\K\\S+') | grep -oP 'src \\K\\S+')
+define private-ips = { 10.0.0.0/8, 127.0.0.1/8, 172.16.0.0/12, 192.168.0.0/16 }
+table ip aproxy
+flush table ip aproxy
+table ip aproxy {
+    chain prerouting {
+            type nat hook prerouting priority dstnat; policy accept;
+            ip daddr != \\$private-ips tcp dport { 80, 443 } counter dnat to \\$default-ip:8443
+    }
+
+    chain output {
+            type nat hook output priority -100; policy accept;
+            ip daddr != \\$private-ips tcp dport { 80, 443 } counter dnat to \\$default-ip:8443
+    }
+}
+EOF"""  # noqa: E501
+    logger.info("Running command: %s", command)
+    result = conn.run(command)
+    assert result.ok, "Failed to configure iptable rules"

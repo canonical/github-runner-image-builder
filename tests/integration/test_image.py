@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 import pytest
+from fabric.connection import Connection as SSHConnection
+from fabric.runners import Result
 from openstack.connection import Connection
 from pylxd import Client
 
@@ -69,8 +71,9 @@ TEST_RUNNER_COMMANDS = (
 
 
 @pytest.mark.asyncio
+@pytest.mark.amd64
 @pytest.mark.usefixtures("cli_run")
-async def test_image(image: str, tmp_path: Path):
+async def test_image_amd(image: str, tmp_path: Path):
     """
     arrange: given a built output from the CLI.
     act: when the image is booted and commands are executed.
@@ -103,6 +106,22 @@ async def test_openstack_upload(openstack_connection: Connection, openstack_imag
     assert: the built image is uploaded in Openstack.
     """
     assert len(openstack_connection.search_images(openstack_image_name))
+
+
+@pytest.mark.asyncio
+@pytest.mark.arm64
+@pytest.mark.usefixtures("cli_run")
+async def test_image_arm(ssh_connection: SSHConnection):
+    """
+    arrange: given a built output from the CLI.
+    act: when the image is booted and commands are executed.
+    assert: commands do not error.
+    """
+    for testcmd in TEST_RUNNER_COMMANDS:
+        logger.info("Running command: %s", testcmd.command)
+        result: Result = ssh_connection.run(testcmd.command)
+        logger.info("Command output: %s %s %s", result.return_code, result.stdout, result.stderr)
+        assert result.return_code == 0
 
 
 @pytest.mark.asyncio

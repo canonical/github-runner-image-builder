@@ -2,17 +2,27 @@
 # See LICENSE file for licensing details.
 
 """Fixtures for github runner image builder integration tests."""
+import logging
+import secrets
 import string
+import typing
 from pathlib import Path
-from typing import Optional
 
 import openstack
 import pytest
+import pytest_asyncio
 import yaml
+from fabric.connection import Connection as SSHConnection
+from openstack.compute.v2.keypair import Keypair
+from openstack.compute.v2.server import Server
 from openstack.connection import Connection
 from openstack.image.v2.image import Image
+from openstack.network.v2.security_group import SecurityGroup
 
 from github_runner_image_builder.cli import main
+from tests.integration import helpers, types
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module", name="image")
@@ -31,7 +41,7 @@ def openstack_clouds_yaml_fixture(pytestconfig: pytest.Config) -> str:
 
 
 @pytest.fixture(scope="module", name="private_endpoint_clouds_yaml")
-def private_endpoint_clouds_yaml_fixture(pytestconfig: pytest.Config) -> Optional[str]:
+def private_endpoint_clouds_yaml_fixture(pytestconfig: pytest.Config) -> typing.Optional[str]:
     """The openstack private endpoint clouds yaml."""
     auth_url = pytestconfig.getoption("--openstack-auth-url")
     password = pytestconfig.getoption("--openstack-password")
@@ -70,7 +80,7 @@ def private_endpoint_clouds_yaml_fixture(pytestconfig: pytest.Config) -> Optiona
 
 @pytest.fixture(scope="module", name="clouds_yaml_contents")
 def clouds_yaml_contents_fixture(
-    openstack_clouds_yaml: Optional[str], private_endpoint_clouds_yaml: Optional[str]
+    openstack_clouds_yaml: typing.Optional[str], private_endpoint_clouds_yaml: typing.Optional[str]
 ):
     """The Openstack clouds yaml or private endpoint cloud yaml contents."""
     clouds_yaml_contents = openstack_clouds_yaml or private_endpoint_clouds_yaml
@@ -120,10 +130,144 @@ echo $IMAGE_ID | tee {callback_result_path}
     return callback_script
 
 
+@pytest.fixture(scope="module", name="test_id")
+def test_id_fixture() -> str:
+    """The unique test identifier."""
+    return secrets.token_hex(4)
+
+
 @pytest.fixture(scope="module", name="openstack_image_name")
-def openstack_image_name_fixture() -> str:
+def openstack_image_name_fixture(test_id: str) -> str:
     """The image name to upload to openstack."""
-    return "image-builder-test-image"
+    return f"image-builder-test-image-{test_id}"
+
+
+@pytest.fixture(scope="module", name="ssh_key")
+def ssh_key_fixture(
+    openstack_connection: Connection, test_id: str
+) -> typing.Generator[types.SSHKey, None, None]:
+    """The openstack ssh key fixture."""
+    keypair: Keypair = openstack_connection.create_keypair(f"test-image-builder-keys-{test_id}")
+    ssh_key_path = Path("tmp_key")
+    ssh_key_path.touch(exist_ok=True)
+    ssh_key_path.write_text(keypair.private_key, encoding="utf-8")
+
+    yield types.SSHKey(keypair=keypair, private_key=ssh_key_path)
+
+    openstack_connection.delete_keypair(name=keypair.name)
+
+
+class OpenstackMeta(typing.NamedTuple):
+    """A wrapper around Openstack related info.
+
+    Attributes:
+        connection: The connection instance to Openstack.
+        ssh_key: The SSH-Key created to connect to Openstack instance.
+        network: The Openstack network to create instances under.
+        flavor: The flavor to create instances with.
+    """
+
+    connection: Connection
+    ssh_key: types.SSHKey
+    network: str
+    flavor: str
+
+
+@pytest.fixture(scope="module", name="openstack_metadata")
+def openstack_metadata_fixture(
+    openstack_connection: Connection, ssh_key: types.SSHKey, network_name: str, flavor_name: str
+) -> OpenstackMeta:
+    """A wrapper around openstack related info."""
+    return OpenstackMeta(
+        connection=openstack_connection, ssh_key=ssh_key, network=network_name, flavor=flavor_name
+    )
+
+
+@pytest.fixture(scope="module", name="openstack_security_group")
+def openstack_security_group_fixture(openstack_connection: Connection):
+    """An ssh-connectable security group."""
+    security_group_name = "github-runner-image-builder-operator-test-security-group"
+    security_group: SecurityGroup = openstack_connection.create_security_group(
+        name=security_group_name,
+        description="For servers managed by the github-runner-image-builder charm.",
+    )
+    # For ping
+    openstack_connection.create_security_group_rule(
+        secgroup_name_or_id=security_group_name,
+        protocol="icmp",
+        direction="ingress",
+        ethertype="IPv4",
+    )
+    # For SSH
+    openstack_connection.create_security_group_rule(
+        secgroup_name_or_id=security_group_name,
+        port_range_min="22",
+        port_range_max="22",
+        protocol="tcp",
+        direction="ingress",
+        ethertype="IPv4",
+    )
+    # For tmate
+    openstack_connection.create_security_group_rule(
+        secgroup_name_or_id=security_group_name,
+        port_range_min="10022",
+        port_range_max="10022",
+        protocol="tcp",
+        direction="egress",
+        ethertype="IPv4",
+    )
+
+    yield security_group
+
+    openstack_connection.delete_security_group(security_group_name)
+
+
+@pytest_asyncio.fixture(scope="module", name="openstack_server")
+async def openstack_server_fixture(
+    openstack_metadata: OpenstackMeta,
+    openstack_security_group: SecurityGroup,
+    openstack_image_name: str,
+    test_id: str,
+):
+    """A testing openstack instance."""
+    server_name = f"test-server-{test_id}"
+    images: list[Image] = openstack_metadata.connection.search_images(openstack_image_name)
+    assert images, "No built image found."
+    server: Server = openstack_metadata.connection.create_server(
+        name=server_name,
+        image=images[0],
+        key_name=openstack_metadata.ssh_key.keypair.name,
+        auto_ip=False,
+        # these are pre-configured values on private endpoint.
+        security_groups=[openstack_security_group.name],
+        flavor=openstack_metadata.flavor,
+        network=openstack_metadata.network,
+        timeout=120,
+        wait=True,
+    )
+
+    yield server
+
+    openstack_metadata.connection.delete_server(server_name, wait=True)
+    for image in images:
+        openstack_metadata.connection.delete_image(image.id)
+
+
+@pytest_asyncio.fixture(scope="module", name="ssh_connection")
+async def ssh_connection_fixture(
+    openstack_server: Server, openstack_metadata: OpenstackMeta, proxy: types.ProxyConfig
+) -> SSHConnection:
+    """The openstack server ssh connection fixture."""
+    logger.info("Setting up SSH connection.")
+    ssh_connection = helpers.wait_for_valid_connection(
+        connection=openstack_metadata.connection,
+        server_name=openstack_server.name,
+        network=openstack_metadata.network,
+        ssh_key=openstack_metadata.ssh_key.private_key,
+        proxy=proxy,
+    )
+
+    return ssh_connection
 
 
 @pytest.fixture(scope="module", name="cli_run")
