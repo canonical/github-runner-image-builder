@@ -258,7 +258,7 @@ def wait_for_valid_connection(  # pylint: disable=too-many-arguments
                 host=ip,
                 user="ubuntu",
                 connect_kwargs={"key_filename": str(ssh_key.absolute())},
-                connect_timeout=10,
+                connect_timeout=10 * 60,
             )
             try:
                 result: Result = ssh_connection.run("echo 'hello world'")
