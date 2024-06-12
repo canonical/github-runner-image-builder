@@ -103,7 +103,7 @@ def clouds_yaml_contents_fixture(
     assert clouds_yaml_contents, (
         "Please specify --openstack-clouds-yaml or all of private endpoint arguments "
         "(--openstack-auth-url, --openstack-password, --openstack-project-domain-name, "
-        "--openstack-project-name, --openstack-user-domain-name, --openstack-user-name, "
+        "--openstack-project-name, --openstack-user-domain-name, --openstack-username, "
         "--openstack-region-name)"
     )
     return clouds_yaml_contents
