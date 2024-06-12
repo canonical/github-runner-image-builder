@@ -78,6 +78,14 @@ def private_endpoint_clouds_yaml_fixture(pytestconfig: pytest.Config) -> typing.
     )
 
 
+@pytest.fixture(scope="module", name="network_name")
+def network_name_fixture(pytestconfig: pytest.Config) -> str:
+    """Network to use to spawn test instances under."""
+    network_name = pytestconfig.getoption("--openstack-network-name")
+    assert network_name, "Please specify the --openstack-network-name command line option"
+    return network_name
+
+
 @pytest.fixture(scope="module", name="clouds_yaml_contents")
 def clouds_yaml_contents_fixture(
     openstack_clouds_yaml: typing.Optional[str], private_endpoint_clouds_yaml: typing.Optional[str]
