@@ -9,6 +9,7 @@ import typing
 from pathlib import Path
 
 import openstack
+import openstack.exceptions
 import pytest
 import pytest_asyncio
 import yaml
@@ -249,24 +250,27 @@ async def openstack_server_fixture(
     server_name = f"test-server-{test_id}"
     images: list[Image] = openstack_metadata.connection.search_images(openstack_image_name)
     assert images, "No built image found."
-    server: Server = openstack_metadata.connection.create_server(
-        name=server_name,
-        image=images[0],
-        key_name=openstack_metadata.ssh_key.keypair.name,
-        auto_ip=False,
-        # these are pre-configured values on private endpoint.
-        security_groups=[openstack_security_group.name],
-        flavor=openstack_metadata.flavor,
-        network=openstack_metadata.network,
-        timeout=120,
-        wait=True,
-    )
-
-    yield server
-
-    openstack_metadata.connection.delete_server(server_name, wait=True)
-    for image in images:
-        openstack_metadata.connection.delete_image(image.id)
+    try:
+        server: Server = openstack_metadata.connection.create_server(
+            name=server_name,
+            image=images[0],
+            key_name=openstack_metadata.ssh_key.keypair.name,
+            auto_ip=False,
+            # these are pre-configured values on private endpoint.
+            security_groups=[openstack_security_group.name],
+            flavor=openstack_metadata.flavor,
+            network=openstack_metadata.network,
+            timeout=120,
+            wait=True,
+        )
+        yield server
+    except openstack.exceptions.SDKException:
+        server = openstack_metadata.connection.get_server(name_or_id=server_name)
+        logger.exception("Failed to create server, %s", dict(server))
+    finally:
+        openstack_metadata.connection.delete_server(server_name, wait=True)
+        for image in images:
+            openstack_metadata.connection.delete_image(image.id)
 
 
 @pytest.fixture(scope="module", name="proxy")
