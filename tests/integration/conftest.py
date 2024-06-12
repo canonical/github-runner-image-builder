@@ -48,7 +48,7 @@ def private_endpoint_clouds_yaml_fixture(pytestconfig: pytest.Config) -> typing.
     project_domain_name = pytestconfig.getoption("--openstack-project-domain-name")
     project_name = pytestconfig.getoption("--openstack-project-name")
     user_domain_name = pytestconfig.getoption("--openstack-user-domain-name")
-    user_name = pytestconfig.getoption("--openstack-user-name")
+    user_name = pytestconfig.getoption("--openstack-username")
     region_name = pytestconfig.getoption("--openstack-region-name")
     if any(
         not val
