@@ -269,6 +269,14 @@ async def openstack_server_fixture(
         openstack_metadata.connection.delete_image(image.id)
 
 
+@pytest.fixture(scope="module", name="proxy")
+def proxy_fixture(pytestconfig: pytest.Config) -> types.ProxyConfig:
+    """The environment proxy to pass on to the charm/testing model."""
+    proxy = pytestconfig.getoption("--proxy")
+    no_proxy = pytestconfig.getoption("--no-proxy")
+    return types.ProxyConfig(http=proxy, https=proxy, no_proxy=no_proxy)
+
+
 @pytest_asyncio.fixture(scope="module", name="ssh_connection")
 async def ssh_connection_fixture(
     openstack_server: Server, openstack_metadata: OpenstackMeta, proxy: types.ProxyConfig
