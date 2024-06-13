@@ -26,7 +26,9 @@ jobs:
       # need to run in sudo mode due to chroot
       - name: Run integration tests
         run: sudo $(which tox) -e integration -- -m arm64 --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
-  
+      - name: Tmate
+        if: ${{ failure() }}
+        uses: canonical/action-tmate@main
   integration-tests-amd:
     name: Integration test (X64)
     runs-on: [self-hosted, X64, jammy, stg-private-endpoint]
