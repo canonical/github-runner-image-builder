@@ -318,7 +318,7 @@ def cli_run_fixture(
             "--keep-revisions",
             "2",
             "--callback-script",
-            str(callback_script),
+            str(callback_script.absolute()),
         ]
     )
 
