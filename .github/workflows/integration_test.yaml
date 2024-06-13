@@ -15,7 +15,7 @@ jobs:
       matrix:
         image: [jammy, noble]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4.1.7
       - uses: canonical/setup-lxd@v0.1.1
       - name: Install tox
         run: |
@@ -36,7 +36,7 @@ jobs:
       matrix:
         image: [jammy, noble]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4.1.7
       - uses: canonical/setup-lxd@v0.1.1
       - name: Install tox
         run: |
