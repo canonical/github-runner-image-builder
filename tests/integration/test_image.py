@@ -26,12 +26,12 @@ class Commands(NamedTuple):
     Attributes:
         name: The test name.
         command: The command to execute.
-        reload: Whether the shell should be reloaded.
+        env: Additional run envs.
     """
 
     name: str
     command: str
-    reload: bool | None = None
+    env: dict | None = None
 
 
 # This is matched with E2E test run of github-runner-operator charm.
@@ -61,9 +61,15 @@ TEST_RUNNER_COMMANDS = (
     Commands(name="yq version", command="yq --version"),
     Commands(name="apt update", command="sudo apt-get update -y"),
     Commands(name="install pipx", command="sudo apt-get install -y pipx"),
-    Commands(name="pipx add path", command="pipx ensurepath", reload=True),
+    Commands(name="pipx add path", command="pipx ensurepath"),
     Commands(name="install check-jsonschema", command="pipx install check-jsonschema"),
-    Commands(name="check jsonschema", command="check-jsonschema --version"),
+    Commands(
+        name="check jsonschema",
+        command="check-jsonschema --version",
+        # pipx has been added to PATH but still requires additional PATH env since
+        # default shell is not bash in OpenStack
+        env={"PATH": "$PATH:/home/ubuntu/.local/bin"},
+    ),
     Commands(name="unzip version", command="unzip -v"),
     Commands(name="gh version", command="gh --version"),
     Commands(
@@ -121,12 +127,8 @@ async def test_image_arm(ssh_connection: SSHConnection):
     """
     for testcmd in TEST_RUNNER_COMMANDS:
         logger.info("Running command: %s", testcmd.command)
-        result: Result = ssh_connection.run(testcmd.command)
+        result: Result = ssh_connection.run(testcmd.command, env=testcmd.env)
         logger.info("Command output: %s %s %s", result.return_code, result.stdout, result.stderr)
-        if testcmd.reload:
-            logger.info("Reloading connection after command: %s", testcmd.command)
-            ssh_connection.close()
-            ssh_connection.open()
         assert result.return_code == 0
 
 
