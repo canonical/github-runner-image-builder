@@ -26,10 +26,12 @@ class Commands(NamedTuple):
     Attributes:
         name: The test name.
         command: The command to execute.
+        reload: Whether the shell should be reloaded.
     """
 
     name: str
     command: str
+    reload: bool | None
 
 
 # This is matched with E2E test run of github-runner-operator charm.
@@ -59,7 +61,7 @@ TEST_RUNNER_COMMANDS = (
     Commands(name="yq version", command="yq --version"),
     Commands(name="apt update", command="sudo apt-get update -y"),
     Commands(name="install pipx", command="sudo apt-get install -y pipx"),
-    Commands(name="pipx add path", command="pipx ensurepath"),
+    Commands(name="pipx add path", command="pipx ensurepath", reload=True),
     Commands(name="install check-jsonschema", command="pipx install check-jsonschema"),
     Commands(name="check jsonschema", command="check-jsonschema --version"),
     Commands(name="unzip version", command="unzip -v"),
@@ -121,6 +123,10 @@ async def test_image_arm(ssh_connection: SSHConnection):
         logger.info("Running command: %s", testcmd.command)
         result: Result = ssh_connection.run(testcmd.command)
         logger.info("Command output: %s %s %s", result.return_code, result.stdout, result.stderr)
+        if testcmd.reload:
+            logger.info("Reloading connection after command: %s", testcmd.command)
+            ssh_connection.close()
+            ssh_connection.open()
         assert result.return_code == 0
 
 
