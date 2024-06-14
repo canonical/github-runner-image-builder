@@ -31,7 +31,7 @@ class Commands(NamedTuple):
 
     name: str
     command: str
-    reload: bool | None
+    reload: bool | None = None
 
 
 # This is matched with E2E test run of github-runner-operator charm.
