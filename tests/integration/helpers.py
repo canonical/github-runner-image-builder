@@ -16,6 +16,7 @@ from typing import Awaitable, Callable, ParamSpec, TypeVar, cast
 
 from fabric import Connection as SSHConnection
 from fabric import Result
+from invoke.exceptions import UnexpectedExit
 from openstack.compute.v2.server import Server
 from openstack.connection import Connection
 from paramiko.ssh_exception import NoValidConnectionsError
@@ -327,5 +328,8 @@ def _snap_ready(conn: SSHConnection) -> bool:
     """
     command = "sudo systemctl is-active snapd.seeded.service"
     logger.info("Running command: %s", command)
-    result: Result = conn.run(command)
-    return result.ok
+    try:
+        result: Result = conn.run(command)
+        return result.ok
+    except UnexpectedExit:
+        return False
