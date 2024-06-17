@@ -280,6 +280,8 @@ def _install_proxy(conn: SSHConnection, proxy: types.ProxyConfig | None = None):
     """
     if not proxy or not proxy.http:
         return
+    wait_for(partial(_snap_ready, conn))
+
     command = "sudo snap install aproxy --edge"
     logger.info("Running command: %s", command)
     result: Result = conn.run(command)
@@ -312,3 +314,18 @@ EOF"""  # noqa: E501
     logger.info("Running command: %s", command)
     result = conn.run(command)
     assert result.ok, "Failed to configure iptable rules"
+
+
+def _snap_ready(conn: SSHConnection) -> bool:
+    """Checks whether snapd is ready.
+
+    Args:
+        conn: The SSH connection instance.
+
+    Returns:
+        Whether snapd is ready.
+    """
+    command = "sudo systemctl is-active snapd.seeded.service"
+    logger.info("Running command: %s", command)
+    result: Result = conn.run(command)
+    return result.ok
