@@ -260,7 +260,7 @@ async def openstack_server_fixture(
             security_groups=[openstack_security_group.name],
             flavor=openstack_metadata.flavor,
             network=openstack_metadata.network,
-            timeout=120,
+            timeout=60 * 20,
             wait=True,
         )
         yield server
