@@ -221,7 +221,7 @@ def _instance_running(instance: Instance) -> bool:
 
 
 # All the arguments are necessary
-def wait_for_valid_connection(  # pylint: disable=too-many-arguments
+async def wait_for_valid_connection(  # pylint: disable=too-many-arguments
     connection: Connection,
     server_name: str,
     network: str,
@@ -263,7 +263,7 @@ def wait_for_valid_connection(  # pylint: disable=too-many-arguments
             try:
                 result: Result = ssh_connection.run("echo 'hello world'")
                 if result.ok:
-                    _install_proxy(conn=ssh_connection, proxy=proxy)
+                    await _install_proxy(conn=ssh_connection, proxy=proxy)
                     return ssh_connection
             except (NoValidConnectionsError, TimeoutError) as exc:
                 logger.warning("Connection not yet ready, %s.", str(exc))
@@ -271,7 +271,7 @@ def wait_for_valid_connection(  # pylint: disable=too-many-arguments
     raise TimeoutError("No valid ssh connections found.")
 
 
-def _install_proxy(conn: SSHConnection, proxy: types.ProxyConfig | None = None):
+async def _install_proxy(conn: SSHConnection, proxy: types.ProxyConfig | None = None):
     """Run commands to install proxy.
 
     Args:
@@ -280,7 +280,7 @@ def _install_proxy(conn: SSHConnection, proxy: types.ProxyConfig | None = None):
     """
     if not proxy or not proxy.http:
         return
-    wait_for(partial(_snap_ready, conn))
+    await wait_for(partial(_snap_ready, conn))
 
     command = "sudo snap install aproxy --edge"
     logger.info("Running command: %s", command)

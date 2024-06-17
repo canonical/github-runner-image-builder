@@ -287,7 +287,7 @@ async def ssh_connection_fixture(
 ) -> SSHConnection:
     """The openstack server ssh connection fixture."""
     logger.info("Setting up SSH connection.")
-    ssh_connection = helpers.wait_for_valid_connection(
+    ssh_connection = await helpers.wait_for_valid_connection(
         connection=openstack_metadata.connection,
         server_name=openstack_server.name,
         network=openstack_metadata.network,
