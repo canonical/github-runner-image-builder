@@ -1,0 +1,49 @@
+name: Integration tests
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-tests-arm:
+    name: Integration test (ARM64)
+    runs-on: [self-hosted, ARM64, jammy, stg-private-endpoint]
+    strategy:
+      matrix:
+        image: [jammy, noble]
+    steps:
+      - uses: actions/checkout@v4.1.7
+      - uses: canonical/setup-lxd@v0.1.1
+      - name: Install tox
+        run: |
+          sudo apt-get update
+          sudo apt-get install pipx -y
+          pipx ensurepath
+          pipx install tox
+      # need to run in sudo mode due to chroot
+      - name: Run integration tests
+        run: sudo $(which tox) -e integration -- -m arm64 --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
+      - name: Tmate
+        if: ${{ failure() }}
+        uses: canonical/action-tmate@main
+  integration-tests-amd:
+    name: Integration test (X64)
+    runs-on: [self-hosted, X64, jammy, stg-private-endpoint]
+    strategy:
+      matrix:
+        image: [jammy, noble]
+    steps:
+      - uses: actions/checkout@v4.1.7
+      - uses: canonical/setup-lxd@v0.1.1
+      - name: Install tox
+        run: |
+          sudo apt-get update
+          sudo apt-get install pipx -y
+          pipx ensurepath
+          pipx install tox
+      # need to run in sudo mode due to chroot
+      - name: Run integration tests
+        run: sudo $(which tox) -e integration -- -m amd64 --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
