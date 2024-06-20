@@ -5,14 +5,17 @@
 # nosec: B603 is added throughout subprocess calls, make sure that they are running trusted user
 # inputs.
 
+import contextlib
 import hashlib
 import logging
 import shutil
 
 # Ignore B404:blacklist since all subprocesses are run with predefined executables.
 import subprocess  # nosec
+import tarfile
 import urllib.error
 import urllib.request
+from io import BytesIO
 from pathlib import Path
 from typing import Literal
 
@@ -30,6 +33,7 @@ from github_runner_image_builder.errors import (
     NetworkBlockDeviceError,
     PermissionConfigurationError,
     ResizePartitionError,
+    RunnerDownloadError,
     SystemUserConfigurationError,
     UnattendedUpgradeDisableError,
     UnmountBuildPathError,
@@ -76,6 +80,7 @@ DOCKER_GROUP = "docker"
 MICROK8S_GROUP = "microk8s"
 LXD_GROUP = "lxd"
 UBUNTU_HOME = Path("/home/ubuntu")
+ACTIONS_RUNNER_PATH = IMAGE_MOUNT_DIR / "home" / UBUNTU_USER / "actions-runner"
 
 # Constants for packages in the image
 YQ_REPOSITORY_URL = "https://github.com/mikefarah/yq.git"
@@ -215,6 +220,7 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
             _configure_system_users()
             _configure_usr_local_bin()
             _install_yarn()
+            _install_github_runner()
     except ChrootBaseError as exc:
         raise BuildImageError from exc
 
@@ -751,6 +757,38 @@ def _install_yarn() -> None:
         raise YarnInstallError from exc
     except subprocess.SubprocessError as exc:
         raise YarnInstallError from exc
+
+
+def _install_github_runner() -> None:
+    """Download and install github runner.
+
+    Raises:
+        RunnerDownloadError: If there was an error downloading runner.
+    """
+    redirect_res = requests.get(
+        "https://github.com/actions/runner/releases/latest", allow_redirects=False
+    )
+    if not redirect_res.is_redirect or not (
+        latest_version := redirect_res.headers.get("Location", "").split("/")[-1]
+    ):
+        raise RunnerDownloadError("Failed to download runner, invalid redirect.")
+
+    version_number = latest_version.lstrip("v")
+    try:
+        tar_res = urllib.request.urlopen(
+            f"https://github.com/actions/runner/releases/download/{latest_version}/"
+            f"actions-runner-linux-x64-${version_number}.tar.gz"
+        )
+    except urllib.error.URLError as exc:
+        raise RunnerDownloadError("Error downloading runner tar archive.") from exc
+    ACTIONS_RUNNER_PATH.mkdir(exist_ok=True)
+    try:
+        with contextlib.closing(
+            tarfile.open(name=None, fileobj=BytesIO(tar_res.read()))
+        ) as tar_file:
+            tar_file.extractall(ACTIONS_RUNNER_PATH)
+    except tarfile.TarError as exc:
+        raise RunnerDownloadError("Error extracting runner tar archive.") from exc
 
 
 # Image compression might fail for arbitrary reasons - retrying usually solves this.
