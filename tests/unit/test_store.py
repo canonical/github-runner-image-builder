@@ -161,7 +161,7 @@ def test_upload_image(mock_connection: MagicMock):
 @pytest.mark.parametrize(
     "images, expected_id",
     [
-        pytest.param([], None, id="No images"),
+        pytest.param([], "", id="No images"),
         pytest.param(
             [
                 MockOpenstackImageFactory(id="1", created_at="2024-01-01T00:00:00Z"),
