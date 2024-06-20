@@ -43,6 +43,8 @@ from github_runner_image_builder.errors import (
 )
 from github_runner_image_builder.utils import retry
 
+logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 SupportedBaseImageArch = Literal["amd64", "arm64"]
