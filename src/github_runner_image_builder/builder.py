@@ -80,7 +80,7 @@ DOCKER_GROUP = "docker"
 MICROK8S_GROUP = "microk8s"
 LXD_GROUP = "lxd"
 UBUNTU_HOME = Path("/home/ubuntu")
-ACTIONS_RUNNER_PATH = IMAGE_MOUNT_DIR / "home" / UBUNTU_USER / "actions-runner"
+ACTIONS_RUNNER_PATH = UBUNTU_HOME / "actions-runner"
 
 # Constants for packages in the image
 YQ_REPOSITORY_URL = "https://github.com/mikefarah/yq.git"
