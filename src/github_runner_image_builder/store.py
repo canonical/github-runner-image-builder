@@ -78,7 +78,7 @@ def _prune_old_images(
             raise OpenstackError from exc
 
 
-def get_latest_build_id(cloud_name: str, image_name: str) -> str | None:
+def get_latest_build_id(cloud_name: str, image_name: str) -> str:
     """Fetch the latest image id.
 
     Args:
@@ -91,7 +91,7 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> str | None:
     with openstack.connect(cloud=cloud_name) as connection:
         images = _get_sorted_images_by_created_at(connection=connection, image_name=image_name)
         if not images:
-            return None
+            return ""
         return images[0].id
 
 
