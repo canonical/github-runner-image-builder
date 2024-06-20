@@ -777,7 +777,7 @@ def _install_github_runner() -> None:
     try:
         tar_res = urllib.request.urlopen(
             f"https://github.com/actions/runner/releases/download/{latest_version}/"
-            f"actions-runner-linux-x64-${version_number}.tar.gz"
+            f"actions-runner-linux-x64-{version_number}.tar.gz"
         )
     except urllib.error.URLError as exc:
         raise RunnerDownloadError("Error downloading runner tar archive.") from exc
