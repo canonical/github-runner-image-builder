@@ -216,10 +216,15 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
                 env=APT_NONINTERACTIVE_ENV,
             )
             logger.info("apt-get install out: %s", output)
+            logger.info("Disabling unattended upgrades.")
             _disable_unattended_upgrades()
+            logger.info("Configuring system users.")
             _configure_system_users()
+            logger.info("Configuring /usr/local/bin directory.")
             _configure_usr_local_bin()
+            logger.info("Installing Yarn.")
             _install_yarn()
+            logger.info("Installing GitHub runner.")
             _install_github_runner()
     except ChrootBaseError as exc:
         raise BuildImageError from exc
