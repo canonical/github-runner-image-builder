@@ -621,10 +621,6 @@ def _disable_unattended_upgrades() -> None:
         # use subprocess run rather than operator-libs-linux's systemd library since the library
         # does not provide full features like mask.
         output = subprocess.check_output(
-            ["/usr/bin/systemctl", "stop", APT_TIMER], timeout=30
-        )  # nosec: B603
-        logger.info("systemctl stop apt timer out: %s", output)
-        output = subprocess.check_output(
             ["/usr/bin/systemctl", "disable", APT_TIMER], timeout=30
         )  # nosec: B603
         logger.info("systemctl disable apt timer out: %s", output)
@@ -632,10 +628,6 @@ def _disable_unattended_upgrades() -> None:
             ["/usr/bin/systemctl", "mask", APT_SVC], timeout=30
         )  # nosec: B603
         logger.info("systemctl mask apt timer out: %s", output)
-        output = subprocess.check_output(
-            ["/usr/bin/systemctl", "stop", APT_UPGRADE_TIMER], timeout=30
-        )  # nosec: B603
-        logger.info("systemctl stop apt upgrade timer out: %s", output)
         output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/systemctl", "disable", APT_UPGRADE_TIMER], timeout=30
         )
@@ -644,10 +636,6 @@ def _disable_unattended_upgrades() -> None:
             ["/usr/bin/systemctl", "mask", APT_UPGRAD_SVC], timeout=30
         )  # nosec: B603
         logger.info("systemctl mask apt upgrade timer out: %s", output)
-        output = subprocess.check_output(
-            ["/usr/bin/systemctl", "daemon-reload"], timeout=30
-        )  # nosec: B603
-        logger.info("systemctl daemon-reload out: %s", output)
         output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/apt-get", "remove", "-y", "unattended-upgrades"],
             env=APT_NONINTERACTIVE_ENV,
