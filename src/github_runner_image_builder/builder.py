@@ -6,7 +6,13 @@
 # inputs.
 
 import contextlib
+
+# gzip needs to be preloaded to extract github runner tar.gz. This is because within the chroot
+# env, tarfile module tries to import gzip dynamically and fails.
+import gzip  # pylint: disable=unused-import
 import hashlib
+import http
+import http.client
 import logging
 import shutil
 
@@ -15,6 +21,7 @@ import subprocess  # nosec
 import tarfile
 import urllib.error
 import urllib.request
+import urllib.response
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
@@ -770,7 +777,7 @@ def _install_github_runner() -> None:
 
     version_number = latest_version.lstrip("v")
     try:
-        tar_res = urllib.request.urlopen(
+        tar_res: http.client.HTTPResponse = urllib.request.urlopen(
             f"https://github.com/actions/runner/releases/download/{latest_version}/"
             f"actions-runner-linux-x64-{version_number}.tar.gz"
         )
@@ -781,7 +788,7 @@ def _install_github_runner() -> None:
         with contextlib.closing(
             tarfile.open(name=None, fileobj=BytesIO(tar_res.read()))
         ) as tar_file:
-            tar_file.extractall(ACTIONS_RUNNER_PATH)
+            tar_file.extractall(path=ACTIONS_RUNNER_PATH)
     except tarfile.TarError as exc:
         raise RunnerDownloadError("Error extracting runner tar archive.") from exc
 
