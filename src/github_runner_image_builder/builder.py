@@ -781,7 +781,7 @@ def _install_github_runner() -> None:
         )
     except urllib.error.URLError as exc:
         raise RunnerDownloadError("Error downloading runner tar archive.") from exc
-    ACTIONS_RUNNER_PATH.mkdir(exist_ok=True)
+    ACTIONS_RUNNER_PATH.mkdir(parents=True, exist_ok=True)
     try:
         with contextlib.closing(
             tarfile.open(name=None, fileobj=BytesIO(tar_res.read()))
