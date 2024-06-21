@@ -9,7 +9,7 @@ import contextlib
 
 # gzip needs to be preloaded to extract github runner tar.gz. This is because within the chroot
 # env, tarfile module tries to import gzip dynamically and fails.
-import gzip  # pylint: disable=unused-import
+import gzip  # noqa: F401 # pylint: disable=unused-import
 import hashlib
 import http
 import http.client
@@ -767,9 +767,15 @@ def _install_github_runner() -> None:
     Raises:
         RunnerDownloadError: If there was an error downloading runner.
     """
-    redirect_res = requests.get(
-        "https://github.com/actions/runner/releases/latest", allow_redirects=False
-    )
+    try:
+        # False positive on bandit that thinks this has no timeout.
+        redirect_res = requests.get(  # nosec: B113
+            "https://github.com/actions/runner/releases/latest",
+            timeout=60 * 30,
+            allow_redirects=False,
+        )
+    except requests.exceptions.RequestException as exc:
+        raise RunnerDownloadError("Unable to fetch the latest release version.") from exc
     if not redirect_res.is_redirect or not (
         latest_version := redirect_res.headers.get("Location", "").split("/")[-1]
     ):
@@ -777,18 +783,20 @@ def _install_github_runner() -> None:
 
     version_number = latest_version.lstrip("v")
     try:
-        tar_res: http.client.HTTPResponse = urllib.request.urlopen(
+        tar_res: http.client.HTTPResponse
+        # The github releases URL is safe to open
+        with urllib.request.urlopen(  # nosec: B310
             f"https://github.com/actions/runner/releases/download/{latest_version}/"
             f"actions-runner-linux-x64-{version_number}.tar.gz"
-        )
+        ) as tar_res:
+            tar_bytes = tar_res.read()
     except urllib.error.URLError as exc:
         raise RunnerDownloadError("Error downloading runner tar archive.") from exc
     ACTIONS_RUNNER_PATH.mkdir(parents=True, exist_ok=True)
     try:
-        with contextlib.closing(
-            tarfile.open(name=None, fileobj=BytesIO(tar_res.read()))
-        ) as tar_file:
-            tar_file.extractall(path=ACTIONS_RUNNER_PATH)
+        with contextlib.closing(tarfile.open(name=None, fileobj=BytesIO(tar_bytes))) as tar_file:
+            # the tar file provided by GitHub can be trusted
+            tar_file.extractall(path=ACTIONS_RUNNER_PATH)  # nosec: B202
     except tarfile.TarError as exc:
         raise RunnerDownloadError("Error extracting runner tar archive.") from exc
 

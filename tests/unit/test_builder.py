@@ -36,6 +36,7 @@ from github_runner_image_builder.builder import (
     shutil,
     subprocess,
 )
+from tests.unit import factories
 
 
 @pytest.mark.parametrize(
@@ -246,6 +247,7 @@ def test_build_image_error(
     monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
     monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
     monkeypatch.setattr(builder, "_install_yarn", MagicMock())
+    monkeypatch.setattr(builder, "_install_github_runner", MagicMock())
     monkeypatch.setattr(builder, "_disconnect_image_to_network_block_device", MagicMock())
     monkeypatch.setattr(builder, "_compress_image", MagicMock())
     monkeypatch.setattr(patch_obj, sub_func, mock)
@@ -680,7 +682,7 @@ def test__disable_unattended_upgrades_subprocess_fail(monkeypatch: pytest.Monkey
         "check_output",
         MagicMock(
             side_effect=[
-                *([None] * 7),
+                *([None] * 4),
                 subprocess.CalledProcessError(1, [], "Failed to disable unattended upgrades", ""),
             ]
         ),
@@ -769,6 +771,71 @@ def test__install_yarn(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(subprocess, "check_output", MagicMock())
 
     assert builder._install_yarn() is None
+
+
+@pytest.mark.parametrize(
+    "module, func, mock, expected_message",
+    [
+        pytest.param(
+            builder.requests,
+            "get",
+            MagicMock(side_effect=builder.requests.exceptions.RequestException),
+            "Unable to fetch the latest release version.",
+        ),
+        pytest.param(
+            builder.requests,
+            "get",
+            MagicMock(return_value=factories.MockRequestsReponseFactory(is_redirect=False)),
+            "Failed to download runner, invalid redirect.",
+        ),
+        pytest.param(
+            builder.urllib.request,
+            "urlopen",
+            MagicMock(side_effect=builder.urllib.error.URLError(reason="not found")),
+            "Error downloading runner tar archive.",
+        ),
+        pytest.param(
+            builder.tarfile,
+            "open",
+            MagicMock(side_effect=builder.tarfile.TarError),
+            "Error extracting runner tar archive.",
+        ),
+    ],
+)
+def test__install_github_runner_error(
+    monkeypatch: pytest.MonkeyPatch, module: Any, func: str, mock: MagicMock, expected_message: str
+):
+    """
+    arrange: given monkeypatched dependency functions that raise an error.
+    act: when _install_github_runner is called.
+    assert: RunnerDownloadError is raised.
+    """
+    monkeypatch.setattr(builder.requests, "get", MagicMock())
+    monkeypatch.setattr(builder.urllib.request, "urlopen", MagicMock())
+    monkeypatch.setattr(builder.tarfile, "open", MagicMock())
+    monkeypatch.setattr(builder, "ACTIONS_RUNNER_PATH", MagicMock())
+    monkeypatch.setattr(builder, "BytesIO", MagicMock())
+    monkeypatch.setattr(module, func, mock)
+
+    with pytest.raises(builder.RunnerDownloadError) as exc:
+        builder._install_github_runner()
+
+    assert expected_message in str(exc.getrepr())
+
+
+def test__install_github_runner(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given monkeypatched dependency functions.
+    act: when _install_github_runner is called.
+    assert: no errors are raised.
+    """
+    monkeypatch.setattr(builder.requests, "get", MagicMock())
+    monkeypatch.setattr(builder.urllib.request, "urlopen", MagicMock())
+    monkeypatch.setattr(builder.tarfile, "open", MagicMock())
+    monkeypatch.setattr(builder, "ACTIONS_RUNNER_PATH", MagicMock())
+    monkeypatch.setattr(builder, "BytesIO", MagicMock())
+
+    builder._install_github_runner()
 
 
 def test__disconnect_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
