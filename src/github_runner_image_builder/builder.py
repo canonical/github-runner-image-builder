@@ -14,6 +14,8 @@ import hashlib
 import http
 import http.client
 import logging
+import os
+import pwd
 import shutil
 
 # Ignore B404:blacklist since all subprocesses are run with predefined executables.
@@ -802,6 +804,8 @@ def _install_github_runner(arch: Arch) -> None:
             tar_file.extractall(path=ACTIONS_RUNNER_PATH)  # nosec: B202
     except tarfile.TarError as exc:
         raise RunnerDownloadError("Error extracting runner tar archive.") from exc
+    ubuntu_user = pwd.getpwnam(UBUNTU_USER)
+    os.chown(ACTIONS_RUNNER_PATH, uid=ubuntu_user.pw_uid, gid=ubuntu_user.pw_gid)
 
 
 # Image compression might fail for arbitrary reasons - retrying usually solves this.

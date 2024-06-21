@@ -815,6 +815,8 @@ def test__install_github_runner_error(
     monkeypatch.setattr(builder.tarfile, "open", MagicMock())
     monkeypatch.setattr(builder, "ACTIONS_RUNNER_PATH", MagicMock())
     monkeypatch.setattr(builder, "BytesIO", MagicMock())
+    monkeypatch.setattr(builder.pwd, "getpwnam", MagicMock())
+    monkeypatch.setattr(builder.os, "chown", MagicMock())
     monkeypatch.setattr(module, func, mock)
 
     with pytest.raises(builder.RunnerDownloadError) as exc:
@@ -834,6 +836,8 @@ def test__install_github_runner(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(builder.tarfile, "open", MagicMock())
     monkeypatch.setattr(builder, "ACTIONS_RUNNER_PATH", MagicMock())
     monkeypatch.setattr(builder, "BytesIO", MagicMock())
+    monkeypatch.setattr(builder.pwd, "getpwnam", MagicMock())
+    monkeypatch.setattr(builder.os, "chown", MagicMock())
 
     builder._install_github_runner(arch=Arch.ARM64)
 
