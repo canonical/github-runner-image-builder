@@ -809,8 +809,8 @@ def _install_github_runner(arch: Arch) -> None:
             [
                 "/usr/bin/chown",
                 "-R",
-                str(ACTIONS_RUNNER_PATH),
                 f"{ubuntu_user.pw_uid}:{ubuntu_user.pw_gid}",
+                str(ACTIONS_RUNNER_PATH),
             ],
             timeout=60,
         )
