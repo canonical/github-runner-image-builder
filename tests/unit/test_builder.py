@@ -818,7 +818,7 @@ def test__install_github_runner_error(
     monkeypatch.setattr(module, func, mock)
 
     with pytest.raises(builder.RunnerDownloadError) as exc:
-        builder._install_github_runner()
+        builder._install_github_runner(arch=Arch.X64)
 
     assert expected_message in str(exc.getrepr())
 
@@ -835,7 +835,7 @@ def test__install_github_runner(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(builder, "ACTIONS_RUNNER_PATH", MagicMock())
     monkeypatch.setattr(builder, "BytesIO", MagicMock())
 
-    builder._install_github_runner()
+    builder._install_github_runner(arch=Arch.ARM64)
 
 
 def test__disconnect_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):

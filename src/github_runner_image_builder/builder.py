@@ -234,7 +234,7 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
             logger.info("Installing Yarn.")
             _install_yarn()
             logger.info("Installing GitHub runner.")
-            _install_github_runner()
+            _install_github_runner(arch=arch)
     except ChrootBaseError as exc:
         raise BuildImageError from exc
 
@@ -761,8 +761,11 @@ def _install_yarn() -> None:
         raise YarnInstallError from exc
 
 
-def _install_github_runner() -> None:
+def _install_github_runner(arch: Arch) -> None:
     """Download and install github runner.
+
+    Args:
+        arch: The architecture of the host image.
 
     Raises:
         RunnerDownloadError: If there was an error downloading runner.
@@ -787,7 +790,7 @@ def _install_github_runner() -> None:
         # The github releases URL is safe to open
         with urllib.request.urlopen(  # nosec: B310
             f"https://github.com/actions/runner/releases/download/{latest_version}/"
-            f"actions-runner-linux-x64-{version_number}.tar.gz"
+            f"actions-runner-linux-{arch.value}-{version_number}.tar.gz"
         ) as tar_res:
             tar_bytes = tar_res.read()
     except urllib.error.URLError as exc:
