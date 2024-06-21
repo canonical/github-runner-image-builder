@@ -14,7 +14,6 @@ import hashlib
 import http
 import http.client
 import logging
-import os
 import pwd
 import shutil
 
@@ -805,7 +804,18 @@ def _install_github_runner(arch: Arch) -> None:
     except tarfile.TarError as exc:
         raise RunnerDownloadError("Error extracting runner tar archive.") from exc
     ubuntu_user = pwd.getpwnam(UBUNTU_USER)
-    os.chown(ACTIONS_RUNNER_PATH, uid=ubuntu_user.pw_uid, gid=ubuntu_user.pw_gid)
+    try:
+        subprocess.check_call(  # nosec: B603
+            [
+                "/usr/bin/chown",
+                "-R",
+                str(ACTIONS_RUNNER_PATH),
+                f"{ubuntu_user.pw_uid}:{ubuntu_user.pw_gid}",
+            ],
+            timeout=60,
+        )
+    except subprocess.SubprocessError as exc:
+        raise RunnerDownloadError("Error changing github runner directory.") from exc
 
 
 # Image compression might fail for arbitrary reasons - retrying usually solves this.

@@ -800,6 +800,12 @@ def test__install_yarn(monkeypatch: pytest.MonkeyPatch):
             MagicMock(side_effect=builder.tarfile.TarError),
             "Error extracting runner tar archive.",
         ),
+        pytest.param(
+            builder.subprocess,
+            "check_call",
+            MagicMock(side_effect=subprocess.SubprocessError()),
+            "Error changing github runner directory.",
+        ),
     ],
 )
 def test__install_github_runner_error(
@@ -816,7 +822,7 @@ def test__install_github_runner_error(
     monkeypatch.setattr(builder, "ACTIONS_RUNNER_PATH", MagicMock())
     monkeypatch.setattr(builder, "BytesIO", MagicMock())
     monkeypatch.setattr(builder.pwd, "getpwnam", MagicMock())
-    monkeypatch.setattr(builder.os, "chown", MagicMock())
+    monkeypatch.setattr(builder.subprocess, "check_call", MagicMock())
     monkeypatch.setattr(module, func, mock)
 
     with pytest.raises(builder.RunnerDownloadError) as exc:
@@ -837,7 +843,7 @@ def test__install_github_runner(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(builder, "ACTIONS_RUNNER_PATH", MagicMock())
     monkeypatch.setattr(builder, "BytesIO", MagicMock())
     monkeypatch.setattr(builder.pwd, "getpwnam", MagicMock())
-    monkeypatch.setattr(builder.os, "chown", MagicMock())
+    monkeypatch.setattr(builder.subprocess, "check_call", MagicMock())
 
     builder._install_github_runner(arch=Arch.ARM64)
 
