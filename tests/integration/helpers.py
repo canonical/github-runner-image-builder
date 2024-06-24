@@ -372,7 +372,7 @@ def format_dockerhub_mirror_microk8s_command(command: str, dockerhub_mirror: str
         dockerhub_mirror: The DockerHub mirror URL.
 
     Returns:
-        The formatted dockerhub mirror registrry command for snap microk8s.
+        The formatted dockerhub mirror registry command for snap microk8s.
     """
     url = urllib.parse.urlparse(dockerhub_mirror)
     return command.format(registry_url=url.geturl(), hostname=url.hostname, port=url.port)
