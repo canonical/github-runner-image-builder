@@ -47,6 +47,3 @@ jobs:
       # need to run in sudo mode due to chroot
       - name: Run integration tests
         run: tox -e integration -- -m amd64 --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
-      - name: Setup tmate session
-        if: ${{ failure() }}
-        uses: canonical/action-tmate@main
