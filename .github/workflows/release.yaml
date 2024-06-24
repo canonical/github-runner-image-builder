@@ -1,0 +1,17 @@
+name: Publish to edge
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish-to-edge:
+    name: Publish application
+    steps:
+      - name: Remove git edge tag
+        run: |
+          git tag -d edge && git push origin :refs/tags/edge
+      - name: Apply new edge tag
+        run: |
+          git tag edge && git push origin --tags
