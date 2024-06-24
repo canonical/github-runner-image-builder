@@ -9,6 +9,7 @@ jobs:
   publish-to-edge:
     name: Publish application
     steps:
+      - uses: actions/checkout@v4.1.7
       - name: Remove git edge tag
         run: |
           git tag -d edge && git push origin :refs/tags/edge
