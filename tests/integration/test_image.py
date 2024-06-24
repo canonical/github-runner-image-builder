@@ -54,7 +54,8 @@ TEST_RUNNER_COMMANDS = (
 
 [host.{hostname}:{port}]
 capabilities = ["pull", "resolve"]
-' > /var/snap/microk8s/current/args/certs.d/docker.io/hosts.toml""",
+' | sudo tee /var/snap/microk8s/current/args/certs.d/docker.io/hosts.toml && \
+sudo microk8s stop && sudo microk8s start""",
     ),
     Commands(name="wait for microk8s", command="microk8s status --wait-ready"),
     Commands(
