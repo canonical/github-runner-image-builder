@@ -5,14 +5,25 @@
 # nosec: B603 is added throughout subprocess calls, make sure that they are running trusted user
 # inputs.
 
+import contextlib
+
+# gzip needs to be preloaded to extract github runner tar.gz. This is because within the chroot
+# env, tarfile module tries to import gzip dynamically and fails.
+import gzip  # noqa: F401 # pylint: disable=unused-import
 import hashlib
+import http
+import http.client
 import logging
+import pwd
 import shutil
 
 # Ignore B404:blacklist since all subprocesses are run with predefined executables.
 import subprocess  # nosec
+import tarfile
 import urllib.error
 import urllib.request
+import urllib.response
+from io import BytesIO
 from pathlib import Path
 from typing import Literal
 
@@ -30,6 +41,7 @@ from github_runner_image_builder.errors import (
     NetworkBlockDeviceError,
     PermissionConfigurationError,
     ResizePartitionError,
+    RunnerDownloadError,
     SystemUserConfigurationError,
     UnattendedUpgradeDisableError,
     UnmountBuildPathError,
@@ -38,6 +50,8 @@ from github_runner_image_builder.errors import (
     YQBuildError,
 )
 from github_runner_image_builder.utils import retry
+
+logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +90,7 @@ DOCKER_GROUP = "docker"
 MICROK8S_GROUP = "microk8s"
 LXD_GROUP = "lxd"
 UBUNTU_HOME = Path("/home/ubuntu")
+ACTIONS_RUNNER_PATH = UBUNTU_HOME / "actions-runner"
 
 # Constants for packages in the image
 YQ_REPOSITORY_URL = "https://github.com/mikefarah/yq.git"
@@ -211,10 +226,16 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
                 env=APT_NONINTERACTIVE_ENV,
             )
             logger.info("apt-get install out: %s", output)
+            logger.info("Disabling unattended upgrades.")
             _disable_unattended_upgrades()
+            logger.info("Configuring system users.")
             _configure_system_users()
+            logger.info("Configuring /usr/local/bin directory.")
             _configure_usr_local_bin()
+            logger.info("Installing Yarn.")
             _install_yarn()
+            logger.info("Installing GitHub runner.")
+            _install_github_runner(arch=arch)
     except ChrootBaseError as exc:
         raise BuildImageError from exc
 
@@ -615,10 +636,6 @@ def _disable_unattended_upgrades() -> None:
         # use subprocess run rather than operator-libs-linux's systemd library since the library
         # does not provide full features like mask.
         output = subprocess.check_output(
-            ["/usr/bin/systemctl", "stop", APT_TIMER], timeout=30
-        )  # nosec: B603
-        logger.info("systemctl stop apt timer out: %s", output)
-        output = subprocess.check_output(
             ["/usr/bin/systemctl", "disable", APT_TIMER], timeout=30
         )  # nosec: B603
         logger.info("systemctl disable apt timer out: %s", output)
@@ -626,10 +643,6 @@ def _disable_unattended_upgrades() -> None:
             ["/usr/bin/systemctl", "mask", APT_SVC], timeout=30
         )  # nosec: B603
         logger.info("systemctl mask apt timer out: %s", output)
-        output = subprocess.check_output(
-            ["/usr/bin/systemctl", "stop", APT_UPGRADE_TIMER], timeout=30
-        )  # nosec: B603
-        logger.info("systemctl stop apt upgrade timer out: %s", output)
         output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/systemctl", "disable", APT_UPGRADE_TIMER], timeout=30
         )
@@ -638,10 +651,6 @@ def _disable_unattended_upgrades() -> None:
             ["/usr/bin/systemctl", "mask", APT_UPGRAD_SVC], timeout=30
         )  # nosec: B603
         logger.info("systemctl mask apt upgrade timer out: %s", output)
-        output = subprocess.check_output(
-            ["/usr/bin/systemctl", "daemon-reload"], timeout=30
-        )  # nosec: B603
-        logger.info("systemctl daemon-reload out: %s", output)
         output = subprocess.check_output(  # nosec: B603
             ["/usr/bin/apt-get", "remove", "-y", "unattended-upgrades"],
             env=APT_NONINTERACTIVE_ENV,
@@ -751,6 +760,62 @@ def _install_yarn() -> None:
         raise YarnInstallError from exc
     except subprocess.SubprocessError as exc:
         raise YarnInstallError from exc
+
+
+def _install_github_runner(arch: Arch) -> None:
+    """Download and install github runner.
+
+    Args:
+        arch: The architecture of the host image.
+
+    Raises:
+        RunnerDownloadError: If there was an error downloading runner.
+    """
+    try:
+        # False positive on bandit that thinks this has no timeout.
+        redirect_res = requests.get(  # nosec: B113
+            "https://github.com/actions/runner/releases/latest",
+            timeout=60 * 30,
+            allow_redirects=False,
+        )
+    except requests.exceptions.RequestException as exc:
+        raise RunnerDownloadError("Unable to fetch the latest release version.") from exc
+    if not redirect_res.is_redirect or not (
+        latest_version := redirect_res.headers.get("Location", "").split("/")[-1]
+    ):
+        raise RunnerDownloadError("Failed to download runner, invalid redirect.")
+
+    version_number = latest_version.lstrip("v")
+    try:
+        tar_res: http.client.HTTPResponse
+        # The github releases URL is safe to open
+        with urllib.request.urlopen(  # nosec: B310
+            f"https://github.com/actions/runner/releases/download/{latest_version}/"
+            f"actions-runner-linux-{arch.value}-{version_number}.tar.gz"
+        ) as tar_res:
+            tar_bytes = tar_res.read()
+    except urllib.error.URLError as exc:
+        raise RunnerDownloadError("Error downloading runner tar archive.") from exc
+    ACTIONS_RUNNER_PATH.mkdir(parents=True, exist_ok=True)
+    try:
+        with contextlib.closing(tarfile.open(name=None, fileobj=BytesIO(tar_bytes))) as tar_file:
+            # the tar file provided by GitHub can be trusted
+            tar_file.extractall(path=ACTIONS_RUNNER_PATH)  # nosec: B202
+    except tarfile.TarError as exc:
+        raise RunnerDownloadError("Error extracting runner tar archive.") from exc
+    ubuntu_user = pwd.getpwnam(UBUNTU_USER)
+    try:
+        subprocess.check_call(  # nosec: B603
+            [
+                "/usr/bin/chown",
+                "-R",
+                f"{ubuntu_user.pw_uid}:{ubuntu_user.pw_gid}",
+                str(ACTIONS_RUNNER_PATH),
+            ],
+            timeout=60,
+        )
+    except subprocess.SubprocessError as exc:
+        raise RunnerDownloadError("Error changing github runner directory.") from exc
 
 
 # Image compression might fail for arbitrary reasons - retrying usually solves this.

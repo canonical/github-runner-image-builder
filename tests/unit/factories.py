@@ -35,3 +35,14 @@ class MockOpenstackImageFactory(factory.Factory):
 
     id: str  # UUID
     created_at = Faker("date")  # Example format: 2024-04-16T04:31:12Z
+
+
+class MockRequestsReponseFactory(factory.Factory):
+    """Mock requests response."""  # noqa: DCO060
+
+    class Meta:  # pylint: disable=too-few-public-methods
+        """Configuration for factory."""  # noqa: DCO060
+
+        model = MagicMock
+
+    is_redirect: bool

@@ -19,7 +19,7 @@ from fabric import Result
 from invoke.exceptions import UnexpectedExit
 from openstack.compute.v2.server import Server
 from openstack.connection import Connection
-from paramiko.ssh_exception import NoValidConnectionsError
+from paramiko.ssh_exception import NoValidConnectionsError, SSHException
 from pylxd import Client
 from pylxd.models.image import Image
 from pylxd.models.instance import Instance, InstanceState
@@ -266,7 +266,7 @@ async def wait_for_valid_connection(  # pylint: disable=too-many-arguments
                 if result.ok:
                     await _install_proxy(conn=ssh_connection, proxy=proxy)
                     return ssh_connection
-            except (NoValidConnectionsError, TimeoutError) as exc:
+            except (NoValidConnectionsError, TimeoutError, SSHException) as exc:
                 logger.warning("Connection not yet ready, %s.", str(exc))
         time.sleep(10)
     raise TimeoutError("No valid ssh connections found.")

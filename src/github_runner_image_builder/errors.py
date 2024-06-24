@@ -69,6 +69,10 @@ class YarnInstallError(BuildImageError):
     """Represents an error installilng Yarn."""
 
 
+class RunnerDownloadError(BuildImageError):
+    """Represents an error downloading GitHub runner tar archive."""
+
+
 class ImageCompressError(BuildImageError):
     """Represents an error while compressing cloud-img."""
 
