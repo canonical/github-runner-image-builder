@@ -5,7 +5,9 @@
 import logging
 import secrets
 import string
-import subprocess
+
+# Subprocess is used to run the application.
+import subprocess  # nosec: B404
 import typing
 from pathlib import Path
 
@@ -311,10 +313,13 @@ def cli_run_fixture(
     This fixture assumes pipx is installed in the system and the github-runner-image-builder has
     been installed using pipx. See testenv:integration section of tox.ini.
     """
-    subprocess.check_call(["sudo", Path.home() / ".local/bin/github-runner-image-builder", "init"])
-    subprocess.check_call(
+    # This is a locally built application - we can trust it.
+    subprocess.check_call(  # nosec: B603
+        ["/usr/bin/sudo", Path.home() / ".local/bin/github-runner-image-builder", "init"]
+    )
+    subprocess.check_call(  # nosec: B603
         [
-            "sudo",
+            "/usr/bin/sudo",
             Path.home() / ".local/bin/github-runner-image-builder",
             "run",
             cloud_name,
