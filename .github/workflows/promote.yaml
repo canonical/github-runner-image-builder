@@ -1,0 +1,27 @@
+name: Promote charm
+
+on:
+  workflow_dispatch:
+    inputs:
+      origin-tag:
+        type: choice
+        description: 'Origin tag'
+        options:
+        - edge
+      destination-tag:
+        type: choice
+        description: 'Destination tag'
+        options:
+        - stable
+
+jobs:
+  publish-to-stable:
+    name: Publish application
+    steps:
+      - uses: actions/checkout@v4.1.7
+      - name: Remove git edge stable
+        run: |
+          git tag -d stable && git push origin :refs/tags/stable
+      - name: Apply new stable tag
+        run: |
+          git tag stable && git push origin --tags
