@@ -229,6 +229,7 @@ async def wait_for_valid_connection(  # pylint: disable=too-many-arguments
     ssh_key: Path,
     timeout: int = 30 * 60,
     proxy: types.ProxyConfig | None = None,
+    dockerhub_mirror: str | None = None,
 ) -> SSHConnection:
     """Wait for a valid SSH connection from Openstack server.
 
@@ -239,6 +240,7 @@ async def wait_for_valid_connection(  # pylint: disable=too-many-arguments
         ssh_key: The path to public ssh_key to create connection with.
         timeout: Number of seconds to wait before raising a timeout error.
         proxy: The proxy to configure on host runner.
+        dockerhub_mirror: The DockerHub mirror URL.
 
     Raises:
         TimeoutError: If no valid connections were found.
@@ -265,6 +267,9 @@ async def wait_for_valid_connection(  # pylint: disable=too-many-arguments
                 result: Result = ssh_connection.run("echo 'hello world'")
                 if result.ok:
                     await _install_proxy(conn=ssh_connection, proxy=proxy)
+                    _install_dockerhub_mirror(
+                        conn=ssh_connection, dockerhub_mirror=dockerhub_mirror
+                    )
                     return ssh_connection
             except (NoValidConnectionsError, TimeoutError) as exc:
                 logger.warning("Connection not yet ready, %s.", str(exc))
@@ -333,3 +338,26 @@ def _snap_ready(conn: SSHConnection) -> bool:
         return result.ok
     except UnexpectedExit:
         return False
+
+
+def _install_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None):
+    """Use dockerhub mirror if provided.
+
+    Args:
+        conn: The SSH connection instance.
+        dockerhub_mirror: The DockerHub mirror URL.
+    """
+    if not dockerhub_mirror:
+        return
+    command = f'echo {{ "registry-mirrors": ["{dockerhub_mirror}"]}} > /etc/docker/daemon.json'
+    logger.info("Running command: %s", command)
+    result: Result = conn.run(command)
+    assert result.ok, "Failed to setup DockerHub mirror"
+
+    command = "sudo systemctl daemon-reload"
+    result = conn.run(command)
+    assert result.ok, "Failed to reload daemon"
+
+    command = "sudo systemctl restart docker"
+    result = conn.run(command)
+    assert result.ok, "Failed to restart docker"
