@@ -3,9 +3,9 @@
 
 """Image test module."""
 
+import dataclasses
 import logging
 from pathlib import Path
-from typing import NamedTuple
 
 import pytest
 from fabric.connection import Connection as SSHConnection
@@ -15,12 +15,17 @@ from pylxd import Client
 
 from github_runner_image_builder.cli import main
 from github_runner_image_builder.config import IMAGE_OUTPUT_PATH
-from tests.integration.helpers import create_lxd_instance, create_lxd_vm_image
+from tests.integration.helpers import (
+    create_lxd_instance,
+    create_lxd_vm_image,
+    format_dockerhub_mirror_microk8s_command,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class Commands(NamedTuple):
+@dataclasses.dataclass
+class Commands:
     """Test commands to execute.
 
     Attributes:
@@ -42,6 +47,15 @@ TEST_RUNNER_COMMANDS = (
         name="file permission to /usr/local/bin (create)", command="touch /usr/local/bin/test_file"
     ),
     Commands(name="install microk8s", command="sudo snap install microk8s --classic"),
+    # This is a special helper command to configure dockerhub registry if available.
+    Commands(
+        name="configure dockerhub mirror",
+        command="""echo 'server = "{registry_url}"
+
+[host.{hostname}:{port}]
+capabilities = ["pull", "resolve"]
+' > /var/snap/microk8s/current/args/certs.d/docker.io/hosts.toml""",
+    ),
     Commands(name="wait for microk8s", command="microk8s status --wait-ready"),
     Commands(
         name="deploy nginx in microk8s",
@@ -81,7 +95,7 @@ TEST_RUNNER_COMMANDS = (
 @pytest.mark.asyncio
 @pytest.mark.amd64
 @pytest.mark.usefixtures("cli_run")
-async def test_image_amd(image: str, tmp_path: Path):
+async def test_image_amd(image: str, tmp_path: Path, dockerhub_mirror: str | None):
     """
     arrange: given a built output from the CLI.
     act: when the image is booted and commands are executed.
@@ -94,6 +108,12 @@ async def test_image_amd(image: str, tmp_path: Path):
     instance = await create_lxd_instance(lxd_client=lxd, image=image)
 
     for testcmd in TEST_RUNNER_COMMANDS:
+        if testcmd == "configure dockerhub mirror":
+            if not dockerhub_mirror:
+                continue
+            testcmd.command = format_dockerhub_mirror_microk8s_command(
+                command=testcmd.command, dockerhub_mirror=dockerhub_mirror
+            )
         logger.info("Running command: %s", testcmd.command)
         # run command as ubuntu user. Passing in user argument would not be equivalent to a login
         # shell which is missing critical environment variables such as $USER and the user groups
@@ -119,13 +139,19 @@ async def test_openstack_upload(openstack_connection: Connection, openstack_imag
 @pytest.mark.asyncio
 @pytest.mark.arm64
 @pytest.mark.usefixtures("cli_run")
-async def test_image_arm(ssh_connection: SSHConnection):
+async def test_image_arm(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
     """
     arrange: given a built output from the CLI.
     act: when the image is booted and commands are executed.
     assert: commands do not error.
     """
     for testcmd in TEST_RUNNER_COMMANDS:
+        if testcmd == "configure dockerhub mirror":
+            if not dockerhub_mirror:
+                continue
+            testcmd.command = format_dockerhub_mirror_microk8s_command(
+                command=testcmd.command, dockerhub_mirror=dockerhub_mirror
+            )
         logger.info("Running command: %s", testcmd.command)
         result: Result = ssh_connection.run(testcmd.command, env=testcmd.env)
         logger.info("Command output: %s %s %s", result.return_code, result.stdout, result.stderr)

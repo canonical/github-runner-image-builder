@@ -9,6 +9,7 @@ import logging
 import platform
 import tarfile
 import time
+import urllib.parse
 from functools import partial
 from pathlib import Path
 from string import Template
@@ -267,7 +268,7 @@ async def wait_for_valid_connection(  # pylint: disable=too-many-arguments
                 result: Result = ssh_connection.run("echo 'hello world'")
                 if result.ok:
                     await _install_proxy(conn=ssh_connection, proxy=proxy)
-                    _install_dockerhub_mirror(
+                    _configure_dockerhub_mirror(
                         conn=ssh_connection, dockerhub_mirror=dockerhub_mirror
                     )
                     return ssh_connection
@@ -340,7 +341,7 @@ def _snap_ready(conn: SSHConnection) -> bool:
         return False
 
 
-def _install_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None):
+def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None):
     """Use dockerhub mirror if provided.
 
     Args:
@@ -361,3 +362,17 @@ def _install_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None)
     command = "sudo systemctl restart docker"
     result = conn.run(command)
     assert result.ok, "Failed to restart docker"
+
+
+def format_dockerhub_mirror_microk8s_command(command: str, dockerhub_mirror: str) -> str:
+    """Format dockerhub mirror for microk8s command.
+
+    Args:
+        command: The command to run.
+        dockerhub_mirror: The DockerHub mirror URL.
+
+    Returns:
+        The formatted dockerhub mirror registrry command for snap microk8s.
+    """
+    url = urllib.parse.urlparse(dockerhub_mirror)
+    return command.format(registry_url=url.geturl(), hostname=url.hostname, port=url.port)
