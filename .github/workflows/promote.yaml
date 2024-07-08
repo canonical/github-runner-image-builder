@@ -5,18 +5,19 @@ on:
     inputs:
       origin-tag:
         type: choice
-        description: 'Origin tag'
+        description: "Origin tag"
         options:
-        - edge
+          - edge
       destination-tag:
         type: choice
-        description: 'Destination tag'
+        description: "Destination tag"
         options:
-        - stable
+          - stable
 
 jobs:
   publish-to-stable:
     name: Publish application
+    runs-on: [ubuntu-22.04]
     steps:
       - uses: actions/checkout@v4.1.7
       - name: Remove git edge stable
