@@ -3,8 +3,10 @@
 
 [project]
 name = "github-runner-image-builder"
-version = "0.1.1"
-authors = [{ name = "Canonical IS DevOps", email = "is-devops-team@canonical.com" }]
+version = "0.2.0"
+authors = [
+    { name = "Canonical IS DevOps", email = "is-devops-team@canonical.com" },
+]
 description = "A github runner image builder package"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -42,10 +44,7 @@ show_missing = true
 
 [tool.pytest.ini_options]
 log_cli_level = "INFO"
-markers = [
-    "amd64",
-    "arm64",
-]
+markers = ["amd64", "arm64"]
 
 # Formatting tools configuration
 [tool.black]
