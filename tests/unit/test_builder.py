@@ -244,6 +244,7 @@ def test_build_image_error(
     monkeypatch.setattr(builder, "_install_yq", MagicMock())
     monkeypatch.setattr(builder, "ChrootContextManager", MagicMock())
     monkeypatch.setattr(builder.subprocess, "check_output", MagicMock())
+    monkeypatch.setattr(builder.subprocess, "run", MagicMock())
     monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
     monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
     monkeypatch.setattr(builder, "_install_yarn", MagicMock())
@@ -253,7 +254,7 @@ def test_build_image_error(
     monkeypatch.setattr(patch_obj, sub_func, mock)
 
     with pytest.raises(BuildImageError) as exc:
-        builder.build_image(arch=MagicMock(), base_image=MagicMock())
+        builder.build_image(arch=MagicMock(), base_image=MagicMock(), runner_version=MagicMock())
 
     assert expected_message in str(exc.getrepr())
 
@@ -826,7 +827,7 @@ def test__install_github_runner_error(
     monkeypatch.setattr(module, func, mock)
 
     with pytest.raises(builder.RunnerDownloadError) as exc:
-        builder._install_github_runner(arch=Arch.X64)
+        builder._install_github_runner(arch=Arch.X64, version="")
 
     assert expected_message in str(exc.getrepr())
 
@@ -845,7 +846,23 @@ def test__install_github_runner(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(builder.pwd, "getpwnam", MagicMock())
     monkeypatch.setattr(builder.subprocess, "check_call", MagicMock())
 
-    builder._install_github_runner(arch=Arch.ARM64)
+    builder._install_github_runner(arch=Arch.ARM64, version="")
+
+
+@pytest.mark.parametrize(
+    "version, expected_version",
+    [
+        pytest.param("v2.220.0", "2.220.0", id="with v prefix"),
+        pytest.param("2.220.0", "2.220.0", id="without v prefix"),
+    ],
+)
+def test__get_github_runner_version_user_defined(version: str, expected_version: str):
+    """
+    arrange: given user defined GitHub runner version.
+    act: when _get_github_runner_version is called.
+    assert: the user provided version is returned.
+    """
+    assert builder._get_github_runner_version(version=version) == expected_version
 
 
 def test__disconnect_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
