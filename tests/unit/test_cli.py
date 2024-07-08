@@ -179,6 +179,7 @@ def test__parse_args_invalid_run_args(run_inputs: dict, invalid_args: dict):
                 cloud_name="test-cloud-name",
                 image_name="test-image-name",
                 keep_revisions=5,
+                runner_version="",
             ),
             id="run (no-optional)",
         ),
@@ -192,6 +193,7 @@ def test__parse_args_invalid_run_args(run_inputs: dict, invalid_args: dict):
                 cloud_name="test-cloud-name",
                 image_name="test-image-name",
                 keep_revisions=5,
+                runner_version="",
             ),
             id="run (base image)",
         ),
@@ -205,6 +207,7 @@ def test__parse_args_invalid_run_args(run_inputs: dict, invalid_args: dict):
                 cloud_name="test-cloud-name",
                 image_name="test-image-name",
                 keep_revisions=2,
+                runner_version="",
             ),
             id="run (keep revisions)",
         ),
@@ -218,6 +221,7 @@ def test__parse_args_invalid_run_args(run_inputs: dict, invalid_args: dict):
                 cloud_name="test-cloud-name",
                 image_name="test-image-name",
                 keep_revisions=5,
+                runner_version="",
             ),
             id="run (callback script)",
         ),
@@ -303,9 +307,8 @@ def test__build_and_upload(monkeypatch: pytest.MonkeyPatch, callback_script: Pat
 
     cli._build_and_upload(
         base="jammy",
-        cloud_name=MagicMock(),
-        image_name=MagicMock(),
-        keep_revisions=MagicMock(),
+        openstack_config=MagicMock(),
+        runner_version=MagicMock(),
         callback_script_path=callback_script,
     )
 

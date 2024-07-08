@@ -3,6 +3,7 @@
 
 """Main entrypoint for github-runner-image-builder cli application."""
 import argparse
+import dataclasses
 import itertools
 
 # Subprocess module is used to execute trusted commands
@@ -47,9 +48,12 @@ def main(args: list[str] | None = None) -> None:
     if options.action == "run":
         _build_and_upload(
             base=options.base,
-            cloud_name=options.cloud_name,
-            image_name=options.image_name,
-            keep_revisions=options.keep_revisions,
+            openstack_config=OpenStackConfig(
+                cloud_name=options.cloud_name,
+                image_name=options.image_name,
+                keep_revisions=options.keep_revisions,
+            ),
+            runner_version=options.runner_version,
             callback_script_path=options.callback_script_path,
         )
         return
@@ -138,6 +142,19 @@ def _parse_args(args: list[str] | None = None) -> ActionsNamespace:
             "with the first argument as the image ID."
         ),
     )
+    run_parser.add_argument(
+        "-r",
+        "--runner-version",
+        dest="runner_version",
+        required=False,
+        type=str,
+        help=(
+            "The GitHub runner version to install, e.g. 2.317.0. "
+            "See github.com/actions/runner/releases/."
+            "Defaults to latest version."
+        ),
+        default="",
+    )
     options = cast(ActionsNamespace, parser.parse_args(args))
     return options
 
@@ -178,31 +195,44 @@ def _non_empty_string(arg: str) -> str:
     return arg
 
 
+@dataclasses.dataclass
+class OpenStackConfig:
+    """The OpenStack image configuration values.
+
+    Attributes:
+        cloud_name: The Openstack cloud to upload the image to.
+        image_name: The image name to upload as.
+        keep_revisions: Number of image revisions to keep before deletion.
+    """
+
+    cloud_name: str
+    image_name: str
+    keep_revisions: int
+
+
 def _build_and_upload(
     base: str,
-    cloud_name: str,
-    image_name: str,
-    keep_revisions: int,
+    openstack_config: OpenStackConfig,
+    runner_version: str,
     callback_script_path: Path | None = None,
 ) -> None:
     """Build and upload image.
 
     Args:
         base: Ubuntu image base.
-        cloud_name: The Openstack cloud to upload the image to.
-        image_name: The image name to upload as.
-        keep_revisions: Number of image revisions to keep before deletion.
+        openstack_config: The OpenStack configuration values for uploading image.
         callback_script_path: Path to bash script to call after image upload.
+        runner_version: The GitHub runner version to download.
     """
     arch = get_supported_arch()
     base_image = BaseImage.from_str(base)
-    builder.build_image(arch=arch, base_image=base_image)
+    builder.build_image(arch=arch, base_image=base_image, runner_version=runner_version)
     image_id = store.upload_image(
         arch=arch,
-        cloud_name=cloud_name,
-        image_name=image_name,
+        cloud_name=openstack_config.cloud_name,
+        image_name=openstack_config.image_name,
         image_path=IMAGE_OUTPUT_PATH,
-        keep_revisions=keep_revisions,
+        keep_revisions=openstack_config.keep_revisions,
     )
     if callback_script_path:
         # The callback script is a user trusted script.

@@ -31,6 +31,7 @@ class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-me
             to the default path, i.e. current directory or ~/.config/openstack or /etc/openstack.
         image_name: The image name to upload as.
         keep_revisions: The maximum number of images to keep before deletion.
+        runner_version: The GitHub runner version. See https://github.com/actions/runner/releases/.
     """
 
     action: Literal["init", "run", "latest-build-id"]
@@ -39,6 +40,7 @@ class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-me
     cloud_name: str
     image_name: str
     keep_revisions: int
+    runner_version: str
 
 
 class Arch(str, Enum):

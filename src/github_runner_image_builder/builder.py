@@ -174,12 +174,13 @@ def _enable_network_block_device() -> None:
         raise NetworkBlockDeviceError from exc
 
 
-def build_image(arch: Arch, base_image: BaseImage) -> None:
+def build_image(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
     """Build and save the image locally.
 
     Args:
         arch: The CPU architecture to build the image for.
         base_image: The ubuntu image to use as build base.
+        runner_version: The GitHub runner version to embed.
 
     Raises:
         BuildImageError: If there was an error building the image.
@@ -235,7 +236,7 @@ def build_image(arch: Arch, base_image: BaseImage) -> None:
             logger.info("Installing Yarn.")
             _install_yarn()
             logger.info("Installing GitHub runner.")
-            _install_github_runner(arch=arch)
+            _install_github_runner(arch=arch, version=runner_version)
     except ChrootBaseError as exc:
         raise BuildImageError from exc
 
@@ -762,36 +763,27 @@ def _install_yarn() -> None:
         raise YarnInstallError from exc
 
 
-def _install_github_runner(arch: Arch) -> None:
+def _install_github_runner(arch: Arch, version: str) -> None:
     """Download and install github runner.
 
     Args:
         arch: The architecture of the host image.
+        version: The runner version to download.
 
     Raises:
         RunnerDownloadError: If there was an error downloading runner.
     """
     try:
-        # False positive on bandit that thinks this has no timeout.
-        redirect_res = requests.get(  # nosec: B113
-            "https://github.com/actions/runner/releases/latest",
-            timeout=60 * 30,
-            allow_redirects=False,
-        )
-    except requests.exceptions.RequestException as exc:
-        raise RunnerDownloadError("Unable to fetch the latest release version.") from exc
-    if not redirect_res.is_redirect or not (
-        latest_version := redirect_res.headers.get("Location", "").split("/")[-1]
-    ):
-        raise RunnerDownloadError("Failed to download runner, invalid redirect.")
+        version = _get_github_runner_version(version)
+    except _FetchVersionError as exc:
+        raise RunnerDownloadError("Failed to fetch latest GitHub runner version.") from exc
 
-    version_number = latest_version.lstrip("v")
     try:
         tar_res: http.client.HTTPResponse
         # The github releases URL is safe to open
         with urllib.request.urlopen(  # nosec: B310
-            f"https://github.com/actions/runner/releases/download/{latest_version}/"
-            f"actions-runner-linux-{arch.value}-{version_number}.tar.gz"
+            f"https://github.com/actions/runner/releases/download/v{version}/"
+            f"actions-runner-linux-{arch.value}-{version}.tar.gz"
         ) as tar_res:
             tar_bytes = tar_res.read()
     except urllib.error.URLError as exc:
@@ -816,6 +808,40 @@ def _install_github_runner(arch: Arch) -> None:
         )
     except subprocess.SubprocessError as exc:
         raise RunnerDownloadError("Error changing github runner directory.") from exc
+
+
+class _FetchVersionError(Exception):
+    """Represents an error fetching latest GitHub runner version."""
+
+
+def _get_github_runner_version(version: str) -> str:
+    """Get GitHub runner's latest version number if version is not specified.
+
+    Args:
+        version: The user provided version.
+
+    Returns:
+        The latest GitHub runner version number or user provided version.
+
+    Raises:
+        _FetchVersionError: if there was an error getting the latest GitHub version.
+    """
+    if version:
+        return version.lstrip("v")
+    try:
+        # False positive on bandit that thinks this has no timeout.
+        redirect_res = requests.get(  # nosec: B113
+            "https://github.com/actions/runner/releases/latest",
+            timeout=60 * 30,
+            allow_redirects=False,
+        )
+    except requests.exceptions.RequestException as exc:
+        raise _FetchVersionError("Unable to fetch the latest release version.") from exc
+    if not redirect_res.is_redirect or not (
+        latest_version := redirect_res.headers.get("Location", "").split("/")[-1]
+    ):
+        raise _FetchVersionError("Failed to get latest runner version, invalid redirect.")
+    return latest_version.lstrip("v")
 
 
 # Image compression might fail for arbitrary reasons - retrying usually solves this.
