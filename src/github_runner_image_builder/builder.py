@@ -98,13 +98,17 @@ YQ_REPOSITORY_PATH = Path("yq_source")
 HOST_YQ_BIN_PATH = Path("/usr/bin/yq")
 MOUNTED_YQ_BIN_PATH = IMAGE_MOUNT_DIR / "usr/bin/yq"
 IMAGE_DEFAULT_APT_PACKAGES = [
+    "build-essential",
     "docker.io",
     "gh",
     "jq",
     "npm",
+    "python3-dev",
     "python3-pip",
     "python-is-python3",
     "shellcheck",
+    "tar",
+    "time",
     "unzip",
     "wget",
 ]
