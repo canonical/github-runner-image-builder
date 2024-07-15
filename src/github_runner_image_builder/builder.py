@@ -103,6 +103,7 @@ IMAGE_DEFAULT_APT_PACKAGES = [
     "gh",
     "jq",
     "npm",
+    "python3-dev",
     "python3-pip",
     "python-is-python3",
     "shellcheck",
