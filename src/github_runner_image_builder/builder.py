@@ -74,7 +74,7 @@ NETWORK_BLOCK_DEVICE_PARTITION_PATH = Path(f"{NETWORK_BLOCK_DEVICE_PATH}p1")
 
 # Constants for building image
 # This amount is the smallest increase that caters for the installations within this image.
-RESIZE_AMOUNT = "+2.5G"
+RESIZE_AMOUNT = "+3G"
 MOUNTED_RESOLV_CONF_PATH = IMAGE_MOUNT_DIR / "etc/resolv.conf"
 HOST_RESOLV_CONF_PATH = Path("/etc/resolv.conf")
 
