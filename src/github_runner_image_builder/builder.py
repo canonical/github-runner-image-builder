@@ -644,7 +644,8 @@ def _install_apt_packages(base_image: BaseImage) -> None:
             "/usr/bin/apt-get",
             "install",
             "-y",
-            "--no-install-recommends",
+            # https://ubuntu.com/kernel/lifecycle installs recommended packages
+            "--install-recommends",
             IMAGE_HWE_PKG_FORMAT.format(VERSION=BaseImage.get_version(base_image)),
         ],
         timeout=60 * 20,
