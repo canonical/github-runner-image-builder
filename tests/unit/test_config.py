@@ -116,7 +116,7 @@ def test_base_image(image: str, expected_base_image: BaseImage):
     "base_image, expected_version",
     [
         pytest.param(BaseImage.JAMMY, "22.04", id="jammy"),
-        pytest.param(BaseImage.NOBLE, "24.04", id="22.04"),
+        pytest.param(BaseImage.NOBLE, "24.04", id="noble"),
     ],
 )
 def test_base_image_get_version(base_image: BaseImage, expected_version: str):
