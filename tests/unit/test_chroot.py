@@ -95,7 +95,7 @@ def test_chroot_sync_fail(monkeypatch: pytest.MonkeyPatch):
     assert "Failed to sync dirs" in str(exc.getrepr())
 
 
-def test_chroot_umount_dev_fail(monkeypatch: pytest.MonkeyPatch):
+def test_chroot_umount_fail(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched subprocess run call that fails.
     act: when chroot context is exited.
@@ -122,3 +122,18 @@ def test_chroot_umount_dev_fail(monkeypatch: pytest.MonkeyPatch):
             pass
 
     assert "Failed to umount dev" in str(exc.getrepr())
+
+
+def test_chroot_umount(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched subprocess run call that succeeds.
+    act: when chroot context is exited.
+    assert: no errors are raised.
+    """
+    monkeypatch.setattr(os, "chroot", MagicMock())
+    monkeypatch.setattr(os, "chdir", MagicMock())
+    monkeypatch.setattr(os, "fchdir", MagicMock())
+    monkeypatch.setattr(os, "close", MagicMock())
+    monkeypatch.setattr(subprocess, "run", MagicMock())
+    with ChrootContextManager(chroot_path=MagicMock()):
+        pass

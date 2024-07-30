@@ -103,6 +103,22 @@ class BaseImage(str, Enum):
     NOBLE = "noble"
 
     @classmethod
+    def get_version(cls, base: "BaseImage") -> Literal["22.04", "24.04"]:
+        """Change the codename to version tag.
+
+        Args:
+            base: The base image to get the version number for.
+
+        Return:
+            The release version of the current base image.
+        """
+        match base:
+            case BaseImage.JAMMY:
+                return "22.04"
+            case BaseImage.NOBLE:
+                return "24.04"
+
+    @classmethod
     def from_str(cls, tag_or_name: str) -> "BaseImage":
         """Retrieve the base image tag from input.
 

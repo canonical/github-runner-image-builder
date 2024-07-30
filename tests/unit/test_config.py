@@ -110,3 +110,19 @@ def test_base_image(image: str, expected_base_image: BaseImage):
     assert: expected base image is returned.
     """
     assert BaseImage.from_str(image) == expected_base_image
+
+
+@pytest.mark.parametrize(
+    "base_image, expected_version",
+    [
+        pytest.param(BaseImage.JAMMY, "22.04", id="jammy"),
+        pytest.param(BaseImage.NOBLE, "24.04", id="noble"),
+    ],
+)
+def test_base_image_get_version(base_image: BaseImage, expected_version: str):
+    """
+    arrange: given base image enum instance.
+    act: when BaseImage.get_version is called.
+    assert: expected image version is returned.
+    """
+    assert BaseImage.get_version(base=base_image) == expected_version

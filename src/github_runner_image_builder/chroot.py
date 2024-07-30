@@ -11,8 +11,7 @@ from pathlib import Path
 from typing import Any, cast
 
 CHROOT_DEVICE_DIR = "dev"
-CHROOT_SHARED_DIRS = ["proc", "sys"]
-CHROOT_EXTENDED_SHARED_DIRS = [*CHROOT_SHARED_DIRS, "dev"]
+CHROOT_SHARED_DIRS = ["proc", "sys", "dev"]
 
 
 class ChrootBaseError(Exception):
@@ -49,7 +48,7 @@ class ChrootContextManager:
         self.root = os.open("/", os.O_PATH)
         self.cwd = os.getcwd()
 
-        for shared_dir in CHROOT_EXTENDED_SHARED_DIRS:
+        for shared_dir in CHROOT_SHARED_DIRS:
             chroot_shared_dir = self.chroot_path / shared_dir
             try:
                 subprocess.run(  # nosec: B603
@@ -85,16 +84,9 @@ class ChrootContextManager:
             chroot_shared_dir = self.chroot_path / shared_dir
             try:
                 subprocess.run(
-                    ["/usr/bin/umount", str(chroot_shared_dir)], check=True, capture_output=True
+                    ["/usr/bin/umount", "-l", str(chroot_shared_dir)],
+                    check=True,
+                    capture_output=True,
                 )  # nosec: B603
             except subprocess.CalledProcessError as exc:
                 raise MountError from exc
-
-        try:
-            subprocess.run(  # nosec: B603
-                ["/usr/bin/umount", "-l", str(self.chroot_path / CHROOT_DEVICE_DIR)],
-                check=True,
-                capture_output=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            raise MountError from exc
