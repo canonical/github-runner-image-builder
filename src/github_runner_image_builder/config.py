@@ -117,8 +117,6 @@ class BaseImage(str, Enum):
                 return "22.04"
             case BaseImage.NOBLE:
                 return "24.04"
-        # This case is not possible
-        return "22.04"  # pragma: no cover
 
     @classmethod
     def from_str(cls, tag_or_name: str) -> "BaseImage":
