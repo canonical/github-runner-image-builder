@@ -11,8 +11,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from click.testing import CliRunner
 
 from github_runner_image_builder import cli
+from github_runner_image_builder.cli import main
 
 
 @pytest.fixture(scope="function", name="callback_path")
@@ -21,6 +23,12 @@ def callback_path_fixture(tmp_path: Path):
     test_path = tmp_path / "test"
     test_path.touch()
     return test_path
+
+
+@pytest.fixture(scope="function", name="latest_build_id_inputs")
+def latest_build_id_inputs_fixture():
+    """Valid CLI run mode inputs."""
+    return {"": "test-cloud-name", " ": "test-image-name"}
 
 
 @pytest.fixture(scope="function", name="run_inputs")
@@ -35,20 +43,41 @@ def run_inputs_fixture(callback_path: Path):
     }
 
 
-def test_main_invalid_choice(monkeypatch: pytest.MonkeyPatch):
+@pytest.fixture(scope="function", name="cli_runner")
+def cli_runner_fixture():
+    """The CliRunner fixture."""
+    return CliRunner()
+
+
+def test_main_invalid_choice(cli_runner: CliRunner):
     """
-    arrange: given a monkeypatched _parse_args that returns invalid action choice.
+    arrange: given main function invocation with no arguments.
     act: when main is called.
     assert: ValueError is raised.
     """
-    monkeypatch.setattr(
-        cli, "_parse_args", MagicMock(return_value=cli.ActionsNamespace(action="invalid"))
-    )
+    result = cli_runner.invoke(main)
 
-    with pytest.raises(ValueError) as exc:
-        cli.main()
+    # This is only called "main" because we're in cli_runner context.
+    # When pip(x) installed, it is correctly called as github-runner-image-builder
+    assert "Usage: main" in result.output
 
-    assert "Invalid CLI action argument." in str(exc.getrepr())
+
+@pytest.mark.parametrize(
+    "invalid_action",
+    [
+        pytest.param("testing", id="empty"),
+        pytest.param("invalid", id="invalid"),
+    ],
+)
+def test_main_invalid_action(cli_runner: CliRunner, invalid_action: str):
+    """
+    arrange: given invalid action arguments.
+    act: when cli is invoked with invalid argument.
+    assert: Error message is output.
+    """
+    result = cli_runner.invoke(main, args=[invalid_action, "--help"])
+
+    assert f"Error: No such command '{invalid_action}'" in result.output
 
 
 @pytest.mark.parametrize(
@@ -59,41 +88,28 @@ def test_main_invalid_choice(monkeypatch: pytest.MonkeyPatch):
         pytest.param("run", id="run"),
     ],
 )
-def test_main(monkeypatch: pytest.MonkeyPatch, action: str):
+def test_main(cli_runner: CliRunner, action: str):
     """
-    arrange: given a monkeypatched _parse_args that returns valid choice.
+    arrange: none.
     act: when main is called.
-    assert: mocked subfunctions are called correctly.
+    assert: respective functions are called correctly.
     """
-    actions_namespace_mock = MagicMock(autospec=cli.ActionsNamespace)
-    actions_namespace_mock.action = action
-    monkeypatch.setattr(cli, "_parse_args", MagicMock(return_value=actions_namespace_mock))
-    monkeypatch.setattr(cli.builder, "initialize", init_mock := MagicMock())
-    monkeypatch.setattr(cli.store, "get_latest_build_id", latest_build_mock := MagicMock())
-    monkeypatch.setattr(cli, "_build_and_upload", build_mock := MagicMock())
+    result = cli_runner.invoke(main, args=[action, "--help"])
 
-    cli.main()
-
-    assert any((init_mock.called, latest_build_mock.called, build_mock.called))
+    assert f"Usage: main {action}" in result.output
 
 
-@pytest.mark.parametrize(
-    "invalid_action",
-    [
-        pytest.param("", id="empty"),
-        pytest.param("invalid", id="invalid"),
-    ],
-)
-def test__parse_args_invalid_action(invalid_action: str):
+def test_initialize(monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner):
     """
-    arrange: given invalid action arguments.
-    act: when _parse_args is called.
-    assert: SystemExit error is raised.
+    arrange: given a monkeypatched builder.initialize function.
+    act: when cli init is invoked.
+    assert: monkeypatched function is called.
     """
-    with pytest.raises(SystemExit) as exc:
-        cli._parse_args([invalid_action])
+    monkeypatch.setattr(cli.builder, "initialize", (mock_func := MagicMock()))
 
-    assert "invalid choice" in str(exc.getrepr())
+    cli_runner.invoke(main, args=["init"])
+
+    mock_func.assert_called()
 
 
 @pytest.mark.parametrize(
@@ -103,24 +119,45 @@ def test__parse_args_invalid_action(invalid_action: str):
         pytest.param({" ": ""}, id="empty image name positional argument"),
     ],
 )
-def test__parse_args_invalid_latest_build_id_args(run_inputs: dict, invalid_args: dict):
+def test_invalid_latest_build_id_args(
+    cli_runner: CliRunner, latest_build_id_inputs: dict, invalid_args: dict
+):
     """
     arrange: given invalid latest-build-id action arguments.
     act: when _parse_args is called.
-    assert: SystemExit error is raised.
+    assert: Error output is printed.
     """
-    run_inputs.update(invalid_args)
+    latest_build_id_inputs.update(invalid_args)
     inputs = list(
         # if flag does not exist, append it as a positional argument.
-        itertools.chain.from_iterable(
-            (flag, value) if flag.strip() else (value,) for (flag, value) in run_inputs.items()
+        value
+        for value in itertools.chain.from_iterable(
+            (flag, value) if flag.strip() else (value,)
+            for (flag, value) in latest_build_id_inputs.items()
         )
+        if value
     )
 
-    with pytest.raises(SystemExit) as exc:
-        cli._parse_args(inputs)
+    result = cli_runner.invoke(main, args=["latest-build-id", *inputs])
 
-    assert "invalid choice" in str(exc.getrepr())
+    assert "Error: Missing argument " in result.output
+
+
+def test_latest_build_id(monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner):
+    """
+    arrange: given valid latest-build-id args.
+    act: when cli is invoked with latest-build-id.
+    assert: latest-build-id is returned.
+    """
+    monkeypatch.setattr(
+        cli.store, "get_latest_build_id", MagicMock(return_value=(test_id := "test-id"))
+    )
+
+    result = cli_runner.invoke(
+        main, args=["latest-build-id", "test-cloud-name", "test-image-name"]
+    )
+
+    assert result.output == test_id
 
 
 @pytest.mark.parametrize(
@@ -135,157 +172,27 @@ def test__parse_args_invalid_latest_build_id_args(run_inputs: dict, invalid_args
         pytest.param({" ": ""}, id="empty image name positional argument"),
     ],
 )
-def test__parse_args_invalid_run_args(run_inputs: dict, invalid_args: dict):
+def test_invalid_run_args(cli_runner: CliRunner, run_inputs: dict, invalid_args: dict):
     """
     arrange: given invalid run action arguments.
     act: when _parse_args is called.
-    assert: SystemExit error is raised.
+    assert: Error output is printed.
     """
     run_inputs.update(invalid_args)
     inputs = list(
         # if flag does not exist, append it as a positional argument.
-        itertools.chain.from_iterable(
+        value
+        for value in itertools.chain.from_iterable(
             (flag, value) if flag.strip() else (value,) for (flag, value) in run_inputs.items()
         )
+        if value
     )
 
-    with pytest.raises(SystemExit) as exc:
-        cli._parse_args(inputs)
+    result = cli_runner.invoke(main, args=["run", *inputs])
 
-    assert "invalid choice" in str(exc.getrepr())
-
-
-@pytest.mark.parametrize(
-    "action, args, expected",
-    [
-        pytest.param("init", {}, cli.argparse.Namespace(action="init"), id="init"),
-        pytest.param(
-            "latest-build-id",
-            {"": "test-cloud-name", " ": "test-image-name"},
-            cli.argparse.Namespace(
-                action="latest-build-id",
-                cloud_name="test-cloud-name",
-                image_name="test-image-name",
-            ),
-            id="latest-build-id",
-        ),
-        pytest.param(
-            "run",
-            {"": "test-cloud-name", " ": "test-image-name"},
-            cli.argparse.Namespace(
-                action="run",
-                base="noble",
-                callback_script_path=None,
-                cloud_name="test-cloud-name",
-                image_name="test-image-name",
-                keep_revisions=5,
-                runner_version="",
-            ),
-            id="run (no-optional)",
-        ),
-        pytest.param(
-            "run",
-            {"": "test-cloud-name", " ": "test-image-name", "--base-image": "jammy"},
-            cli.argparse.Namespace(
-                action="run",
-                base="jammy",
-                callback_script_path=None,
-                cloud_name="test-cloud-name",
-                image_name="test-image-name",
-                keep_revisions=5,
-                runner_version="",
-            ),
-            id="run (base image)",
-        ),
-        pytest.param(
-            "run",
-            {"": "test-cloud-name", " ": "test-image-name", "--keep-revisions": "2"},
-            cli.argparse.Namespace(
-                action="run",
-                base="noble",
-                callback_script_path=None,
-                cloud_name="test-cloud-name",
-                image_name="test-image-name",
-                keep_revisions=2,
-                runner_version="",
-            ),
-            id="run (keep revisions)",
-        ),
-        pytest.param(
-            "run",
-            {"": "test-cloud-name", " ": "test-image-name", "--callback-script": "test_callback"},
-            cli.argparse.Namespace(
-                action="run",
-                base="noble",
-                callback_script_path=Path("test_callback"),
-                cloud_name="test-cloud-name",
-                image_name="test-image-name",
-                keep_revisions=5,
-                runner_version="",
-            ),
-            id="run (callback script)",
-        ),
-    ],
-)
-def test__parse_args(
-    monkeypatch: pytest.MonkeyPatch, action: str, args: dict, expected: cli.ActionsNamespace
-):
-    """
-    arrange: given action and its arguments.
-    act: when _parse_args is called.
-    assert: expected ActionsNamespace object is created.
-    """
-    monkeypatch.setattr(
-        cli,
-        "_existing_path",
-        MagicMock(
-            return_value=(
-                Path(args["--callback-script"]) if args.get("--callback-script", None) else None
-            )
-        ),
+    assert (
+        "Error: Invalid value for" in result.output or "Error: Missing argument" in result.output
     )
-    inputs = list(
-        # if flag does not exist, append it as a positional argument.
-        itertools.chain.from_iterable(
-            (flag, value) if flag.strip() else (value,) for (flag, value) in args.items()
-        )
-    )
-
-    assert cli._parse_args([action, *inputs]) == expected
-
-
-def test__existing_path_not_exists(tmp_path: Path):
-    """
-    arrange: given a path that does not exist.
-    act: when _existing_path is called.
-    assert: ValueError is raised.
-    """
-    not_exists_path = tmp_path / "non-existent"
-    with pytest.raises(ValueError) as exc:
-        cli._existing_path(str(not_exists_path))
-
-    assert f"Given path {not_exists_path} not found." in str(exc.getrepr())
-
-
-def test__existing_path(tmp_path: Path):
-    """
-    arrange: given a path that does not exist.
-    act: when _existing_path is called.
-    assert: ValueError is raised.
-    """
-    not_exists_path = tmp_path / "non-existent"
-    not_exists_path.touch()
-    assert cli._existing_path(str(not_exists_path)) == not_exists_path
-
-
-def test__non_empty_string_error():
-    """
-    arrange: given an empty string.
-    act: when _non_empty_string is called.
-    assert: ValueError is raised.
-    """
-    with pytest.raises(ValueError):
-        cli._non_empty_string("")
 
 
 @pytest.mark.parametrize(
@@ -295,21 +202,29 @@ def test__non_empty_string_error():
         pytest.param(Path("tmp_path"), id="Callback script"),
     ],
 )
-def test__build_and_upload(monkeypatch: pytest.MonkeyPatch, callback_script: Path | None):
+def test_run(monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner, callback_script: Path | None):
     """
     arrange: given a monkeypatched builder.setup_builder function.
     act: when _build is called.
     assert: the mock function is called.
     """
-    monkeypatch.setattr(cli.builder, "build_image", (builder_mock := MagicMock()))
-    monkeypatch.setattr(cli.store, "upload_image", MagicMock(return_value="test-image-id"))
+    monkeypatch.setattr(cli.builder, "build_image", MagicMock())
+    monkeypatch.setattr(cli.store, "upload_image", MagicMock())
     monkeypatch.setattr(cli.subprocess, "check_call", MagicMock())
+    command = [
+        "run",
+        "--base-image",
+        "jammy",
+        "test-cloud-name",
+        "test-image-name",
+    ]
+    if callback_script:
+        callback_script.touch(exist_ok=True)
+        command.extend(["--callback-script", str(callback_script)])
 
-    cli._build_and_upload(
-        base="jammy",
-        openstack_config=MagicMock(),
-        runner_version=MagicMock(),
-        callback_script_path=callback_script,
+    result = cli_runner.invoke(
+        main,
+        command,
     )
 
-    builder_mock.assert_called_once()
+    assert result.exit_code == 0
