@@ -133,6 +133,8 @@ def initialize_external(cloud_name: str) -> None:
 @main.command(name="experimental-run-external")
 @click.argument("cloud_name")
 @click.argument("image_name")
+@click.argument("flavor")
+@click.argument("network")
 @click.option(
     "-b",
     "--base-image",
@@ -169,6 +171,8 @@ def initialize_external(cloud_name: str) -> None:
 def run_external(
     cloud_name: str,
     image_name: str,
+    flavor: str,
+    network: str,
     base_image: str,
     keep_revisions: int,
     callback_script: Path | None,
@@ -180,10 +184,20 @@ def run_external(
         cloud_name: The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in
             paths of the following order: current directory, ~/.config/openstack, /etc/openstack.
         image_name: The image name uploaded to Openstack.
+        flavor: The Openstack flavor to create server to build images.
+        network: The Openstack network to assign to server to build images.
         base_image: The Ubuntu base image to use as build base.
         keep_revisions: Number of past revisions to keep before deletion.
         callback_script: Script to callback after a successful build.
         runner_version: GitHub runner version to pin.
     """
+    arch = get_supported_arch()
     base = BaseImage.from_str(base_image)
-    openstack_builder.run(base_image=base, runner_version=runner_version)
+    image_id = openstack_builder.run(
+        arch=arch,
+        base_image=base,
+        cloud_name=cloud_name,
+        flavor=flavor,
+        network=network,
+        runner_version=runner_version,
+    )
