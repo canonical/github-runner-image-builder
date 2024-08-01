@@ -13,7 +13,7 @@ from fabric.runners import Result
 from openstack.connection import Connection
 from pylxd import Client
 
-from github_runner_image_builder.cli import main
+from github_runner_image_builder.cli import get_latest_build_id
 from github_runner_image_builder.config import IMAGE_OUTPUT_PATH
 from tests.integration.helpers import (
     create_lxd_instance,
@@ -185,7 +185,7 @@ async def test_get_image(
     act: when get image id is run.
     assert: the latest image matches the stdout output.
     """
-    main(["latest-build-id", cloud_name, openstack_image_name])
+    get_latest_build_id(cloud_name, openstack_image_name)
     image_id = openstack_connection.get_image_id(openstack_image_name)
 
     res = capsys.readouterr()

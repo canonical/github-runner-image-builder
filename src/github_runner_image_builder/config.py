@@ -3,44 +3,13 @@
 
 """Module containing configurations."""
 
-import argparse
-import logging
+import itertools
 import platform
 from enum import Enum
 from pathlib import Path
 from typing import Literal
 
 from github_runner_image_builder.errors import UnsupportedArchitectureError
-
-logger = logging.getLogger(__name__)
-
-ACTION_INIT = "init"
-ACTION_RUN = "run"
-ACTION_LATEST_BUILD_ID = "latest-build-id"
-
-
-# This is a class used for type hinting argparse.
-class ActionsNamespace(argparse.Namespace):  # pylint: disable=too-few-public-methods
-    """Action positional argument namespace.
-
-    Attributes:
-        action: CLI action positional argument.
-        base: The base image to build.
-        callback_script_path: The callback script path to run after image build.
-        cloud_name: The Openstack cloud to interact with. The CLI assumes clouds.yaml is written
-            to the default path, i.e. current directory or ~/.config/openstack or /etc/openstack.
-        image_name: The image name to upload as.
-        keep_revisions: The maximum number of images to keep before deletion.
-        runner_version: The GitHub runner version. See https://github.com/actions/runner/releases/.
-    """
-
-    action: Literal["init", "run", "latest-build-id"]
-    base: Literal["22.04", "jammy", "24.04", "noble"]
-    callback_script_path: Path | None
-    cloud_name: str
-    image_name: str
-    keep_revisions: int
-    runner_version: str
 
 
 class Arch(str, Enum):
@@ -134,5 +103,7 @@ class BaseImage(str, Enum):
 
 
 LTS_IMAGE_VERSION_TAG_MAP = {"22.04": BaseImage.JAMMY.value, "24.04": BaseImage.NOBLE.value}
-
+BASE_CHOICES = tuple(
+    itertools.chain.from_iterable((tag, name) for (tag, name) in LTS_IMAGE_VERSION_TAG_MAP.items())
+)
 IMAGE_OUTPUT_PATH = Path("compressed.img")
