@@ -4,6 +4,7 @@
 """Module for interacting with external openstack VM image builder."""
 
 import pathlib
+import shutil
 
 import openstack
 import openstack.compute.v2.server
@@ -151,9 +152,9 @@ def run(
     Returns:
         The Openstack snapshot image ID.
     """
-    _determine_flavor(flavor_name=flavor)
-    _determine_network(flavor_name=network)
-    installation_script = _generate_installation_script(runner_version=runner_version)
+    flavor = _determine_flavor(flavor_name=flavor)
+    network = _determine_network(flavor_name=network)
+    installation_script = _generate_cloud_init_script(runner_version=runner_version)
     with openstack.connect(cloud=cloud_name) as conn:
         builder: openstack.compute.v2.server.Server = conn.create_server(
             name=BUILDER_SERVER_NAME_FORMAT.format(ARCH=arch.value, SERIES=base.value),
@@ -167,7 +168,7 @@ def run(
             timeout=5 * 60,
             wait=True,
         )
-        _wait_for_install_complete(builder)
+        _wait_for_cloud_init_complete(builder)
         image: openstack.image.v2.image.Image = conn.create_image_snapshot()
         _wait_for_snapshot_complete(image)
     return str(image.id)
@@ -203,12 +204,12 @@ def _determine_network(network_name: str | None) -> str:
     pass
 
 
-def _generate_installation_script(runner_version: str):
+def _generate_cloud_init_script(runner_version: str):
     """Generate userdata for installing GitHub runner image components."""
     pass
 
 
-def _wait_for_install_complete(server: openstack.compute.v2.server.Server):
+def _wait_for_cloud_init_complete(server: openstack.compute.v2.server.Server):
     """Wait until the userdata has finished installing expected components."""
     pass
 
