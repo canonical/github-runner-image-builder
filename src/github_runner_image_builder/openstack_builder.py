@@ -53,7 +53,7 @@ def determine_cloud(cloud_name: str | None) -> str:
         clouds_yaml = yaml.safe_load(clouds_yaml_path.read_text(encoding="utf-8"))
         cloud: str = list(clouds_yaml["clouds"].keys())[0]
     except (TypeError, yaml.error.YAMLError, KeyError) as exc:
-        raise ValueError("Invalud clouds.yaml.") from exc
+        raise ValueError("Invalid clouds.yaml.") from exc
     return cloud
 
 
