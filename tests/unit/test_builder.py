@@ -254,7 +254,7 @@ def test_build_image_error(
     monkeypatch.setattr(patch_obj, sub_func, mock)
 
     with pytest.raises(BuildImageError) as exc:
-        builder.build_image(arch=MagicMock(), base_image=MagicMock(), runner_version=MagicMock())
+        builder.run(arch=MagicMock(), base_image=MagicMock(), runner_version=MagicMock())
 
     assert expected_message in str(exc.getrepr())
 
