@@ -169,7 +169,7 @@ def _enable_network_block_device() -> None:
         raise NetworkBlockDeviceError from exc
 
 
-def build_image(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
+def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
     """Build and save the image locally.
 
     Args:
