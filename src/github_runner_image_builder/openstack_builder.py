@@ -4,12 +4,12 @@
 """Module for interacting with external openstack VM image builder."""
 
 import pathlib
-import shutil
 
 import openstack
 import openstack.compute.v2.server
 import openstack.connection
 import openstack.image.v2.image
+import yaml
 
 from github_runner_image_builder import cloud_image, store
 from github_runner_image_builder.config import Arch, BaseImage
@@ -20,6 +20,40 @@ BUILDER_SSH_KEY_NAME = "image-builder-ssh-key"
 BUILDER_KEY_PATH = pathlib.Path("/home/ubuntu/.ssh/builder_key")
 
 SHARED_SECURITY_GROUP_NAME = "github-runner-image-builder-v1"
+
+
+def determine_cloud(cloud_name: str | None) -> str:
+    """Automatically determine cloud to use from clouds.yaml by selecting the first cloud.
+
+    Args:
+        cloud_name: str
+
+    Raises:
+        ValueError: if clouds.yaml was not found.
+    """
+    if cloud_name:
+        return cloud_name
+    clouds_yaml_path: pathlib.Path | None
+    for path in (
+        pathlib.Path("clouds.yaml"),
+        pathlib.Path("~/clouds.yaml"),
+        pathlib.Path("~/.config/openstack/clouds.yaml"),
+        pathlib.Path("/etc/openstack/clouds.yaml"),
+    ):
+        if path.exists():
+            clouds_yaml_path = path
+            break
+    if not clouds_yaml_path:
+        raise ValueError(
+            "Unable to determine cloud to use from clouds.yaml files. "
+            "Please check that clouds.yaml exists."
+        )
+    try:
+        clouds_yaml = yaml.safe_load(clouds_yaml_path.read_text(encoding="utf-8"))
+        cloud: str = list(clouds_yaml["clouds"].keys())[0]
+    except (TypeError, yaml.error.YAMLError, KeyError) as exc:
+        raise ValueError("Invalud clouds.yaml.") from exc
+    return cloud
 
 
 def initialize(arch: Arch, cloud_name: str):
@@ -100,6 +134,8 @@ def run(
     Returns:
         The Openstack snapshot image ID.
     """
+    _determine_flavor(flavor_name=flavor)
+    _determine_network(flavor_name=network)
     installation_script = _generate_installation_script(runner_version=runner_version)
     with openstack.connect(cloud=cloud_name) as conn:
         builder: openstack.compute.v2.server.Server = conn.create_server(
@@ -108,6 +144,36 @@ def run(
         _wait_for_install_complete(builder)
         image: openstack.image.v2.image.Image = conn.create_image_snapshot(image_name)
     return image.id
+
+
+def _determine_flavor(flavor_name: str | None) -> str:
+    """Determine the flavor to use for the image builder.
+
+    Args:
+        flavor_name: Flavor name to use if given.
+
+    Raises:
+        ValueError: If no suitable flavor was found.
+
+    Returns:
+        The flavor to use for launching builder VM.
+    """
+    pass
+
+
+def _determine_network(network_name: str | None) -> str:
+    """Determine the network to use for the image builder.
+
+    Args:
+        network_name: Network name to use if given.
+
+    Raises:
+        ValueError: If no suitable network was found.
+
+    Returns:
+        The network to use for launching builder VM.
+    """
+    pass
 
 
 def _generate_installation_script(runner_version: str):
