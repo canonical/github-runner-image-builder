@@ -15,8 +15,6 @@ import yaml
 from github_runner_image_builder import cloud_image, store
 from github_runner_image_builder.config import Arch, BaseImage
 
-BASE_IMAGE_NAME_FORMAT = "image-builder-base-{SERIES}-{ARCH}"
-BUILDER_SERVER_NAME_FORMAT = "image-builder-{SERIES}-{ARCH}"
 BUILDER_SSH_KEY_NAME = "image-builder-ssh-key"
 BUILDER_KEY_PATH = pathlib.Path("/home/ubuntu/.ssh/builder_key")
 
@@ -77,14 +75,14 @@ def initialize(arch: Arch, cloud_name: str):
     store.upload_image(
         arch=arch,
         cloud_name=cloud_name,
-        image_name=BASE_IMAGE_NAME_FORMAT.format(ARCH=arch.value, SERIES=BaseImage.JAMMY.value),
+        image_name=_get_seed_image_name(arch=arch, base=BaseImage.JAMMY),
         image_path=jammy_image_path,
         keep_revisions=1,
     )
     store.upload_image(
         arch=arch,
         cloud_name=cloud_name,
-        image_name=BASE_IMAGE_NAME_FORMAT.format(ARCH=arch.value, SERIES=BaseImage.NOBLE.value),
+        image_name=_get_seed_image_name(arch=arch, base=BaseImage.NOBLE),
         image_path=noble_image_path,
         keep_revisions=1,
     )
@@ -92,6 +90,19 @@ def initialize(arch: Arch, cloud_name: str):
     with openstack.connect(cloud=cloud_name) as conn:
         _create_keypair(conn=conn)
         _create_security_group(conn=conn)
+
+
+def _get_seed_image_name(arch: Arch, base: BaseImage) -> str:
+    """Get formatted image name.
+
+    Args:
+        arch: The architecture of the image to seed.
+        base: The ubuntu base image.
+
+    Returns:
+        The ubuntu base image name uploaded to OpenStack.
+    """
+    return f"image-builder-base-{base.value}-{arch.value}"
 
 
 def _create_keypair(conn: openstack.connection.Connection) -> None:
@@ -157,8 +168,8 @@ def run(
     installation_script = _generate_cloud_init_script(runner_version=runner_version)
     with openstack.connect(cloud=cloud_name) as conn:
         builder: openstack.compute.v2.server.Server = conn.create_server(
-            name=BUILDER_SERVER_NAME_FORMAT.format(ARCH=arch.value, SERIES=base.value),
-            image=BASE_IMAGE_NAME_FORMAT.format(ARCH=arch.value, SERIES=base.value),
+            name=_get_builder_name(arch=arch, base=base),
+            image=_get_seed_image_name(arch=arch, base=base),
             key_name=BUILDER_SSH_KEY_NAME,
             flavor=flavor,
             network=network,
@@ -207,6 +218,19 @@ def _determine_network(network_name: str | None) -> str:
 def _generate_cloud_init_script(runner_version: str):
     """Generate userdata for installing GitHub runner image components."""
     pass
+
+
+def _get_builder_name(arch: Arch, base: BaseImage) -> str:
+    """Get builder VM name.
+
+    Args:
+        arch: The architecture of the image to seed.
+        base: The ubuntu base image.
+
+    Returns:
+        The builder VM name lauched on OpenStack.
+    """
+    return f"image-builder-{base.value}-{arch.value}"
 
 
 def _wait_for_cloud_init_complete(server: openstack.compute.v2.server.Server):
