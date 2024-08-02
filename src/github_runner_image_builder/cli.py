@@ -149,16 +149,6 @@ def initialize_external(cloud_name: str) -> None:
     help="The maximum number of images to keep before deletion.",
 )
 @click.option(
-    "-s",
-    "--callback-script",
-    type=click.Path(exists=True),
-    default=None,
-    help=(
-        "The callback script to trigger after image is built. The callback script is called"
-        "with the first argument as the image ID."
-    ),
-)
-@click.option(
     "-r",
     "--runner-version",
     default="",
@@ -175,7 +165,6 @@ def run_external(
     network: str,
     base_image: str,
     keep_revisions: int,
-    callback_script: Path | None,
     runner_version: str,
 ):
     """Build a cloud image using external Openstack builder and snapshot.
@@ -188,7 +177,6 @@ def run_external(
         network: The Openstack network to assign to server to build images.
         base_image: The Ubuntu base image to use as build base.
         keep_revisions: Number of past revisions to keep before deletion.
-        callback_script: Script to callback after a successful build.
         runner_version: GitHub runner version to pin.
     """
     arch = get_supported_arch()
@@ -200,4 +188,8 @@ def run_external(
         flavor=flavor,
         network=network,
         runner_version=runner_version,
+    )
+    click.echo(
+        message=image_id,
+        nl=False,
     )
