@@ -28,14 +28,19 @@ def main() -> None:
     default=False,
     help="EXPERIMENTAL: Use external Openstack builder to build images.",
 )
-@click.argument(
+@click.option(
     "--cloud-name",
     default="",
     help="The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in paths of "
     "the following order: current directory, ~/.config/openstack, /etc/openstack.",
 )
 def initialize(experimental_external: bool, cloud_name: str) -> None:
-    """Initialize builder CLI function wrapper."""
+    """Initialize builder CLI function wrapper.
+
+    Args:
+        experimental_external: Whether to use external Openstack builder to build images.
+        cloud_name: The cloud name to use from clouds.yaml.
+    """
     if not experimental_external:
         builder.initialize()
         return
@@ -111,10 +116,16 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     help="EXPERIMENTAL: OpenStack flavor to launch for external build run VMs. "
     "Ignored if --experimental-external is not enabled",
 )
-@click.argument(
+@click.option(
     "--network",
     default="",
     help="EXPERIMENTAL: OpenStack network to launch the external build run VMs under. "
+    "Ignored if --experimental-external is not enabled",
+)
+@click.option(
+    "--proxy",
+    default="",
+    help="EXPERIMENTAL: Proxy to use for external build VMs in host:port format (without scheme). "
     "Ignored if --experimental-external is not enabled",
 )
 # click doesn't yet support dataclasses, hence all arguments are required.
@@ -128,6 +139,7 @@ def run(  # pylint: disable=too-many-arguments
     experimental_external: bool,
     flavor: str,
     network: str,
+    proxy: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
 
@@ -142,6 +154,7 @@ def run(  # pylint: disable=too-many-arguments
         experimental_external: Whether to use external OpenStack builder.
         flavor: The Openstack flavor to create server to build images.
         network: The Openstack network to assign to server to build images.
+        proxy: Proxy to use for external build VMs.
     """
     arch = get_supported_arch()
     base = BaseImage.from_str(base_image)
@@ -157,11 +170,12 @@ def run(  # pylint: disable=too-many-arguments
     else:
         image_id = openstack_builder.run(
             arch=arch,
-            base_image=base,
-            cloud_name=cloud_name,
-            flavor=flavor,
-            network=network,
+            base=base,
+            cloud_config=openstack_builder.CloudConfig(
+                cloud_name=cloud_name, flavor=flavor, network=network
+            ),
             runner_version=runner_version,
+            proxy=proxy,
         )
     if callback_script:
         # The callback script is a user trusted script.

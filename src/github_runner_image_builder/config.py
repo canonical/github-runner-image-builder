@@ -107,3 +107,19 @@ BASE_CHOICES = tuple(
     itertools.chain.from_iterable((tag, name) for (tag, name) in LTS_IMAGE_VERSION_TAG_MAP.items())
 )
 IMAGE_OUTPUT_PATH = Path("compressed.img")
+
+IMAGE_DEFAULT_APT_PACKAGES = [
+    "build-essential",
+    "docker.io",
+    "gh",
+    "jq",
+    "npm",
+    "python3-dev",
+    "python3-pip",
+    "python-is-python3",
+    "shellcheck",
+    "tar",
+    "time",
+    "unzip",
+    "wget",
+]

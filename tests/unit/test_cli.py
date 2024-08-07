@@ -208,7 +208,7 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner, callback_sc
     act: when _build is called.
     assert: the mock function is called.
     """
-    monkeypatch.setattr(cli.builder, "build_image", MagicMock())
+    monkeypatch.setattr(cli.builder, "run", MagicMock())
     monkeypatch.setattr(cli.store, "upload_image", MagicMock())
     monkeypatch.setattr(cli.subprocess, "check_call", MagicMock())
     command = [

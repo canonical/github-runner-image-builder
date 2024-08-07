@@ -91,3 +91,23 @@ class UploadImageError(OpenstackBaseError):
 
 class OpenstackError(OpenstackBaseError):
     """Represents an error while communicating with Openstack."""
+
+
+class NotFoundError(OpenstackBaseError):
+    """Represents an error with not matching OpenStack object found."""
+
+
+class FlavorNotFoundError(NotFoundError):
+    """Represents an error with given OpenStack flavor not found."""
+
+
+class NetworkNotFoundError(NotFoundError):
+    """Represents an error with given OpenStack network not found."""
+
+
+class AddressNotFoundError(OpenstackBaseError):
+    """Represents an error with OpenStack instance not receiving an IP address."""
+
+
+class CloudInitFailError(OpenstackBaseError):
+    """Represents an error with cloud-init."""

@@ -3,22 +3,40 @@
 
 """Module for interacting with external openstack VM image builder."""
 
+import dataclasses
+import logging
 import pathlib
 import shutil
 
+import fabric
+import jinja2
 import openstack
+import openstack.compute.v2.flavor
 import openstack.compute.v2.server
 import openstack.connection
+import openstack.exceptions
 import openstack.image.v2.image
+import openstack.network.v2.network
+import openstack.network.v2.subnet
+import paramiko
+import paramiko.ssh_exception
+import tenacity
 import yaml
 
+import github_runner_image_builder.errors
 from github_runner_image_builder import cloud_image, store
-from github_runner_image_builder.config import Arch, BaseImage
+from github_runner_image_builder.config import IMAGE_DEFAULT_APT_PACKAGES, Arch, BaseImage
+
+logger = logging.getLogger(__name__)
 
 BUILDER_SSH_KEY_NAME = "image-builder-ssh-key"
 BUILDER_KEY_PATH = pathlib.Path("/home/ubuntu/.ssh/builder_key")
 
 SHARED_SECURITY_GROUP_NAME = "github-runner-image-builder-v1"
+
+MIN_CPU = 2
+MIN_RAM = 8192  # M
+MIN_DISK = 30  # G
 
 
 def determine_cloud(cloud_name: str | None) -> str:
@@ -29,9 +47,14 @@ def determine_cloud(cloud_name: str | None) -> str:
 
     Raises:
         ValueError: if clouds.yaml was not found.
+
+    Returns:
+        The cloud name to use.
     """
+    # The cloud credentials may be stored in environment variable, trust user input if given.
     if cloud_name:
         return cloud_name
+    logger.info("Determning cloud to use.")
     clouds_yaml_path: pathlib.Path | None
     for path in (
         pathlib.Path("clouds.yaml"),
@@ -55,7 +78,7 @@ def determine_cloud(cloud_name: str | None) -> str:
     return cloud
 
 
-def initialize(arch: Arch, cloud_name: str):
+def initialize(arch: Arch, cloud_name: str) -> None:
     """Initialize the OpenStack external image builder.
 
     Upload ubuntu base images to openstack to use as builder base. This is a separate method to
@@ -66,37 +89,44 @@ def initialize(arch: Arch, cloud_name: str):
         arch: The architecture of the image to seed.
         cloud_name: The cloud to use from the clouds.yaml file.
     """
+    logger.info("Initializing external builder.")
+    logger.info("Downloading Jammy image.")
     jammy_image_path = cloud_image.download_and_validate_image(
         arch=arch, base_image=BaseImage.JAMMY
     )
+    logger.info("Downloading Noble image.")
     noble_image_path = cloud_image.download_and_validate_image(
         arch=arch, base_image=BaseImage.NOBLE
     )
+    logger.info("Uploading Jammy image.")
     store.upload_image(
         arch=arch,
         cloud_name=cloud_name,
-        image_name=_get_seed_image_name(arch=arch, base=BaseImage.JAMMY),
+        image_name=_get_base_image_name(arch=arch, base=BaseImage.JAMMY),
         image_path=jammy_image_path,
         keep_revisions=1,
     )
+    logger.info("Uploading Noble image.")
     store.upload_image(
         arch=arch,
         cloud_name=cloud_name,
-        image_name=_get_seed_image_name(arch=arch, base=BaseImage.NOBLE),
+        image_name=_get_base_image_name(arch=arch, base=BaseImage.NOBLE),
         image_path=noble_image_path,
         keep_revisions=1,
     )
 
     with openstack.connect(cloud=cloud_name) as conn:
+        logger.info("Creating keypair %s.", BUILDER_SSH_KEY_NAME)
         _create_keypair(conn=conn)
+        logger.info("Creating security group %s.", SHARED_SECURITY_GROUP_NAME)
         _create_security_group(conn=conn)
 
 
-def _get_seed_image_name(arch: Arch, base: BaseImage) -> str:
+def _get_base_image_name(arch: Arch, base: BaseImage) -> str:
     """Get formatted image name.
 
     Args:
-        arch: The architecture of the image to seed.
+        arch: The architecture of the image to use as build base.
         base: The ubuntu base image.
 
     Returns:
@@ -111,10 +141,10 @@ def _create_keypair(conn: openstack.connection.Connection) -> None:
     Args:
         conn: The Openstach connection instance.
     """
-    if conn.get_keypair(name=BUILDER_SSH_KEY_NAME):
+    if conn.get_keypair(name_or_id=BUILDER_SSH_KEY_NAME):
         return
     keypair = conn.create_keypair(name=BUILDER_SSH_KEY_NAME)
-    BUILDER_KEY_PATH.write_text(keypair.private_key)
+    BUILDER_KEY_PATH.write_text(keypair.private_key, encoding="utf-8")
     shutil.chown(BUILDER_KEY_PATH, user="ubuntu", group="ubuntu")
     BUILDER_KEY_PATH.chmod(0o400)
 
@@ -125,7 +155,7 @@ def _create_security_group(conn: openstack.connection.Connection) -> None:
     Args:
         conn: The Openstach connection instance.
     """
-    if conn.get_security_group(name=BUILDER_SSH_KEY_NAME):
+    if conn.get_security_group(name_or_id=SHARED_SECURITY_GROUP_NAME):
         return
     conn.create_security_group(
         name=SHARED_SECURITY_GROUP_NAME,
@@ -147,29 +177,51 @@ def _create_security_group(conn: openstack.connection.Connection) -> None:
     )
 
 
+@dataclasses.dataclass
+class CloudConfig:
+    """The OpenStack cloud configuration values.
+
+    Attributes:
+        cloud_name: The OpenStack cloud name to use.
+        flavor: The OpenStack flavor to launch builder VMs on.
+        network: The OpenStack network to launch the builder VMs on.
+    """
+
+    cloud_name: str
+    flavor: str
+    network: str
+
+
 def run(
-    arch: Arch, base: BaseImage, cloud_name: str, flavor: str, network: str, runner_version: str
+    arch: Arch,
+    base: BaseImage,
+    cloud_config: CloudConfig,
+    runner_version: str,
+    proxy: str,
 ) -> str:
     """Run external OpenStack builder instance and create a snapshot.
 
     Args:
         arch: The architecture of the image to seed.
         base: The Ubuntu base to use as builder VM base.
-        cloud_name: The cloud to use from the clouds.yaml file.
-        flavor: The openstack flavor to create the builder server on.
-        network: The openstack network to assign the builder server to.
+        cloud_config: The OpenStack cloud configuration values for builder VM.
         runner_version: The GitHub runner version to install on the VM. Defaults to latest.
+        proxy: Proxy to use for external build VMs.
 
     Returns:
         The Openstack snapshot image ID.
     """
-    flavor = _determine_flavor(flavor_name=flavor)
-    network = _determine_network(flavor_name=network)
-    installation_script = _generate_cloud_init_script(runner_version=runner_version)
-    with openstack.connect(cloud=cloud_name) as conn:
+    installation_script = _generate_cloud_init_script(
+        arch=arch, base=base, runner_version=runner_version, proxy=proxy
+    )
+    with openstack.connect(cloud=cloud_config.cloud_name) as conn:
+        flavor = _determine_flavor(conn=conn, flavor_name=cloud_config.flavor)
+        logger.info("Using flavor ID: %s.", flavor)
+        network = _determine_network(conn=conn, network_name=cloud_config.network)
+        logger.info("Using network ID: %s.", network)
         builder: openstack.compute.v2.server.Server = conn.create_server(
             name=_get_builder_name(arch=arch, base=base),
-            image=_get_seed_image_name(arch=arch, base=base),
+            image=_get_base_image_name(arch=arch, base=base),
             key_name=BUILDER_SSH_KEY_NAME,
             flavor=flavor,
             network=network,
@@ -179,45 +231,92 @@ def run(
             timeout=5 * 60,
             wait=True,
         )
-        _wait_for_cloud_init_complete(builder)
-        image: openstack.image.v2.image.Image = conn.create_image_snapshot()
-        _wait_for_snapshot_complete(image)
+        logger.info("Launched builder, waiting for cloud-init to complete: %s.", builder.id)
+        _wait_for_cloud_init_complete(conn=conn, server=builder, ssh_key=BUILDER_KEY_PATH)
+        image: openstack.image.v2.image.Image = conn.create_image_snapshot(
+            name="TODO:IMAGE_NAME", server=builder.id
+        )
+        logger.info("Requested snapshot, waiting for snapshot to complete: %s.", image.id)
+        _wait_for_snapshot_complete(conn=conn, image=image)
     return str(image.id)
 
 
-def _determine_flavor(flavor_name: str | None) -> str:
+def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | None) -> str:
     """Determine the flavor to use for the image builder.
 
     Args:
+        conn: The OpenStack connection instance.
         flavor_name: Flavor name to use if given.
 
     Raises:
-        ValueError: If no suitable flavor was found.
+        FlavorNotFoundError: If no suitable flavor was found.
 
     Returns:
-        The flavor to use for launching builder VM.
+        The flavor ID to use for launching builder VM.
     """
-    pass
+    flavors: list[openstack.compute.v2.flavor.Flavor] = conn.list_flavors()
+    for flavor in flavors:
+        if flavor_name == flavor.name:
+            return flavor.id
+        if flavor.vcpus >= MIN_CPU and flavor.disk >= MIN_DISK and flavor.ram >= MIN_RAM:
+            return flavor.id
+    raise github_runner_image_builder.errors.FlavorNotFoundError("No suitable flavor found.")
 
 
-def _determine_network(network_name: str | None) -> str:
+def _determine_network(conn: openstack.connection.Connection, network_name: str | None) -> str:
     """Determine the network to use for the image builder.
 
     Args:
+        conn: The OpenStack connection instance.
         network_name: Network name to use if given.
 
     Raises:
-        ValueError: If no suitable network was found.
+        NetworkNotFoundError: If no suitable network was found.
 
     Returns:
         The network to use for launching builder VM.
     """
-    pass
+    networks: list[openstack.network.v2.network.Network] = conn.list_networks()
+    # Only a single valid subnet should exist per environment (PS5/6).
+    subnets: list[openstack.network.v2.subnet.Subnet] = conn.list_subnets()
+    if not subnets:
+        raise github_runner_image_builder.errors.NetworkNotFoundError("No valid subnets found.")
+    for network in networks:
+        if network_name == network.name:
+            return network.id
+        if subnets[0].id in network.subnet_ids:  # TODO
+            return network.id
+    raise github_runner_image_builder.errors.NetworkNotFoundError("No suitble network found.")
 
 
-def _generate_cloud_init_script(runner_version: str):
-    """Generate userdata for installing GitHub runner image components."""
-    pass
+def _generate_cloud_init_script(
+    arch: Arch,
+    base: BaseImage,
+    runner_version: str,
+    proxy: str,
+) -> str:
+    """Generate userdata for installing GitHub runner image components.
+
+    Args:
+        arch: The GitHub runner architecture to download.
+        base: The ubuntu base image.
+        runner_version: The GitHub runner version to pin.
+        proxy: The proxy to enable while setting up the VM.
+
+    Returns:
+        The cloud-init script to create snapshot image.
+    """
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader("templates"), autoescape=jinja2.select_autoescape()
+    )
+    template = env.get_template("cloud-init.sh.j2")
+    return template.render(
+        PROXY_URL=proxy,
+        APT_PACKAGES=" ".join(IMAGE_DEFAULT_APT_PACKAGES),
+        HWE_VERSION=BaseImage.get_version(base),
+        RUNNER_VERSION=runner_version,
+        RUNNER_ARCH=arch.value,
+    )
 
 
 def _get_builder_name(arch: Arch, base: BaseImage) -> str:
@@ -228,16 +327,122 @@ def _get_builder_name(arch: Arch, base: BaseImage) -> str:
         base: The ubuntu base image.
 
     Returns:
-        The builder VM name lauched on OpenStack.
+        The builder VM name launched on OpenStack.
     """
     return f"image-builder-{base.value}-{arch.value}"
 
 
-def _wait_for_cloud_init_complete(server: openstack.compute.v2.server.Server):
-    """Wait until the userdata has finished installing expected components."""
-    pass
+@tenacity.retry(
+    wait=tenacity.wait_exponential(multiplier=2, max=30),
+    retry=tenacity.retry_if_result(lambda result: result),
+)
+def _wait_for_cloud_init_complete(
+    conn: openstack.connection.Connection,
+    server: openstack.compute.v2.server.Server,
+    ssh_key: pathlib.Path,
+) -> bool:
+    """Wait until the userdata has finished installing expected components.
+
+    Args:
+        conn: The Openstach connection instance.
+        server: The OpenStack server instance to check if cloud_init is complete.
+        ssh_key: The key to SSH RSA key to connect to the OpenStack server instance.
+
+    Raises:
+        CloudInitFailError: if there was an error running cloud-init status command.
+
+    Returns:
+        Whether the cloud init is complete. Used for tenacity retry to pick up return value.
+    """
+    ssh_connection = _get_ssh_connection(conn=conn, server=server, ssh_key=ssh_key)
+    result: fabric.Result | None = ssh_connection.run("cloud-init status --wait", timeout=60 * 5)
+    if not result or not result.ok:
+        raise github_runner_image_builder.errors.CloudInitFailError("Invalid cloud-init status")
+    return "status: done" in result.stdout
 
 
-def _wait_for_snapshot_complete(image: openstack.image.v2.image.Image):
-    """Wait until snapshot has been completed and is ready to be used."""
-    pass
+@tenacity.retry(wait=tenacity.wait_exponential(multiplier=2, max=30))
+def _get_ssh_connection(
+    conn: openstack.connection.Connection,
+    server: openstack.compute.v2.server.Server,
+    ssh_key: pathlib.Path,
+) -> fabric.Connection:
+    """Get a valid SSH connection to OpenStack instance.
+
+    Args:
+        conn: The Openstach connection instance.
+        server: The OpenStack server instance to check if cloud_init is complete.
+        ssh_key: The key to SSH RSA key to connect to the OpenStack server instance.
+
+    Raises:
+        AddressNotFoundError: If there was no valid address to get SSH connection.
+
+    Returns:
+        The SSH Connection instance.
+    """
+    server = conn.get_server(name_or_id=server.id)
+    network_address_list = server.addresses.values()
+    if not network_address_list:
+        raise github_runner_image_builder.errors.AddressNotFoundError(
+            f"No addresses found for OpenStack server {server.name}"
+        )
+
+    server_addresses: list[str] = [
+        address["addr"]
+        for network_addresses in network_address_list
+        for address in network_addresses
+    ]
+    for ip in server_addresses:
+        try:
+            connection = fabric.Connection(
+                host=ip,
+                user="ubuntu",
+                connect_kwargs={"key_filename": str(ssh_key)},
+                connect_timeout=30,
+            )
+            result: fabric.Result | None = connection.run(
+                "echo hello world", warn=True, timeout=30
+            )
+            if not result or not result.ok:
+                logger.warning(
+                    "SSH test connection failed, server: %s, address: %s", server.name, ip
+                )
+                continue
+            if "hello world" in result.stdout:
+                return connection
+        except (
+            paramiko.ssh_exception.NoValidConnectionsError,
+            TimeoutError,
+            paramiko.ssh_exception.SSHException,
+        ):
+            logger.warning(
+                "Unable to SSH into %s with address %s",
+                server.name,
+                connection.host,
+                exc_info=True,
+            )
+            continue
+    raise github_runner_image_builder.errors.AddressNotFoundError(
+        f"No connectable SSH addresses found, server: {server.name}, "
+        f"addresses: {server_addresses}"
+    )
+
+
+@tenacity.retry(
+    wait=tenacity.wait_exponential(multiplier=2, max=30),
+    retry=tenacity.retry_if_result(lambda result: result),
+)
+def _wait_for_snapshot_complete(
+    conn: openstack.connection.Connection, image: openstack.image.v2.image.Image
+) -> bool:
+    """Wait until snapshot has been completed and is ready to be used.
+
+    Args:
+        conn: The Openstach connection instance.
+        image: The OpenStack server snapshot image to check is complete.
+
+    Returns:
+        Whether the cloud init is complete. Used for tenacity retry to pick up return value.
+    """
+    image = conn.get_image(name_or_id=image.id)
+    return image.status == "active"

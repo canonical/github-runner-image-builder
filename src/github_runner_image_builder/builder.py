@@ -25,7 +25,12 @@ import requests
 
 from github_runner_image_builder import cloud_image
 from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextManager
-from github_runner_image_builder.config import IMAGE_OUTPUT_PATH, Arch, BaseImage
+from github_runner_image_builder.config import (
+    IMAGE_DEFAULT_APT_PACKAGES,
+    IMAGE_OUTPUT_PATH,
+    Arch,
+    BaseImage,
+)
 from github_runner_image_builder.errors import (
     BuildImageError,
     DependencyInstallError,
@@ -87,21 +92,6 @@ YQ_REPOSITORY_URL = "https://github.com/mikefarah/yq.git"
 YQ_REPOSITORY_PATH = Path("yq_source")
 HOST_YQ_BIN_PATH = Path("/usr/bin/yq")
 MOUNTED_YQ_BIN_PATH = IMAGE_MOUNT_DIR / "usr/bin/yq"
-IMAGE_DEFAULT_APT_PACKAGES = [
-    "build-essential",
-    "docker.io",
-    "gh",
-    "jq",
-    "npm",
-    "python3-dev",
-    "python3-pip",
-    "python-is-python3",
-    "shellcheck",
-    "tar",
-    "time",
-    "unzip",
-    "wget",
-]
 IMAGE_HWE_PKG_FORMAT = "linux-generic-hwe-{VERSION}"
 
 
