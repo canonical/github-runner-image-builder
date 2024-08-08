@@ -12,10 +12,13 @@ import fabric
 import jinja2
 import openstack
 import openstack.compute.v2.flavor
+import openstack.compute.v2.keypair
 import openstack.compute.v2.server
 import openstack.connection
 import openstack.exceptions
 import openstack.image.v2.image
+import openstack.key_manager
+import openstack.key_manager.key_manager_service
 import openstack.network.v2.network
 import openstack.network.v2.subnet
 import paramiko
@@ -29,6 +32,13 @@ from github_runner_image_builder.config import IMAGE_DEFAULT_APT_PACKAGES, Arch,
 
 logger = logging.getLogger(__name__)
 
+CLOUD_YAML_PATHS = (
+    pathlib.Path("clouds.yaml"),
+    pathlib.Path("~/clouds.yaml"),
+    pathlib.Path("~/.config/openstack/clouds.yaml"),
+    pathlib.Path("/etc/openstack/clouds.yaml"),
+)
+
 BUILDER_SSH_KEY_NAME = "image-builder-ssh-key"
 BUILDER_KEY_PATH = pathlib.Path("/home/ubuntu/.ssh/builder_key")
 
@@ -39,14 +49,14 @@ MIN_RAM = 8192  # M
 MIN_DISK = 30  # G
 
 
-def determine_cloud(cloud_name: str | None) -> str:
+def determine_cloud(cloud_name: str | None = None) -> str:
     """Automatically determine cloud to use from clouds.yaml by selecting the first cloud.
 
     Args:
         cloud_name: str
 
     Raises:
-        ValueError: if clouds.yaml was not found.
+        CloudsYAMLError: if clouds.yaml was not found.
 
     Returns:
         The cloud name to use.
@@ -55,18 +65,13 @@ def determine_cloud(cloud_name: str | None) -> str:
     if cloud_name:
         return cloud_name
     logger.info("Determning cloud to use.")
-    clouds_yaml_path: pathlib.Path | None
-    for path in (
-        pathlib.Path("clouds.yaml"),
-        pathlib.Path("~/clouds.yaml"),
-        pathlib.Path("~/.config/openstack/clouds.yaml"),
-        pathlib.Path("/etc/openstack/clouds.yaml"),
-    ):
+    clouds_yaml_path: pathlib.Path | None = None
+    for path in CLOUD_YAML_PATHS:
         if path.exists():
             clouds_yaml_path = path
             break
     if not clouds_yaml_path:
-        raise ValueError(
+        raise github_runner_image_builder.errors.CloudsYAMLError(
             "Unable to determine cloud to use from clouds.yaml files. "
             "Please check that clouds.yaml exists."
         )
@@ -74,7 +79,7 @@ def determine_cloud(cloud_name: str | None) -> str:
         clouds_yaml = yaml.safe_load(clouds_yaml_path.read_text(encoding="utf-8"))
         cloud: str = list(clouds_yaml["clouds"].keys())[0]
     except (TypeError, yaml.error.YAMLError, KeyError) as exc:
-        raise ValueError("Invalid clouds.yaml.") from exc
+        raise github_runner_image_builder.errors.CloudsYAMLError("Invalid clouds.yaml.") from exc
     return cloud
 
 
@@ -141,8 +146,10 @@ def _create_keypair(conn: openstack.connection.Connection) -> None:
     Args:
         conn: The Openstach connection instance.
     """
-    if conn.get_keypair(name_or_id=BUILDER_SSH_KEY_NAME):
+    key = conn.get_keypair(name_or_id=BUILDER_SSH_KEY_NAME)
+    if key and BUILDER_KEY_PATH.exists():
         return
+    conn.delete_keypair(name=BUILDER_SSH_KEY_NAME)
     keypair = conn.create_keypair(name=BUILDER_SSH_KEY_NAME)
     BUILDER_KEY_PATH.write_text(keypair.private_key, encoding="utf-8")
     shutil.chown(BUILDER_KEY_PATH, user="ubuntu", group="ubuntu")
@@ -234,10 +241,11 @@ def run(
         logger.info("Launched builder, waiting for cloud-init to complete: %s.", builder.id)
         _wait_for_cloud_init_complete(conn=conn, server=builder, ssh_key=BUILDER_KEY_PATH)
         image: openstack.image.v2.image.Image = conn.create_image_snapshot(
-            name="TODO:IMAGE_NAME", server=builder.id
+            name="github-runner-image-builder-snapshot-v0", server=builder.id
         )
         logger.info("Requested snapshot, waiting for snapshot to complete: %s.", image.id)
         _wait_for_snapshot_complete(conn=conn, image=image)
+        conn.delete_server(name_or_id=builder.id, wait=True, timeout=5 * 60)
     return str(image.id)
 
 
@@ -255,10 +263,11 @@ def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | 
         The flavor ID to use for launching builder VM.
     """
     flavors: list[openstack.compute.v2.flavor.Flavor] = conn.list_flavors()
+    flavors = sorted(flavors, key=lambda flavor: (flavor.vcpus, flavor.ram, flavor.disk))
     for flavor in flavors:
         if flavor_name == flavor.name:
             return flavor.id
-        if flavor.vcpus >= MIN_CPU and flavor.disk >= MIN_DISK and flavor.ram >= MIN_RAM:
+        if flavor.vcpus >= MIN_CPU and flavor.ram >= MIN_RAM and flavor.disk >= MIN_DISK:
             return flavor.id
     raise github_runner_image_builder.errors.FlavorNotFoundError("No suitable flavor found.")
 
@@ -281,12 +290,13 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
     subnets: list[openstack.network.v2.subnet.Subnet] = conn.list_subnets()
     if not subnets:
         raise github_runner_image_builder.errors.NetworkNotFoundError("No valid subnets found.")
+    subnet = subnets[0]
     for network in networks:
         if network_name == network.name:
             return network.id
-        if subnets[0].id in network.subnet_ids:  # TODO
+        if subnet.id in network.subnet_ids:
             return network.id
-    raise github_runner_image_builder.errors.NetworkNotFoundError("No suitble network found.")
+    raise github_runner_image_builder.errors.NetworkNotFoundError("No suitable network found.")
 
 
 def _generate_cloud_init_script(
@@ -334,7 +344,9 @@ def _get_builder_name(arch: Arch, base: BaseImage) -> str:
 
 @tenacity.retry(
     wait=tenacity.wait_exponential(multiplier=2, max=30),
-    retry=tenacity.retry_if_result(lambda result: result),
+    # retry if False is returned
+    retry=tenacity.retry_if_result(lambda result: not result),
+    reraise=True,
 )
 def _wait_for_cloud_init_complete(
     conn: openstack.connection.Connection,
@@ -361,7 +373,7 @@ def _wait_for_cloud_init_complete(
     return "status: done" in result.stdout
 
 
-@tenacity.retry(wait=tenacity.wait_exponential(multiplier=2, max=30))
+@tenacity.retry(wait=tenacity.wait_exponential(multiplier=2, max=30), reraise=True)
 def _get_ssh_connection(
     conn: openstack.connection.Connection,
     server: openstack.compute.v2.server.Server,
@@ -430,7 +442,7 @@ def _get_ssh_connection(
 
 @tenacity.retry(
     wait=tenacity.wait_exponential(multiplier=2, max=30),
-    retry=tenacity.retry_if_result(lambda result: result),
+    retry=tenacity.retry_if_result(lambda result: not result),
 )
 def _wait_for_snapshot_complete(
     conn: openstack.connection.Connection, image: openstack.image.v2.image.Image

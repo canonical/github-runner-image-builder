@@ -93,6 +93,10 @@ class OpenstackError(OpenstackBaseError):
     """Represents an error while communicating with Openstack."""
 
 
+class CloudsYAMLError(OpenstackBaseError):
+    """Represents an error with clouds.yaml for OpenStack connection."""
+
+
 class NotFoundError(OpenstackBaseError):
     """Represents an error with not matching OpenStack object found."""
 

@@ -8,8 +8,7 @@ function configure_proxy() {
     echo "Installing aproxy"
     /usr/bin/sudo snap install aproxy --edge;
     /usr/bin/sudo nft -f - << EOF
-define default-ip = $(ip route get $(ip route show 0.0.0.0/0 | grep -oP 'via \K\S+') | grep -oP \
-'src \K\S+')
+define default-ip = $(ip route get $(ip route show 0.0.0.0/0 | grep -oP 'via \K\S+') | grep -oP 'src \K\S+')
 define private-ips = { 10.0.0.0/8, 127.0.0.1/8, 172.16.0.0/12, 192.168.0.0/16 }
 table ip aproxy
 flush table ip aproxy
@@ -32,7 +31,7 @@ function install_apt_packages() {
     local packages="$1"
     local hwe_version="$2"
     echo "Updating apt packages"
-    DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get update -y 
+    DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get update -y
     echo "Installing apt packages $packages"
     DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --no-install-recommends ${packages}
     echo "Installing linux-generic-hwe-${hwe_version}"
