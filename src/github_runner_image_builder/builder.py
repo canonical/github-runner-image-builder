@@ -6,11 +6,6 @@
 # inputs.
 
 import contextlib
-
-# gzip needs to be preloaded to extract github runner tar.gz. This is because within the chroot
-# env, tarfile module tries to import gzip dynamically and fails.
-import gzip  # noqa: F401 # pylint: disable=unused-import
-import hashlib
 import http
 import http.client
 import logging
@@ -25,14 +20,18 @@ import urllib.request
 import urllib.response
 from io import BytesIO
 from pathlib import Path
-from typing import Literal
 
 import requests
 
+from github_runner_image_builder import cloud_image
 from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextManager
-from github_runner_image_builder.config import IMAGE_OUTPUT_PATH, Arch, BaseImage
+from github_runner_image_builder.config import (
+    IMAGE_DEFAULT_APT_PACKAGES,
+    IMAGE_OUTPUT_PATH,
+    Arch,
+    BaseImage,
+)
 from github_runner_image_builder.errors import (
-    BaseImageDownloadError,
     BuildImageError,
     DependencyInstallError,
     ImageCompressError,
@@ -45,7 +44,6 @@ from github_runner_image_builder.errors import (
     SystemUserConfigurationError,
     UnattendedUpgradeDisableError,
     UnmountBuildPathError,
-    UnsupportedArchitectureError,
     YarnInstallError,
     YQBuildError,
 )
@@ -55,7 +53,6 @@ logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-SupportedBaseImageArch = Literal["amd64", "arm64"]
 
 APT_DEPENDENCIES = [
     "qemu-utils",  # used for qemu utilities tools to build and resize image
@@ -64,8 +61,6 @@ APT_DEPENDENCIES = [
 ]
 APT_NONINTERACTIVE_ENV = {"DEBIAN_FRONTEND": "noninteractive"}
 SNAP_GO = "go"
-
-CHECKSUM_BUF_SIZE = 65536  # 65kb
 
 # Constants for mounting images
 IMAGE_MOUNT_DIR = Path("/mnt/ubuntu-image/")
@@ -97,21 +92,6 @@ YQ_REPOSITORY_URL = "https://github.com/mikefarah/yq.git"
 YQ_REPOSITORY_PATH = Path("yq_source")
 HOST_YQ_BIN_PATH = Path("/usr/bin/yq")
 MOUNTED_YQ_BIN_PATH = IMAGE_MOUNT_DIR / "usr/bin/yq"
-IMAGE_DEFAULT_APT_PACKAGES = [
-    "build-essential",
-    "docker.io",
-    "gh",
-    "jq",
-    "npm",
-    "python3-dev",
-    "python3-pip",
-    "python-is-python3",
-    "shellcheck",
-    "tar",
-    "time",
-    "unzip",
-    "wget",
-]
 IMAGE_HWE_PKG_FORMAT = "linux-generic-hwe-{VERSION}"
 
 
@@ -179,7 +159,7 @@ def _enable_network_block_device() -> None:
         raise NetworkBlockDeviceError from exc
 
 
-def build_image(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
+def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
     """Build and save the image locally.
 
     Args:
@@ -197,7 +177,7 @@ def build_image(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
 
     IMAGE_MOUNT_DIR.mkdir(parents=True, exist_ok=True)
     logger.info("Downloading base image.")
-    base_image_path = _download_and_validate_image(arch=arch, base_image=base_image)
+    base_image_path = cloud_image.download_and_validate_image(arch=arch, base_image=base_image)
     logger.info("Resizing base image.")
     _resize_image(image_path=base_image_path)
     logger.info("Connecting image to network block device.")
@@ -328,144 +308,6 @@ def _unmount_build_path() -> None:
         logger.info("umount nbdp1 out: %s", output)
     except subprocess.SubprocessError as exc:
         raise UnmountBuildPathError from exc
-
-
-def _download_and_validate_image(arch: Arch, base_image: BaseImage) -> Path:
-    """Download and verify the base image from cloud-images.ubuntu.com.
-
-    Args:
-        arch: The base image architecture to download.
-        base_image: The ubuntu base image OS to download.
-
-    Returns:
-        The downloaded image path.
-
-    Raises:
-        BaseImageDownloadError: If there was an error with downloading/verifying the image.
-    """
-    try:
-        bin_arch = _get_supported_runner_arch(arch)
-    except UnsupportedArchitectureError as exc:
-        raise BaseImageDownloadError from exc
-
-    image_path_str = f"{base_image.value}-server-cloudimg-{bin_arch}.img"
-    image_path = _download_base_image(
-        base_image=base_image, bin_arch=bin_arch, output_filename=image_path_str
-    )
-    shasums = _fetch_shasums(base_image=base_image)
-    if image_path_str not in shasums:
-        raise BaseImageDownloadError("Corresponding checksum not found.")
-    if not _validate_checksum(image_path, shasums[image_path_str]):
-        raise BaseImageDownloadError("Invalid checksum.")
-    return image_path
-
-
-def _get_supported_runner_arch(arch: Arch) -> SupportedBaseImageArch:
-    """Validate and return supported runner architecture.
-
-    The supported runner architecture takes in arch value from Github supported
-    architecture and outputs architectures supported by ubuntu cloud images.
-    See: https://docs.github.com/en/actions/hosting-your-own-runners/managing-\
-        self-hosted-runners/about-self-hosted-runners#architectures
-    and https://cloud-images.ubuntu.com/jammy/current/
-
-    Args:
-        arch: The compute architecture to check support for.
-
-    Raises:
-        UnsupportedArchitectureError: If an unsupported architecture was passed.
-
-    Returns:
-        The supported architecture.
-    """
-    match arch:
-        case Arch.X64:
-            return "amd64"
-        case Arch.ARM64:
-            return "arm64"
-        case _:
-            raise UnsupportedArchitectureError(f"Detected system arch: {arch} is unsupported.")
-
-
-@retry(tries=3, delay=5, max_delay=30, backoff=2, local_logger=logger)
-def _download_base_image(base_image: BaseImage, bin_arch: str, output_filename: str) -> Path:
-    """Download the base image.
-
-    Args:
-        bin_arch: The ubuntu cloud-image supported arch.
-        base_image: The ubuntu base image OS to download.
-        output_filename: The output filename of the downloaded image.
-
-    Raises:
-        BaseImageDownloadError: If there was an error downloaded from cloud-images.ubuntu.com
-
-    Returns:
-        The downloaded image path.
-    """
-    # The ubuntu-cloud-images is a trusted source
-    try:
-        urllib.request.urlretrieve(  # nosec: B310
-            (
-                f"https://cloud-images.ubuntu.com/{base_image.value}/current/{base_image.value}"
-                f"-server-cloudimg-{bin_arch}.img"
-            ),
-            output_filename,
-        )
-    except urllib.error.URLError as exc:
-        raise BaseImageDownloadError from exc
-    return Path(output_filename)
-
-
-@retry(tries=3, delay=5, max_delay=30, backoff=2, local_logger=logger)
-def _fetch_shasums(base_image: BaseImage) -> dict[str, str]:
-    """Fetch SHA256SUM for given base image.
-
-    Args:
-        base_image: The ubuntu base image OS to fetch SHA256SUMs for.
-
-    Raises:
-        BaseImageDownloadError: If there was an error downloading SHA256SUMS file from \
-            cloud-images.ubuntu.com
-
-    Returns:
-        A map of image file name to SHA256SUM.
-    """
-    try:
-        # bandit does not detect that the timeout parameter exists.
-        response = requests.get(  # nosec: request_without_timeout
-            f"https://cloud-images.ubuntu.com/{base_image.value}/current/SHA256SUMS",
-            timeout=60 * 5,
-        )
-    except requests.RequestException as exc:
-        raise BaseImageDownloadError from exc
-    # file consisting of lines <SHA256SUM> *<filename>
-    shasum_contents = str(response.content, encoding="utf-8")
-    imagefile_to_shasum = {
-        sha256_and_file[1].strip("*"): sha256_and_file[0]
-        for shasum_line in shasum_contents.strip().splitlines()
-        if (sha256_and_file := shasum_line.split())
-    }
-    return imagefile_to_shasum
-
-
-def _validate_checksum(file: Path, expected_checksum: str) -> bool:
-    """Validate the checksum of a given file.
-
-    Args:
-        file: The file to calculate checksum for.
-        expected_checksum: The expected file checksum.
-
-    Returns:
-        True if the checksums match. False otherwise.
-    """
-    sha256 = hashlib.sha256()
-    with open(file=file, mode="rb") as target_file:
-        while True:
-            data = target_file.read(CHECKSUM_BUF_SIZE)
-            if not data:
-                break
-            sha256.update(data)
-    return sha256.hexdigest() == expected_checksum
 
 
 def _resize_image(image_path: Path) -> None:

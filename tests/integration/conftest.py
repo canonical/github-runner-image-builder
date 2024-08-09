@@ -225,12 +225,16 @@ def openstack_security_group_fixture(openstack_connection: Connection):
     )
     # For SSH
     openstack_connection.create_security_group_rule(
+        # The code is not duplicated, this code is strictly for integration test which should not
+        # be imported from module or referenced from module.
+        # pylint: disable=R0801
         secgroup_name_or_id=security_group_name,
         port_range_min="22",
         port_range_max="22",
         protocol="tcp",
         direction="ingress",
         ethertype="IPv4",
+        # pylint: enable=R0801
     )
     # For tmate
     openstack_connection.create_security_group_rule(
