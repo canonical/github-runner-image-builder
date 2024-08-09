@@ -317,7 +317,8 @@ def _generate_cloud_init_script(
         The cloud-init script to create snapshot image.
     """
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader("templates"), autoescape=jinja2.select_autoescape()
+        loader=jinja2.PackageLoader("github-runner-image-builder", "templates"),
+        autoescape=jinja2.select_autoescape(),
     )
     template = env.get_template("cloud-init.sh.j2")
     return template.render(
