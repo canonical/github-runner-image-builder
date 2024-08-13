@@ -3,6 +3,7 @@
 
 """Fixtures for github runner image builder integration tests."""
 import logging
+import platform
 import secrets
 import string
 
@@ -23,9 +24,28 @@ from openstack.connection import Connection
 from openstack.image.v2.image import Image
 from openstack.network.v2.security_group import SecurityGroup
 
+from github_runner_image_builder import config
 from tests.integration import helpers, types
 
 logger = logging.getLogger(__name__)
+
+
+@pytest.fixture(scope="module", name="arch")
+def arch_fixture():
+    """The testing architecture."""
+    arch = platform.machine()
+    match arch:
+        case arch if arch in config.ARCHITECTURES_ARM64:
+            return "arm64"
+        case arch if arch in config.ARCHITECTURES_X86:
+            return "amd64"
+    raise ValueError(f"Unsupported testing architecture {arch}")
+
+
+@pytest.fixture(scope="module", name="test_id")
+def test_id_fixture() -> str:
+    """The random 2 char test id."""
+    return "".join(secrets.choice(string.ascii_lowercase) for _ in range(2))
 
 
 @pytest.fixture(scope="module", name="image")
@@ -149,12 +169,6 @@ echo $IMAGE_ID | tee {callback_result_path}
     return callback_script
 
 
-@pytest.fixture(scope="module", name="test_id")
-def test_id_fixture() -> str:
-    """The unique test identifier."""
-    return secrets.token_hex(4)
-
-
 @pytest.fixture(scope="module", name="dockerhub_mirror")
 def dockerhub_mirror_fixture(pytestconfig: pytest.Config) -> str | None:
     """Dockerhub mirror URL."""
@@ -182,28 +196,12 @@ def ssh_key_fixture(
     openstack_connection.delete_keypair(name=keypair.name)
 
 
-class OpenstackMeta(typing.NamedTuple):
-    """A wrapper around Openstack related info.
-
-    Attributes:
-        connection: The connection instance to Openstack.
-        ssh_key: The SSH-Key created to connect to Openstack instance.
-        network: The Openstack network to create instances under.
-        flavor: The flavor to create instances with.
-    """
-
-    connection: Connection
-    ssh_key: types.SSHKey
-    network: str
-    flavor: str
-
-
 @pytest.fixture(scope="module", name="openstack_metadata")
 def openstack_metadata_fixture(
     openstack_connection: Connection, ssh_key: types.SSHKey, network_name: str, flavor_name: str
-) -> OpenstackMeta:
+) -> types.OpenstackMeta:
     """A wrapper around openstack related info."""
-    return OpenstackMeta(
+    return types.OpenstackMeta(
         connection=openstack_connection, ssh_key=ssh_key, network=network_name, flavor=flavor_name
     )
 
@@ -253,7 +251,7 @@ def openstack_security_group_fixture(openstack_connection: Connection):
 
 @pytest_asyncio.fixture(scope="module", name="openstack_server")
 async def openstack_server_fixture(
-    openstack_metadata: OpenstackMeta,
+    openstack_metadata: types.OpenstackMeta,
     openstack_security_group: SecurityGroup,
     openstack_image_name: str,
     test_id: str,
@@ -296,8 +294,8 @@ def proxy_fixture(pytestconfig: pytest.Config) -> types.ProxyConfig:
 @pytest_asyncio.fixture(scope="module", name="ssh_connection")
 async def ssh_connection_fixture(
     openstack_server: Server,
-    openstack_metadata: OpenstackMeta,
     proxy: types.ProxyConfig,
+    openstack_metadata: types.OpenstackMeta,
     dockerhub_mirror: str | None,
 ) -> SSHConnection:
     """The openstack server ssh connection fixture."""

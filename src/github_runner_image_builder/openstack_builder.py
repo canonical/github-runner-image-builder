@@ -43,6 +43,7 @@ BUILDER_SSH_KEY_NAME = "image-builder-ssh-key"
 BUILDER_KEY_PATH = pathlib.Path("/home/ubuntu/.ssh/builder_key")
 
 SHARED_SECURITY_GROUP_NAME = "github-runner-image-builder-v1"
+IMAGE_SNAPSHOT_NAME = "github-runner-image-builder-snapshot-v0"
 
 MIN_CPU = 2
 MIN_RAM = 8192  # M
@@ -241,7 +242,7 @@ def run(
         logger.info("Launched builder, waiting for cloud-init to complete: %s.", builder.id)
         _wait_for_cloud_init_complete(conn=conn, server=builder, ssh_key=BUILDER_KEY_PATH)
         image: openstack.image.v2.image.Image = conn.create_image_snapshot(
-            name="github-runner-image-builder-snapshot-v0", server=builder.id
+            name=IMAGE_SNAPSHOT_NAME, server=builder.id
         )
         logger.info("Requested snapshot, waiting for snapshot to complete: %s.", image.id)
         _wait_for_snapshot_complete(conn=conn, image=image)
@@ -317,7 +318,7 @@ def _generate_cloud_init_script(
         The cloud-init script to create snapshot image.
     """
     env = jinja2.Environment(
-        loader=jinja2.PackageLoader("github-runner-image-builder", "templates"),
+        loader=jinja2.PackageLoader("github_runner_image_builder", "templates"),
         autoescape=jinja2.select_autoescape(),
     )
     template = env.get_template("cloud-init.sh.j2")

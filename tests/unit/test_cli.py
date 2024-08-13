@@ -221,6 +221,7 @@ def test_invalid_run_args(cli_runner: CliRunner, run_inputs: dict, invalid_args:
 def test_run(
     monkeypatch: pytest.MonkeyPatch,
     cli_runner: CliRunner,
+    tmp_path: Path,
     callback_script: Path | None,
     flags: list[str],
 ):
@@ -242,8 +243,8 @@ def test_run(
         *flags,
     ]
     if callback_script:
-        callback_script.touch(exist_ok=True)
-        command.extend(["--callback-script", str(callback_script)])
+        (callback_script_path := tmp_path / callback_script).touch(exist_ok=True)
+        command.extend(["--callback-script", str(callback_script_path)])
 
     result = cli_runner.invoke(
         main,

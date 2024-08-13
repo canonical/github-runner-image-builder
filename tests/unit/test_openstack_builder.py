@@ -108,8 +108,9 @@ def test__create_keypair_already_exists(monkeypatch: pytest.MonkeyPatch, tmp_pat
     act: when _create_keypair is called.
     assert: create keypair functions are not called.
     """
-    tmp_path.touch(exist_ok=True)
-    monkeypatch.setattr(openstack_builder, "BUILDER_KEY_PATH", tmp_path)
+    tmp_key_path = tmp_path / "test-key-path"
+    tmp_key_path.touch(exist_ok=True)
+    monkeypatch.setattr(openstack_builder, "BUILDER_KEY_PATH", tmp_key_path)
     connection_mock = MagicMock()
 
     openstack_builder._create_keypair(conn=connection_mock)

@@ -10,10 +10,11 @@ import platform
 import tarfile
 import time
 import urllib.parse
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 from string import Template
-from typing import Awaitable, Callable, ParamSpec, TypeVar, cast
+from typing import Awaitable, Callable, ParamSpec, Protocol, TypeVar, cast
 
 from fabric import Connection as SSHConnection
 from fabric import Result
@@ -26,7 +27,7 @@ from pylxd.models.image import Image
 from pylxd.models.instance import Instance, InstanceState
 from requests_toolbelt import MultipartEncoder
 
-from tests.integration import types
+from tests.integration import commands, types
 
 logger = logging.getLogger(__name__)
 
@@ -376,3 +377,76 @@ def format_dockerhub_mirror_microk8s_command(command: str, dockerhub_mirror: str
     """
     url = urllib.parse.urlparse(dockerhub_mirror)
     return command.format(registry_url=url.geturl(), hostname=url.hostname, port=url.port)
+
+
+def run_openstack_tests(dockerhub_mirror: str | None, ssh_connection: SSHConnection):
+    """Run test commands on the openstack instance via ssh.
+
+    Args:
+        dockerhub_mirror: The dockerhub mirror URL to reduce rate limiting for tests.
+        ssh_connection: The SSH connection instance to OpenStack test server.
+    """
+    for testcmd in commands.TEST_RUNNER_COMMANDS:
+        if testcmd == "configure dockerhub mirror":
+            if not dockerhub_mirror:
+                continue
+            testcmd.command = format_dockerhub_mirror_microk8s_command(
+                command=testcmd.command, dockerhub_mirror=dockerhub_mirror
+            )
+        logger.info("Running command: %s", testcmd.command)
+        result: Result = ssh_connection.run(testcmd.command, env=testcmd.env)
+        logger.info("Command output: %s %s %s", result.return_code, result.stdout, result.stderr)
+        assert result.return_code == 0
+
+
+# This is a simple interface for filtering out openstack objects.
+class CreatedAtProtocol(Protocol):  # pylint: disable=too-few-public-methods
+    """The interface for objects containing the created_at property.
+
+    Attributes:
+        created_at: The created_at timestamp of format YYYY-MM-DDTHH:MM:SSZ.
+    """
+
+    @property
+    def created_at(self) -> str:
+        """The object's creation timestamp."""
+
+
+def is_greater_than_time(instance_to_check: CreatedAtProtocol, timestamp: datetime):
+    """Return if object was created after given timestamp.
+
+    Args:
+        instance_to_check: The object to check for creation after timestamp.
+        timestamp: The timestamp to check.
+
+    Returns:
+        Whether the object was created after given timestamp.
+    """
+    created_at = datetime.strptime(instance_to_check.created_at, "%Y-%m-%dT%H:%M:%SZ")
+    return created_at > timestamp
+
+
+# This is a simple interface for filtering out openstack objects.
+class NameProtocol(Protocol):  # pylint: disable=too-few-public-methods
+    """The interface for objects containing the name property.
+
+    Attributes:
+        name: The object name.
+    """
+
+    @property
+    def name(self) -> str:
+        """The object's name."""
+
+
+def has_name(instance_to_check: NameProtocol, name: str):
+    """Return if object has given name.
+
+    Args:
+        instance_to_check: The object to check for name equality.
+        name: The name to check.
+
+    Returns:
+        Whether the object has given name.
+    """
+    return instance_to_check.name == name
