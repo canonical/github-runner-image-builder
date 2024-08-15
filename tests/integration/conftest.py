@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 """Fixtures for github runner image builder integration tests."""
+import glob
 import logging
 import platform
 import secrets
@@ -350,4 +351,5 @@ def cli_run_fixture(
     openstack_image: Image
     for openstack_image in openstack_connection.search_images(openstack_image_name):
         openstack_connection.delete_image(openstack_image.id)
-    subprocess.call(["/usr/bin/sudo", "rm", "*.img"])
+    for imge_file in glob.glob("*.img"):
+        subprocess.call(["/usr/bin/sudo", "rm", imge_file])
