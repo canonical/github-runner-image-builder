@@ -10,7 +10,7 @@ import platform
 import tarfile
 import time
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from string import Template
@@ -422,7 +422,9 @@ def is_greater_than_time(instance_to_check: CreatedAtProtocol, timestamp: dateti
     Returns:
         Whether the object was created after given timestamp.
     """
-    created_at = datetime.strptime(instance_to_check.created_at, "%Y-%m-%dT%H:%M:%SZ")
+    created_at = datetime.strptime(instance_to_check.created_at, "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc
+    )
     return created_at > timestamp
 
 
