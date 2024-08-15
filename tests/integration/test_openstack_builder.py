@@ -26,6 +26,8 @@ from tests.integration import helpers, types
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.amd64
+@pytest.mark.arm64
 def test_initialize(openstack_connection: Connection, arch: config.Arch, cloud_name: str):
     """
     arrange: given an openstack cloud instance.
@@ -72,6 +74,8 @@ def test_initialize(openstack_connection: Connection, arch: config.Arch, cloud_n
 # The code is not duplicated, it has similar setup but uses different input fixtures for external
 # openstack builder.
 # pylint: disable=R0801
+@pytest.mark.amd64
+@pytest.mark.arm64
 @pytest.fixture(scope="module", name="server")
 def server_fixture(
     openstack_metadata: types.OpenstackMeta,
