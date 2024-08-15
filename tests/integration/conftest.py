@@ -350,3 +350,4 @@ def cli_run_fixture(
     openstack_image: Image
     for openstack_image in openstack_connection.search_images(openstack_image_name):
         openstack_connection.delete_image(openstack_image.id)
+    subprocess.call(["/usr/bin/sudo", "rm", "*.img"])
