@@ -37,9 +37,9 @@ def arch_fixture():
     arch = platform.machine()
     match arch:
         case arch if arch in config.ARCHITECTURES_ARM64:
-            return "arm64"
+            return config.Arch.ARM64
         case arch if arch in config.ARCHITECTURES_X86:
-            return "amd64"
+            return config.Arch.X64
     raise ValueError(f"Unsupported testing architecture {arch}")
 
 
