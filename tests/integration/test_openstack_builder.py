@@ -102,7 +102,9 @@ def server_fixture(
         logger.exception("Failed to create server, %s", dict(server))
     finally:
         openstack_metadata.connection.delete_server(server_name, wait=True)
-        openstack_metadata.connection.delete_image(image.name, wait=True)
+        openstack_metadata.connection.delete_image(
+            openstack_builder.IMAGE_SNAPSHOT_NAME, wait=True
+        )
 
 
 @pytest_asyncio.fixture(scope="module", name="ssh_connection")
