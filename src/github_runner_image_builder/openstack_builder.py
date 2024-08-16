@@ -268,11 +268,13 @@ def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | 
             raise github_runner_image_builder.errors.FlavorNotFoundError(
                 f"Given flavor {flavor_name} not found."
             )
+        logger.info("Flavor found, %s", flavor.name)
         return flavor.id
     flavors: list[openstack.compute.v2.flavor.Flavor] = conn.list_flavors()
     flavors = sorted(flavors, key=lambda flavor: (flavor.vcpus, flavor.ram, flavor.disk))
     for flavor in flavors:
         if flavor.vcpus >= MIN_CPU and flavor.ram >= MIN_RAM and flavor.disk >= MIN_DISK:
+            logger.info("Flavor found, %s", flavor.name)
             return flavor.id
     raise github_runner_image_builder.errors.FlavorNotFoundError("No suitable flavor found.")
 
@@ -295,6 +297,7 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
             raise github_runner_image_builder.errors.NetworkNotFoundError(
                 f"Given network {network_name} not found."
             )
+        logger.info("Network found, %s", network.name)
         return network.id
     networks: list[openstack.network.v2.network.Network] = conn.list_networks()
     # Only a single valid subnet should exist per environment.
@@ -304,6 +307,7 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
     subnet = subnets[0]
     for network in networks:
         if subnet.id in network.subnet_ids:
+            logger.info("Network found, %s", network.name)
             return network.id
     raise github_runner_image_builder.errors.NetworkNotFoundError("No suitable network found.")
 
