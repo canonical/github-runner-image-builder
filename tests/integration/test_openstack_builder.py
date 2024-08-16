@@ -71,9 +71,35 @@ def test_initialize(openstack_connection: Connection, arch: config.Arch, cloud_n
     assert openstack_connection.get_keypair(name_or_id=openstack_builder.BUILDER_SSH_KEY_NAME)
 
 
+@pytest.fixture(scope="module", name="cli_run")
+def cli_run_fixture(
+    arch: config.Arch,
+    image: str,
+    cloud_name: str,
+    network_name: str,
+    flavor_name: str,
+    proxy: types.ProxyConfig,
+):
+    """A CLI run.
+
+    This fixture assumes pipx is installed in the system and the github-runner-image-builder has
+    been installed using pipx. See testenv:integration section of tox.ini.
+    """
+    openstack_builder.run(
+        arch=arch,
+        base=config.BaseImage.from_str(image),
+        cloud_config=openstack_builder.CloudConfig(
+            cloud_name=cloud_name, flavor=flavor_name, network=network_name
+        ),
+        runner_version="",
+        proxy=proxy.http,
+    )
+
+
 # The code is not duplicated, it has similar setup but uses different input fixtures for external
 # openstack builder.
 # pylint: disable=R0801
+@pytest.mark.usefixtures("cli_run")
 @pytest.fixture(scope="module", name="server")
 def server_fixture(
     openstack_metadata: types.OpenstackMeta,
@@ -133,6 +159,7 @@ async def ssh_connection_fixture(
 
 @pytest.mark.amd64
 @pytest.mark.arm64
+@pytest.mark.usefixtures("cli_run")
 async def test_run(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
     """
     arrange: given openstack cloud instance.
