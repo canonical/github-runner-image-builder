@@ -7,11 +7,11 @@ import logging
 from pathlib import Path
 
 import pytest
+from click.testing import CliRunner
 from fabric.connection import Connection as SSHConnection
 from openstack.connection import Connection
 from pylxd import Client
 
-from github_runner_image_builder.cli import get_latest_build_id
 from github_runner_image_builder.config import IMAGE_OUTPUT_PATH
 from tests.integration import commands, helpers
 
@@ -107,8 +107,9 @@ async def test_get_image(
     act: when get image id is run.
     assert: the latest image matches the stdout output.
     """
-    get_latest_build_id(cloud_name, openstack_image_name)
+    result = CliRunner().invoke("latest-build-id", args=[cloud_name, openstack_image_name])
     image_id = openstack_connection.get_image_id(openstack_image_name)
 
-    res = capsys.readouterr()
-    assert res.out == image_id, f"Openstack image not matching, {res.out} {res.err}, {image_id}"
+    assert (
+        result.output == image_id
+    ), f"Openstack image not matching, {result.output} {result.exit_code}, {image_id}"
