@@ -71,13 +71,31 @@ def test_initialize(openstack_connection: Connection, arch: config.Arch, cloud_n
     assert openstack_connection.get_keypair(name_or_id=openstack_builder.BUILDER_SSH_KEY_NAME)
 
 
+class OpenStackMetadata(typing.NamedTuple):
+    """The OpenStack metadata wrapper fixture.
+
+    Attributes:
+        cloud_name: The OpenStack cloud name to use.
+        network: The OpenStack network to use.
+        flavor: The OpenStack flavor to use.
+    """
+
+    cloud_name: str
+    network: str
+    flavor: str
+
+
+@pytest.fixture(scope="module", name="openstack_metadata")
+def openstack_metadata_fixture(cloud_name: str, network_name: str, flavor_name: str):
+    """A wrapper fixture containing OpenStack metadata."""
+    return OpenStackMetadata(cloud_name=cloud_name, network=network_name, flavor=flavor_name)
+
+
 @pytest.fixture(scope="module", name="cli_run")
 def cli_run_fixture(
     arch: config.Arch,
     image: str,
-    cloud_name: str,
-    network_name: str,
-    flavor_name: str,
+    openstack_metadata: OpenStackMetadata,
     proxy: types.ProxyConfig,
 ):
     """A CLI run.
@@ -89,7 +107,9 @@ def cli_run_fixture(
         arch=arch,
         base=config.BaseImage.from_str(image),
         cloud_config=openstack_builder.CloudConfig(
-            cloud_name=cloud_name, flavor=flavor_name, network=network_name
+            cloud_name=openstack_metadata.cloud_name,
+            flavor=openstack_metadata.flavor,
+            network=openstack_metadata.network,
         ),
         runner_version="",
         proxy=proxy.http,
