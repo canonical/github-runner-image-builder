@@ -100,7 +100,6 @@ async def test_script_callback(callback_result_path: Path):
 async def test_get_image(
     cloud_name: str,
     openstack_image_name: str,
-    capsys: pytest.CaptureFixture,
     openstack_connection: Connection,
 ):
     """
