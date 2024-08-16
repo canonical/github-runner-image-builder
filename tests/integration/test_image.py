@@ -53,6 +53,8 @@ async def test_image_amd(image: str, tmp_path: Path, dockerhub_mirror: str | Non
         assert result.exit_code == 0
 
 
+@pytest.mark.amd64
+@pytest.mark.arm64
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
 async def test_openstack_upload(openstack_connection: Connection, openstack_image_name: str):
@@ -64,8 +66,8 @@ async def test_openstack_upload(openstack_connection: Connection, openstack_imag
     assert len(openstack_connection.search_images(openstack_image_name))
 
 
-@pytest.mark.asyncio
 @pytest.mark.arm64
+@pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
 async def test_image_arm(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
     """
@@ -76,6 +78,8 @@ async def test_image_arm(ssh_connection: SSHConnection, dockerhub_mirror: str | 
     helpers.run_openstack_tests(dockerhub_mirror=dockerhub_mirror, ssh_connection=ssh_connection)
 
 
+@pytest.mark.amd64
+@pytest.mark.arm64
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
 async def test_script_callback(callback_result_path: Path):
@@ -88,6 +92,8 @@ async def test_script_callback(callback_result_path: Path):
     assert len(callback_result_path.read_text(encoding="utf-8"))
 
 
+@pytest.mark.amd64
+@pytest.mark.arm64
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
 async def test_get_image(

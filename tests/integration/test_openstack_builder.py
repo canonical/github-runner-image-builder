@@ -74,8 +74,6 @@ def test_initialize(openstack_connection: Connection, arch: config.Arch, cloud_n
 # The code is not duplicated, it has similar setup but uses different input fixtures for external
 # openstack builder.
 # pylint: disable=R0801
-@pytest.mark.amd64
-@pytest.mark.arm64
 @pytest.fixture(scope="module", name="server")
 def server_fixture(
     openstack_metadata: types.OpenstackMeta,
@@ -131,6 +129,8 @@ async def ssh_connection_fixture(
 # pylint: enable=R0801
 
 
+@pytest.mark.amd64
+@pytest.mark.arm64
 async def test_run(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
     """
     arrange: given openstack cloud instance.
