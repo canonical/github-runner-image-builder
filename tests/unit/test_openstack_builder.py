@@ -213,6 +213,22 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
     connection_mock.delete_server.assert_called()
 
 
+def test__determine_flavor_flavor_not_found():
+    """
+    arrange: given a mocked openstack connection instance that returns no flavors.
+    act: when _determine_flavor is called.
+    assert: FlavorNotFoundError is raised.
+    """
+    mock_connection = MagicMock()
+    mock_connection.get_flavor.return_value = None
+    test_flavor_name = "test-flavor"
+
+    with pytest.raises(errors.FlavorNotFoundError) as exc:
+        openstack_builder._determine_flavor(conn=mock_connection, flavor_name=test_flavor_name)
+
+    assert f"Given flavor {test_flavor_name} not found." in str(exc)
+
+
 def test__determine_flavor_no_flavor():
     """
     arrange: given a mocked openstack connection instance that returns no flavors.
@@ -273,13 +289,32 @@ def test__determine_flavor(flavors: typing.Any, name: str | None, expected_flavo
     act: when _determine_flavor is called.
     assert: the smallest matching flavor is selected.
     """
+    mock_flavor = MagicMock()
+    mock_flavor.id = expected_flavor_id
     mock_connection = MagicMock()
+    mock_connection.get_flavor = MagicMock(return_value=mock_flavor)
     mock_connection.list_flavors.return_value = flavors
 
     assert (
         openstack_builder._determine_flavor(conn=mock_connection, flavor_name=name)
         == expected_flavor_id
     )
+
+
+def test__determine_network_no_network():
+    """
+    arrange: given a mock get_network() command that returns no networks.
+    act: when _determine_network is called.
+    assert: NetworkNotFoundError error is raised.
+    """
+    mock_connection = MagicMock()
+    mock_connection.get_network.return_value = None
+    test_network_name = "test-network-name"
+
+    with pytest.raises(errors.NetworkNotFoundError) as exc:
+        openstack_builder._determine_network(conn=mock_connection, network_name=test_network_name)
+
+    assert f"Given network {test_network_name} not found." in str(exc)
 
 
 def test__determine_network_no_subnet():
@@ -350,7 +385,10 @@ def test__determine_network(network_name: str | None):
     act: when _determine_network is called.
     assert: corresponding network is returned.
     """
+    mock_network = MagicMock()
+    mock_network.id = "test-network-id"
     mock_connection = MagicMock()
+    mock_connection.get_network = MagicMock(return_value=mock_network)
     subnet = Subnet("test-subnet-id")
     mock_connection.list_networks.return_value = [
         Network("test-network-not-target", "test-network-not-target-id", []),
@@ -699,19 +737,46 @@ def test__get_ssh_connection_ssh(monkeypatch: pytest.MonkeyPatch):
         pytest.param("saving", id="Saving status"),
     ],
 )
-def test__wait_for_snapshot_complete_non_active(image_status: str):
+def test__wait_for_snapshot_complete_non_active(
+    monkeypatch: pytest.MonkeyPatch, image_status: str
+):
     """
     arrange: given a mocked get_image function that returns an image with parametrized status.
     act: when _wait_for_snapshot_complete is called.
-    assert: RetryError is raised.
+    assert: TimeoutError is raised.
     """
-    # patch tenacity retry to speed up testing
-    openstack_builder._wait_for_snapshot_complete.retry.wait = tenacity.wait_none()
-    openstack_builder._wait_for_snapshot_complete.retry.stop = tenacity.stop_after_attempt(1)
+    monkeypatch.setattr(openstack_builder.time, "sleep", MagicMock())
     connection_mock = MagicMock()
     image_mock = MagicMock()
     image_mock.status = image_status
     connection_mock.get_image.return_value = image_mock
 
-    with pytest.raises(tenacity.RetryError):
+    with pytest.raises(TimeoutError):
         openstack_builder._wait_for_snapshot_complete(conn=connection_mock, image=MagicMock())
+
+
+@pytest.mark.parametrize(
+    "num_not_active",
+    [
+        pytest.param(0, id="active right away"),
+        pytest.param(10, id="active after 10 tries"),
+    ],
+)
+def test__wait_for_snapshot_complete(monkeypatch: pytest.MonkeyPatch, num_not_active: int):
+    """
+    arrange: given a mocked get_image function that returns an image with active status.
+    act: when _wait_for_snapshot_complete is called.
+    assert: no errors are raised.
+    """
+    monkeypatch.setattr(openstack_builder.time, "sleep", MagicMock())
+    connection_mock = MagicMock()
+    not_active_mock = MagicMock()
+    not_active_mock.status = "saving"
+    image_mock = MagicMock()
+    image_mock.status = "active"
+    connection_mock.get_image.side_effect = [*[not_active_mock] * num_not_active, image_mock]
+
+    assert (
+        openstack_builder._wait_for_snapshot_complete(conn=connection_mock, image=MagicMock())
+        is None
+    )

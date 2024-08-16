@@ -96,7 +96,6 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     ),
 )
 @click.option(
-    "-r",
     "--runner-version",
     default="",
     help=(

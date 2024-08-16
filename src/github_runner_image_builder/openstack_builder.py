@@ -7,6 +7,7 @@ import dataclasses
 import logging
 import pathlib
 import shutil
+import time
 
 import fabric
 import jinja2
@@ -45,6 +46,8 @@ BUILDER_KEY_PATH = pathlib.Path("/home/ubuntu/.ssh/builder_key")
 SHARED_SECURITY_GROUP_NAME = "github-runner-image-builder-v1"
 IMAGE_SNAPSHOT_NAME = "github-runner-image-builder-snapshot-v0"
 
+CREATE_SERVER_TIMEOUT = 5 * 60  # seconds
+
 MIN_CPU = 2
 MIN_RAM = 8192  # M
 MIN_DISK = 30  # G
@@ -66,20 +69,17 @@ def determine_cloud(cloud_name: str | None = None) -> str:
     if cloud_name:
         return cloud_name
     logger.info("Determning cloud to use.")
-    clouds_yaml_path: pathlib.Path | None = None
-    for path in CLOUD_YAML_PATHS:
-        if path.exists():
-            clouds_yaml_path = path
-            break
-    if not clouds_yaml_path:
+    try:
+        clouds_yaml_path = next(path for path in CLOUD_YAML_PATHS if path.exists())
+    except StopIteration as exc:
         raise github_runner_image_builder.errors.CloudsYAMLError(
             "Unable to determine cloud to use from clouds.yaml files. "
             "Please check that clouds.yaml exists."
-        )
+        ) from exc
     try:
         clouds_yaml = yaml.safe_load(clouds_yaml_path.read_text(encoding="utf-8"))
         cloud: str = list(clouds_yaml["clouds"].keys())[0]
-    except (TypeError, yaml.error.YAMLError, KeyError) as exc:
+    except (TypeError, yaml.error.YAMLError, KeyError, IndexError) as exc:
         raise github_runner_image_builder.errors.CloudsYAMLError("Invalid clouds.yaml.") from exc
     return cloud
 
@@ -219,7 +219,7 @@ def run(
     Returns:
         The Openstack snapshot image ID.
     """
-    installation_script = _generate_cloud_init_script(
+    cloud_init_script = _generate_cloud_init_script(
         arch=arch, base=base, runner_version=runner_version, proxy=proxy
     )
     with openstack.connect(cloud=cloud_config.cloud_name) as conn:
@@ -234,9 +234,9 @@ def run(
             flavor=flavor,
             network=network,
             security_groups=[SHARED_SECURITY_GROUP_NAME],
-            userdata=installation_script,
+            userdata=cloud_init_script,
             auto_ip=False,
-            timeout=5 * 60,
+            timeout=CREATE_SERVER_TIMEOUT,
             wait=True,
         )
         logger.info("Launched builder, waiting for cloud-init to complete: %s.", builder.id)
@@ -263,11 +263,15 @@ def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | 
     Returns:
         The flavor ID to use for launching builder VM.
     """
+    if flavor_name:
+        if not (flavor := conn.get_flavor(name_or_id=flavor_name)):
+            raise github_runner_image_builder.errors.FlavorNotFoundError(
+                f"Given flavor {flavor_name} not found."
+            )
+        return flavor.id
     flavors: list[openstack.compute.v2.flavor.Flavor] = conn.list_flavors()
     flavors = sorted(flavors, key=lambda flavor: (flavor.vcpus, flavor.ram, flavor.disk))
     for flavor in flavors:
-        if flavor_name == flavor.name:
-            return flavor.id
         if flavor.vcpus >= MIN_CPU and flavor.ram >= MIN_RAM and flavor.disk >= MIN_DISK:
             return flavor.id
     raise github_runner_image_builder.errors.FlavorNotFoundError("No suitable flavor found.")
@@ -286,15 +290,19 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
     Returns:
         The network to use for launching builder VM.
     """
+    if network_name:
+        if not (network := conn.get_network(name_or_id=network_name)):
+            raise github_runner_image_builder.errors.NetworkNotFoundError(
+                f"Given network {network_name} not found."
+            )
+        return network.id
     networks: list[openstack.network.v2.network.Network] = conn.list_networks()
-    # Only a single valid subnet should exist per environment (PS5/6).
+    # Only a single valid subnet should exist per environment.
     subnets: list[openstack.network.v2.subnet.Subnet] = conn.list_subnets()
     if not subnets:
         raise github_runner_image_builder.errors.NetworkNotFoundError("No valid subnets found.")
     subnet = subnets[0]
     for network in networks:
-        if network_name == network.name:
-            return network.id
         if subnet.id in network.subnet_ids:
             return network.id
     raise github_runner_image_builder.errors.NetworkNotFoundError("No suitable network found.")
@@ -369,7 +377,7 @@ def _wait_for_cloud_init_complete(
         Whether the cloud init is complete. Used for tenacity retry to pick up return value.
     """
     ssh_connection = _get_ssh_connection(conn=conn, server=server, ssh_key=ssh_key)
-    result: fabric.Result | None = ssh_connection.run("cloud-init status --wait", timeout=60 * 5)
+    result: fabric.Result | None = ssh_connection.run("cloud-init status --wait", timeout=60 * 10)
     if not result or not result.ok:
         raise github_runner_image_builder.errors.CloudInitFailError("Invalid cloud-init status")
     return "status: done" in result.stdout
@@ -442,21 +450,23 @@ def _get_ssh_connection(
     )
 
 
-@tenacity.retry(
-    wait=tenacity.wait_exponential(multiplier=2, max=30),
-    retry=tenacity.retry_if_result(lambda result: not result),
-)
 def _wait_for_snapshot_complete(
     conn: openstack.connection.Connection, image: openstack.image.v2.image.Image
-) -> bool:
+) -> None:
     """Wait until snapshot has been completed and is ready to be used.
 
     Args:
         conn: The Openstach connection instance.
         image: The OpenStack server snapshot image to check is complete.
 
-    Returns:
-        Whether the cloud init is complete. Used for tenacity retry to pick up return value.
+    Raises:
+        TimeoutError: if the image snapshot took too long to complete.
     """
+    for _ in range(10):
+        image = conn.get_image(name_or_id=image.id)
+        if image.status == "active":
+            return
+        time.sleep(60)
     image = conn.get_image(name_or_id=image.id)
-    return image.status == "active"
+    if not image.status == "active":
+        raise TimeoutError(f"Timed out waiting for snapshot to be active, {image.id}.")
