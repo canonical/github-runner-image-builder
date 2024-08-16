@@ -351,5 +351,5 @@ def cli_run_fixture(
     openstack_image: Image
     for openstack_image in openstack_connection.search_images(openstack_image_name):
         openstack_connection.delete_image(openstack_image.id)
-    for imge_file in glob.glob("*.img"):
-        subprocess.call(["/usr/bin/sudo", "rm", imge_file])
+    for image_file in glob.glob("*.img"):
+        Path(image_file).unlink(missing_ok=True)
