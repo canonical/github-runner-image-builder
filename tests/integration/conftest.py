@@ -2,31 +2,23 @@
 # See LICENSE file for licensing details.
 
 """Fixtures for github runner image builder integration tests."""
-import glob
 import logging
 import platform
 import secrets
 import string
-
-# Subprocess is used to run the application.
-import subprocess  # nosec: B404
 import typing
 from pathlib import Path
 
 import openstack
 import openstack.exceptions
 import pytest
-import pytest_asyncio
 import yaml
-from fabric.connection import Connection as SSHConnection
 from openstack.compute.v2.keypair import Keypair
-from openstack.compute.v2.server import Server
 from openstack.connection import Connection
-from openstack.image.v2.image import Image
 from openstack.network.v2.security_group import SecurityGroup
 
 from github_runner_image_builder import config
-from tests.integration import helpers, types
+from tests.integration import types
 
 logger = logging.getLogger(__name__)
 
@@ -250,106 +242,9 @@ def openstack_security_group_fixture(openstack_connection: Connection):
     openstack_connection.delete_security_group(security_group_name)
 
 
-@pytest_asyncio.fixture(scope="module", name="openstack_server")
-async def openstack_server_fixture(
-    openstack_metadata: types.OpenstackMeta,
-    openstack_security_group: SecurityGroup,
-    openstack_image_name: str,
-    test_id: str,
-):
-    """A testing openstack instance."""
-    server_name = f"test-server-{test_id}"
-    images: list[Image] = openstack_metadata.connection.search_images(openstack_image_name)
-    assert images, "No built image found."
-    try:
-        server: Server = openstack_metadata.connection.create_server(
-            name=server_name,
-            image=images[0],
-            key_name=openstack_metadata.ssh_key.keypair.name,
-            auto_ip=False,
-            # these are pre-configured values on private endpoint.
-            security_groups=[openstack_security_group.name],
-            flavor=openstack_metadata.flavor,
-            network=openstack_metadata.network,
-            timeout=60 * 20,
-            wait=True,
-        )
-        yield server
-    except openstack.exceptions.SDKException:
-        server = openstack_metadata.connection.get_server(name_or_id=server_name)
-        logger.exception("Failed to create server, %s", dict(server))
-    finally:
-        openstack_metadata.connection.delete_server(server_name, wait=True)
-        for image in images:
-            openstack_metadata.connection.delete_image(image.id)
-
-
 @pytest.fixture(scope="module", name="proxy")
 def proxy_fixture(pytestconfig: pytest.Config) -> types.ProxyConfig:
     """The environment proxy to pass on to the charm/testing model."""
     proxy = pytestconfig.getoption("--proxy")
     no_proxy = pytestconfig.getoption("--no-proxy")
     return types.ProxyConfig(http=proxy, https=proxy, no_proxy=no_proxy)
-
-
-@pytest_asyncio.fixture(scope="module", name="ssh_connection")
-async def ssh_connection_fixture(
-    openstack_server: Server,
-    proxy: types.ProxyConfig,
-    openstack_metadata: types.OpenstackMeta,
-    dockerhub_mirror: str | None,
-) -> SSHConnection:
-    """The openstack server ssh connection fixture."""
-    logger.info("Setting up SSH connection.")
-    ssh_connection = await helpers.wait_for_valid_connection(
-        connection=openstack_metadata.connection,
-        server_name=openstack_server.name,
-        network=openstack_metadata.network,
-        ssh_key=openstack_metadata.ssh_key.private_key,
-        proxy=proxy,
-        dockerhub_mirror=dockerhub_mirror,
-    )
-
-    return ssh_connection
-
-
-@pytest.fixture(scope="module", name="cli_run")
-def cli_run_fixture(
-    image: str,
-    cloud_name: str,
-    callback_script: Path,
-    openstack_connection: Connection,
-    openstack_image_name: str,
-):
-    """A CLI run.
-
-    This fixture assumes pipx is installed in the system and the github-runner-image-builder has
-    been installed using pipx. See testenv:integration section of tox.ini.
-    """
-    # This is a locally built application - we can trust it.
-    subprocess.check_call(  # nosec: B603
-        ["/usr/bin/sudo", Path.home() / ".local/bin/github-runner-image-builder", "init"]
-    )
-    subprocess.check_call(  # nosec: B603
-        [
-            "/usr/bin/sudo",
-            Path.home() / ".local/bin/github-runner-image-builder",
-            "run",
-            cloud_name,
-            openstack_image_name,
-            "--base-image",
-            image,
-            "--keep-revisions",
-            "2",
-            "--callback-script",
-            str(callback_script.absolute()),
-        ]
-    )
-
-    yield
-
-    openstack_image: Image
-    for openstack_image in openstack_connection.search_images(openstack_image_name):
-        openstack_connection.delete_image(openstack_image.id)
-    for image_file in glob.glob("*.img"):
-        Path(image_file).unlink(missing_ok=True)

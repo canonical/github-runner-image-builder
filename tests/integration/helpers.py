@@ -14,16 +14,19 @@ from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from string import Template
-from typing import Awaitable, Callable, ParamSpec, Protocol, TypeVar, cast
+from typing import Awaitable, Callable, Generator, ParamSpec, Protocol, TypeVar, cast
 
+import openstack.exceptions
 from fabric import Connection as SSHConnection
 from fabric import Result
 from invoke.exceptions import UnexpectedExit
+from openstack.compute.v2.image import Image as OpenstackImage
 from openstack.compute.v2.server import Server
 from openstack.connection import Connection
+from openstack.network.v2.security_group import SecurityGroup
 from paramiko.ssh_exception import NoValidConnectionsError, SSHException
 from pylxd import Client
-from pylxd.models.image import Image
+from pylxd.models.image import Image as LXDImage
 from pylxd.models.instance import Instance, InstanceState
 from requests_toolbelt import MultipartEncoder
 
@@ -75,7 +78,9 @@ async def wait_for(
     raise TimeoutError()
 
 
-def create_lxd_vm_image(lxd_client: Client, img_path: Path, image: str, tmp_path: Path) -> Image:
+def create_lxd_vm_image(
+    lxd_client: Client, img_path: Path, image: str, tmp_path: Path
+) -> LXDImage:
     """Create LXD VM image.
 
     1. Creates the metadata.tar.gz file with the corresponding Ubuntu OS image and a pre-defined
@@ -140,7 +145,7 @@ def _post_vm_img(
     image_data: bytes,
     metadata: bytes | None = None,
     public: bool = False,
-) -> Image:
+) -> LXDImage:
     """Create an LXD VM image.
 
     Args:
@@ -174,7 +179,7 @@ def _post_vm_img(
 
     response = client.api.images.post(data=data, headers=headers)
     operation = client.operations.wait_for_operation(response.json()["operation"])
-    return Image(client, fingerprint=operation.metadata["fingerprint"])
+    return LXDImage(client, fingerprint=operation.metadata["fingerprint"])
 
 
 async def create_lxd_instance(lxd_client: Client, image: str) -> Instance:
@@ -452,3 +457,41 @@ def has_name(instance_to_check: NameProtocol, name: str):
         Whether the object has given name.
     """
     return instance_to_check.name == name
+
+
+def create_openstack_server(
+    openstack_metadata: types.OpenstackMeta,
+    server_name: str,
+    image: OpenstackImage,
+    security_group: SecurityGroup,
+) -> Generator[Server, None, None]:
+    """Create OpenStack server.
+
+    Args:
+        openstack_metadata: Wrapped openstack metadata.
+        server_name: The server name to create as.
+        image: Image used to create the server.
+        security_group: Security group in which the instance belongs to.
+
+    Yields:
+        The Openstack server instance.
+    """
+    try:
+        server: Server = openstack_metadata.connection.create_server(
+            name=server_name,
+            image=image,
+            key_name=openstack_metadata.ssh_key.keypair.name,
+            auto_ip=False,
+            # these are pre-configured values on private endpoint.
+            security_groups=[security_group.name],
+            flavor=openstack_metadata.flavor,
+            network=openstack_metadata.network,
+            timeout=60 * 20,
+            wait=True,
+        )
+        yield server
+    except openstack.exceptions.SDKException:
+        server = openstack_metadata.connection.get_server(name_or_id=server_name)
+        logger.exception("Failed to create server, %s", dict(server))
+    finally:
+        openstack_metadata.connection.delete_server(server_name, wait=True)
