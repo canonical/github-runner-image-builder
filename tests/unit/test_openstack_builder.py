@@ -583,6 +583,26 @@ def test__wait_for_cloud_init_complete(monkeypatch: pytest.MonkeyPatch):
     )
 
 
+def test__create_and_ensure_single_image_snapshot():
+    """
+    arrange: given mocked existing images.
+    act: when _create_and_ensure_single_image_snapshot is called.
+    assert: existing image deletion calls are made and snapshot call is made.
+    """
+    mock_existing_image = MagicMock()
+    mock_existing_image.name = openstack_builder.IMAGE_SNAPSHOT_NAME
+    mock_existing_image.id = "testid"
+    mock_connection = MagicMock()
+    mock_connection.list_images.return_value = [mock_existing_image]
+
+    openstack_builder._create_and_ensure_single_image_snapshot(
+        conn=mock_connection, server=MagicMock()
+    )
+
+    mock_connection.delete_image.assert_called_with(name_or_id=mock_existing_image.id)
+    mock_connection.create_image_snapshot.assert_called()
+
+
 def test__get_ssh_connection_no_networks():
     """
     arrange: given a mocked connection.get_server function that returns server with no addresses.

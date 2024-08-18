@@ -13,6 +13,7 @@ import fabric
 import jinja2
 import openstack
 import openstack.compute.v2.flavor
+import openstack.compute.v2.image
 import openstack.compute.v2.keypair
 import openstack.compute.v2.server
 import openstack.connection
@@ -241,9 +242,7 @@ def run(
         )
         logger.info("Launched builder, waiting for cloud-init to complete: %s.", builder.id)
         _wait_for_cloud_init_complete(conn=conn, server=builder, ssh_key=BUILDER_KEY_PATH)
-        image: openstack.image.v2.image.Image = conn.create_image_snapshot(
-            name=IMAGE_SNAPSHOT_NAME, server=builder.id
-        )
+        image = _create_and_ensure_single_image_snapshot(conn=conn, server=builder)
         logger.info("Requested snapshot, waiting for snapshot to complete: %s.", image.id)
         _wait_for_snapshot_complete(conn=conn, image=image)
         conn.delete_server(name_or_id=builder.id, wait=True, timeout=5 * 60)
@@ -385,6 +384,30 @@ def _wait_for_cloud_init_complete(
     if not result or not result.ok:
         raise github_runner_image_builder.errors.CloudInitFailError("Invalid cloud-init status")
     return "status: done" in result.stdout
+
+
+def _create_and_ensure_single_image_snapshot(
+    conn: openstack.connection.Connection,
+    server: openstack.compute.v2.server.Server,
+) -> openstack.image.v2.image.Image:
+    """Create a snapshot of a running server.
+
+    Args:
+        conn: The Openstach connection instance.
+        server: The OpenStack server instance to snapshot.
+
+    Returns:
+        The snapshot image.
+    """
+    existing_images = filter(
+        lambda image: image.name == IMAGE_SNAPSHOT_NAME, conn.list_images(IMAGE_SNAPSHOT_NAME)
+    )
+    image: openstack.image.v2.image.Image = conn.create_image_snapshot(
+        name=IMAGE_SNAPSHOT_NAME, server=server.id, wait=True
+    )
+    for image in existing_images:
+        conn.delete_image(name_or_id=image.id)
+    return image
 
 
 @tenacity.retry(wait=tenacity.wait_exponential(multiplier=2, max=30), reraise=True)
