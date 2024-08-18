@@ -399,14 +399,13 @@ def _create_and_ensure_single_image_snapshot(
     Returns:
         The snapshot image.
     """
-    existing_images = filter(
-        lambda image: image.name == IMAGE_SNAPSHOT_NAME, conn.list_images(IMAGE_SNAPSHOT_NAME)
-    )
+    images = conn.list_images(IMAGE_SNAPSHOT_NAME)
+    existing_images = filter(lambda image: image.name == IMAGE_SNAPSHOT_NAME, images)
     image: openstack.image.v2.image.Image = conn.create_image_snapshot(
         name=IMAGE_SNAPSHOT_NAME, server=server.id, wait=True
     )
-    for image in existing_images:
-        conn.delete_image(name_or_id=image.id)
+    for existing_image in existing_images:
+        conn.delete_image(name_or_id=existing_image.id)
     return image
 
 
