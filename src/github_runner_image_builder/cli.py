@@ -171,10 +171,10 @@ def run(  # pylint: disable=too-many-arguments
             arch=arch,
             base=base,
             cloud_config=openstack_builder.CloudConfig(
-                cloud_name=cloud_name, flavor=flavor, network=network
+                cloud_name=cloud_name, flavor=flavor, network=network, proxy=proxy
             ),
             runner_version=runner_version,
-            proxy=proxy,
+            keep_revisions=keep_revisions,
         )
     if callback_script:
         # The callback script is a user trusted script.

@@ -180,6 +180,7 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         openstack_builder, "_determine_network", (determine_network_mock := MagicMock())
     )
+    monkeypatch.setattr(store, "create_snapshot", create_image_snapshot := MagicMock())
     connection_enter_mock = MagicMock()
     connection_mock = MagicMock()
     connection_enter_mock.__enter__.return_value = connection_mock
@@ -200,7 +201,7 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
         base=MagicMock(),
         cloud_config=MagicMock(),
         runner_version=MagicMock(),
-        proxy=MagicMock(),
+        keep_revisions=5,
     )
 
     generate_cloud_init_mock.assert_called()
@@ -208,8 +209,8 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
     determine_network_mock.assert_called()
     wait_cloud_init_mock.assert_called()
     wait_snapshot_mock.assert_called()
+    create_image_snapshot.assert_called()
     connection_mock.create_server.assert_called()
-    connection_mock.create_image_snapshot.assert_called()
     connection_mock.delete_server.assert_called()
 
 
@@ -581,26 +582,6 @@ def test__wait_for_cloud_init_complete(monkeypatch: pytest.MonkeyPatch):
     assert openstack_builder._wait_for_cloud_init_complete(
         conn=mock_connection, server=MagicMock(), ssh_key=MagicMock()
     )
-
-
-def test__create_and_ensure_single_image_snapshot():
-    """
-    arrange: given mocked existing images.
-    act: when _create_and_ensure_single_image_snapshot is called.
-    assert: existing image deletion calls are made and snapshot call is made.
-    """
-    mock_existing_image = MagicMock()
-    mock_existing_image.name = openstack_builder.IMAGE_SNAPSHOT_NAME
-    mock_existing_image.id = "testid"
-    mock_connection = MagicMock()
-    mock_connection.list_images.return_value = [mock_existing_image]
-
-    openstack_builder._create_and_ensure_single_image_snapshot(
-        conn=mock_connection, server=MagicMock()
-    )
-
-    mock_connection.delete_image.assert_called_with(name_or_id=mock_existing_image.id)
-    mock_connection.create_image_snapshot.assert_called()
 
 
 def test__get_ssh_connection_no_networks():

@@ -27,6 +27,46 @@ def mock_connection_fixture(monkeypatch: pytest.MonkeyPatch) -> Connection:
     return connection_context_mock  # noqa: DCO030
 
 
+def test_create_image_snapshot_error(mock_connection: MagicMock):
+    """
+    arrange: given mock connection that raises an error.
+    act: when create_image_snapshot is called.
+    assert: UploadImageError is raised.
+    """
+    mock_connection.create_image_snapshot.side_effect = (
+        openstack.exceptions.OpenStackCloudException()
+    )
+
+    with pytest.raises(store.UploadImageError):
+        store.create_snapshot(
+            arch=MagicMock(),
+            cloud_name=MagicMock(),
+            image_name=MagicMock(),
+            server=MagicMock(),
+            keep_revisions=3,
+        )
+
+
+def test_create_image_snapshot(monkeypatch: pytest.MonkeyPatch, mock_connection: MagicMock):
+    """
+    arrange: given mock connection.
+    act: when create_image_snapshot is called.
+    assert: create_image_snapshot is called and prune image functions are called.
+    """
+    monkeypatch.setattr(store, "_prune_old_images", prune_images_mock := MagicMock())
+
+    store.create_snapshot(
+        arch=MagicMock(),
+        cloud_name=MagicMock(),
+        image_name=MagicMock(),
+        server=MagicMock(),
+        keep_revisions=3,
+    )
+
+    mock_connection.create_image_snapshot.assert_called()
+    prune_images_mock.assert_called_once()
+
+
 def test__get_sorted_images_by_created_at_error(mock_connection: MagicMock):
     """
     arrange: given a mocked openstack connection that returns images in non-sorted order.

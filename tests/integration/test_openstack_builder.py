@@ -91,9 +91,10 @@ def cli_run_fixture(
             cloud_name=cloud_name,
             flavor=openstack_metadata.flavor,
             network=openstack_metadata.network,
+            proxy=proxy.http,
         ),
         runner_version="",
-        proxy=proxy.http,
+        keep_revisions=1,
     )
 
 
