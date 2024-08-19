@@ -39,7 +39,6 @@ def test_create_image_snapshot_error(mock_connection: MagicMock):
 
     with pytest.raises(store.UploadImageError):
         store.create_snapshot(
-            arch=MagicMock(),
             cloud_name=MagicMock(),
             image_name=MagicMock(),
             server=MagicMock(),
@@ -56,7 +55,6 @@ def test_create_image_snapshot(monkeypatch: pytest.MonkeyPatch, mock_connection:
     monkeypatch.setattr(store, "_prune_old_images", prune_images_mock := MagicMock())
 
     store.create_snapshot(
-        arch=MagicMock(),
         cloud_name=MagicMock(),
         image_name=MagicMock(),
         server=MagicMock(),

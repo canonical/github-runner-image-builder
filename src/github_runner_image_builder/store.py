@@ -20,12 +20,11 @@ logger = logging.getLogger(__name__)
 
 
 def create_snapshot(
-    arch: Arch, cloud_name: str, image_name: str, server: Server, keep_revisions: int
+    cloud_name: str, image_name: str, server: Server, keep_revisions: int
 ) -> Image:
     """Upload image to openstack glance.
 
     Args:
-        arch: The image architecture.
         cloud_name: The Openstack cloud to use from clouds.yaml.
         image_name: The image name to upload as.
         server: The running OpenStack server to snapshot.
