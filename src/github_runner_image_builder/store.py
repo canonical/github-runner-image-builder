@@ -43,7 +43,6 @@ def create_snapshot(
                 name=image_name,
                 server=server.id,
                 wait=True,
-                properties={"architecture": arch.to_openstack()},
             )
             _prune_old_images(
                 connection=connection, image_name=image_name, num_revisions=keep_revisions
