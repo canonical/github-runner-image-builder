@@ -77,7 +77,6 @@ def upload_image(
             image: Image = connection.create_image(
                 name=image_name,
                 filename=str(image_path),
-                allow_duplicates=True,
                 properties={"architecture": arch.to_openstack()},
                 wait=True,
             )
