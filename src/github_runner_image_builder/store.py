@@ -43,7 +43,6 @@ def create_snapshot(
                 name=image_name,
                 server=server.id,
                 wait=True,
-                allow_duplicates=True,
                 properties={"architecture": arch.to_openstack()},
             )
             _prune_old_images(
@@ -78,6 +77,7 @@ def upload_image(
                 name=image_name,
                 filename=str(image_path),
                 properties={"architecture": arch.to_openstack()},
+                allow_duplicates=True,
                 wait=True,
             )
             _prune_old_images(
