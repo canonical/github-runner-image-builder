@@ -17,6 +17,7 @@ from string import Template
 from typing import Awaitable, Callable, Generator, ParamSpec, Protocol, TypeVar, cast
 
 import openstack.exceptions
+import tenacity
 from fabric import Connection as SSHConnection
 from fabric import Result
 from invoke.exceptions import UnexpectedExit
@@ -347,6 +348,9 @@ def _snap_ready(conn: SSHConnection) -> bool:
         return False
 
 
+@tenacity.retry(
+    wait=tenacity.wait_exponential(multiplier=2, max=30), stop=tenacity.stop_after_attempt(5)
+)
 def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None):
     """Use dockerhub mirror if provided.
 
