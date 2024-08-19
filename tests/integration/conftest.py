@@ -124,9 +124,9 @@ def private_endpoint_clouds_yaml_fixture(
 
 
 @pytest.fixture(scope="module", name="network_name")
-def network_name_fixture(pytestconfig: pytest.Config) -> str:
+def network_name_fixture(pytestconfig: pytest.Config, arch: config.Arch) -> str:
     """Network to use to spawn test instances under."""
-    if config.Arch.ARM64:
+    if arch == config.Arch.ARM64:
         network_name = pytestconfig.getoption("--openstack-network-name-arm64")
     else:
         network_name = pytestconfig.getoption("--openstack-network-name-amd64")
@@ -135,9 +135,9 @@ def network_name_fixture(pytestconfig: pytest.Config) -> str:
 
 
 @pytest.fixture(scope="module", name="flavor_name")
-def flavor_name_fixture(pytestconfig: pytest.Config) -> str:
+def flavor_name_fixture(pytestconfig: pytest.Config, arch: config.Arch) -> str:
     """Flavor to create testing instances with."""
-    if config.Arch.ARM64:
+    if arch == config.Arch.ARM64:
         flavor_name = pytestconfig.getoption("--openstack-flavor-name-arm64")
     else:
         flavor_name = pytestconfig.getoption("--openstack-flavor-name-amd64")
