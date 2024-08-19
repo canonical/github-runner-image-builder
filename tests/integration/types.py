@@ -36,7 +36,7 @@ class SSHKey(typing.NamedTuple):
     private_key: Path
 
 
-class PrivateEndpointConfigs(typing.TypedDict):
+class PrivateEndpointConfig(typing.TypedDict):
     """The Private endpoint configuration values.
 
     Attributes:
