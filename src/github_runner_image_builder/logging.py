@@ -16,7 +16,7 @@ def configure(log_level: str | int):
     """Configure the global log configurations."""
     LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
     log_handler = logging.handlers.WatchedFileHandler(filename=LOG_FILE_PATH, encoding="utf-8")
-    log_handler.setLevel(log_level.capitalize() if isinstance(log_level, str) else log_level)
+    log_handler.setLevel(log_level.upper() if isinstance(log_level, str) else log_level)
     error_log_handler = logging.handlers.WatchedFileHandler(
         filename=ERROR_LOG_FILE_PATH, encoding="utf-8"
     )
