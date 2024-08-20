@@ -204,6 +204,7 @@ def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
             logger.info("Installing GitHub runner.")
             _install_github_runner(arch=arch, version=runner_version)
     except ChrootBaseError as exc:
+        logger.exception("Error chrooting into %s", IMAGE_MOUNT_DIR)
         raise BuildImageError from exc
 
     logger.info("Disconnecting image to network block device.")
@@ -307,6 +308,7 @@ def _unmount_build_path() -> None:
         )
         logger.info("umount nbdp1 out: %s", output)
     except subprocess.SubprocessError as exc:
+        logger.exception("Unable to unmount build path")
         raise UnmountBuildPathError from exc
 
 
@@ -362,6 +364,7 @@ def _connect_image_to_network_block_device(image_path: Path) -> None:
         )
         raise ImageConnectError from exc
     except subprocess.SubprocessError as exc:
+        logger.exception("Error connecting to network block device.")
         raise ImageConnectError from exc
 
 
@@ -407,6 +410,7 @@ def _resize_mount_partitions() -> None:
         )
         raise ResizePartitionError from exc
     except subprocess.SubprocessError as exc:
+        logger.exception("Error running partition resize.")
         raise ResizePartitionError from exc
 
 
@@ -445,6 +449,7 @@ def _install_yq() -> None:
         )
         raise YQBuildError from exc
     except subprocess.SubprocessError as exc:
+        logger.exception("Error running install yq commands.")
         raise YQBuildError from exc
 
 
@@ -537,6 +542,7 @@ def _disable_unattended_upgrades() -> None:
         )
         raise UnattendedUpgradeDisableError from exc
     except subprocess.SubprocessError as exc:
+        logger.exception("Error running unattended upgrades disable commands.")
         raise UnattendedUpgradeDisableError from exc
 
 
@@ -578,6 +584,7 @@ def _configure_system_users() -> None:
         )
         raise SystemUserConfigurationError from exc
     except subprocess.SubprocessError as exc:
+        logger.exception("Error running system user configuration commands.")
         raise SystemUserConfigurationError from exc
 
 
@@ -602,6 +609,7 @@ def _configure_usr_local_bin() -> None:
         )
         raise PermissionConfigurationError from exc
     except subprocess.SubprocessError as exc:
+        logger.exception("Error running system user bin directory configuration commands.")
         raise PermissionConfigurationError from exc
 
 
@@ -630,6 +638,7 @@ def _install_yarn() -> None:
         )
         raise YarnInstallError from exc
     except subprocess.SubprocessError as exc:
+        logger.exception("Error running Yarn installation commands.")
         raise YarnInstallError from exc
 
 
@@ -646,6 +655,7 @@ def _install_github_runner(arch: Arch, version: str) -> None:
     try:
         version = _get_github_runner_version(version)
     except _FetchVersionError as exc:
+        logger.exception("Error fetching github runner version.")
         raise RunnerDownloadError("Failed to fetch latest GitHub runner version.") from exc
 
     try:
@@ -657,6 +667,7 @@ def _install_github_runner(arch: Arch, version: str) -> None:
         ) as tar_res:
             tar_bytes = tar_res.read()
     except urllib.error.URLError as exc:
+        logger.exception("Error downloading GitHub runner tar.gz.")
         raise RunnerDownloadError("Error downloading runner tar archive.") from exc
     ACTIONS_RUNNER_PATH.mkdir(parents=True, exist_ok=True)
     try:
@@ -664,6 +675,7 @@ def _install_github_runner(arch: Arch, version: str) -> None:
             # the tar file provided by GitHub can be trusted
             tar_file.extractall(path=ACTIONS_RUNNER_PATH)  # nosec: B202
     except tarfile.TarError as exc:
+        logger.exception("Error extracting GitHub runner tar.gz.")
         raise RunnerDownloadError("Error extracting runner tar archive.") from exc
     ubuntu_user = pwd.getpwnam(UBUNTU_USER)
     try:
@@ -677,7 +689,8 @@ def _install_github_runner(arch: Arch, version: str) -> None:
             timeout=60,
         )
     except subprocess.SubprocessError as exc:
-        raise RunnerDownloadError("Error changing github runner directory.") from exc
+        logger.exception("Error changing ownership of GitHub runner directory.")
+        raise RunnerDownloadError("Error changing GitHub runner directory.") from exc
 
 
 class _FetchVersionError(Exception):
@@ -751,4 +764,5 @@ def _compress_image(image: Path) -> None:
         )
         raise ImageCompressError from exc
     except subprocess.SubprocessError as exc:
+        logger.exception("Error running image compression command.")
         raise ImageCompressError from exc

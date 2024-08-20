@@ -83,6 +83,7 @@ def upload_image(
             )
             return image.id
         except openstack.exceptions.OpenStackCloudException as exc:
+            logger.exception("Failed to upload image.")
             raise UploadImageError from exc
 
 
@@ -106,6 +107,7 @@ def _prune_old_images(
     for image in images_to_prune:
         try:
             if not connection.delete_image(image.id, wait=True):
+                logger.exception("Failed to delete image %s:%s.", image.name, image.id)
                 raise OpenstackError(f"Failed to delete image: {image.id}")
         except openstack.exceptions.OpenStackCloudException as exc:
             raise OpenstackError from exc
@@ -146,6 +148,7 @@ def _get_sorted_images_by_created_at(
     try:
         images = cast(list[Image], connection.search_images(image_name))
     except openstack.exceptions.OpenStackCloudException as exc:
+        logger.exception("Failed to search images with name %s.", image_name)
         raise OpenstackError from exc
 
     return sorted(images, key=lambda image: image.created_at, reverse=True)

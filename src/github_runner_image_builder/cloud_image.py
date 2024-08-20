@@ -40,6 +40,7 @@ def download_and_validate_image(arch: Arch, base_image: BaseImage) -> Path:
     try:
         bin_arch = _get_supported_runner_arch(arch)
     except UnsupportedArchitectureError as exc:
+        logger.exception("Unsupported runner architecture")
         raise BaseImageDownloadError from exc
 
     image_path_str = f"{base_image.value}-server-cloudimg-{bin_arch}.img"
@@ -48,8 +49,10 @@ def download_and_validate_image(arch: Arch, base_image: BaseImage) -> Path:
     )
     shasums = _fetch_shasums(base_image=base_image)
     if image_path_str not in shasums:
+        logger.exception("Failed to validate SHASUM for cloud image (checksum not found).")
         raise BaseImageDownloadError("Corresponding checksum not found.")
     if not _validate_checksum(image_path, shasums[image_path_str]):
+        logger.exception("Failed to validate SHASUM for cloud image (invalid checksum).")
         raise BaseImageDownloadError("Invalid checksum.")
     return image_path
 
@@ -106,6 +109,7 @@ def _download_base_image(base_image: BaseImage, bin_arch: str, output_filename: 
             stream=True,
         )  # nosec: B310, B113
     except requests.exceptions.HTTPError as exc:
+        logger.exception("Failed to download base cloud image.")
         raise BaseImageDownloadError from exc
     with open(output_filename, "wb") as file:
         for chunk in request.iter_content(1024 * 1024):  # 1 MB chunks
@@ -134,6 +138,7 @@ def _fetch_shasums(base_image: BaseImage) -> dict[str, str]:
             timeout=60 * 5,
         )
     except requests.RequestException as exc:
+        logger.exception("Failed to download base cloud image SHA256SUMS file.")
         raise BaseImageDownloadError from exc
     # file consisting of lines <SHA256SUM> *<filename>
     shasum_contents = str(response.content, encoding="utf-8")

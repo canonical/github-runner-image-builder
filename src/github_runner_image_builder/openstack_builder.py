@@ -73,6 +73,7 @@ def determine_cloud(cloud_name: str | None = None) -> str:
     try:
         clouds_yaml_path = next(path for path in CLOUD_YAML_PATHS if path.exists())
     except StopIteration as exc:
+        logger.exception("Unable to determine ckoud to use from clouds.yaml files.")
         raise github_runner_image_builder.errors.CloudsYAMLError(
             "Unable to determine cloud to use from clouds.yaml files. "
             "Please check that clouds.yaml exists."
@@ -81,6 +82,7 @@ def determine_cloud(cloud_name: str | None = None) -> str:
         clouds_yaml = yaml.safe_load(clouds_yaml_path.read_text(encoding="utf-8"))
         cloud: str = list(clouds_yaml["clouds"].keys())[0]
     except (TypeError, yaml.error.YAMLError, KeyError, IndexError) as exc:
+        logger.exception("Invalid clouds.yaml contents.")
         raise github_runner_image_builder.errors.CloudsYAMLError("Invalid clouds.yaml.") from exc
     return cloud
 
@@ -272,11 +274,13 @@ def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | 
     """
     if flavor_name:
         if not (flavor := conn.get_flavor(name_or_id=flavor_name)):
+            logger.error("Given flavor %s not found.", flavor_name)
             raise github_runner_image_builder.errors.FlavorNotFoundError(
                 f"Given flavor {flavor_name} not found."
             )
         logger.info("Flavor found, %s", flavor.name)
         if not (flavor.vcpus >= MIN_CPU and flavor.ram >= MIN_RAM and flavor.disk >= MIN_DISK):
+            logger.error("Given flavor %s does not meet the minimum requirements.", flavor_name)
             raise github_runner_image_builder.errors.FlavorRequirementsNotMetError(
                 f"Provided flavor {flavor_name} does not meet the minimum requirements."
                 f"Required: CPU: {MIN_CPU} MEM: {MIN_RAM}M DISK: {MIN_DISK}G. "
@@ -307,6 +311,7 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
     """
     if network_name:
         if not (network := conn.get_network(name_or_id=network_name)):
+            logger.error("Given network %s not found.", network_name)
             raise github_runner_image_builder.errors.NetworkNotFoundError(
                 f"Given network {network_name} not found."
             )
@@ -316,6 +321,7 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
     # Only a single valid subnet should exist per environment.
     subnets: list[openstack.network.v2.subnet.Subnet] = conn.list_subnets()
     if not subnets:
+        logger.error("No vaild subnets found.")
         raise github_runner_image_builder.errors.NetworkNotFoundError("No valid subnets found.")
     subnet = subnets[0]
     for network in networks:
@@ -396,6 +402,7 @@ def _wait_for_cloud_init_complete(
     ssh_connection = _get_ssh_connection(conn=conn, server=server, ssh_key=ssh_key)
     result: fabric.Result | None = ssh_connection.run("cloud-init status --wait", timeout=60 * 10)
     if not result or not result.ok:
+        logger.error("cloud-init status command failure, exit code: %s.", result.return_code)
         raise github_runner_image_builder.errors.CloudInitFailError("Invalid cloud-init status")
     return "status: done" in result.stdout
 
@@ -422,6 +429,7 @@ def _get_ssh_connection(
     server = conn.get_server(name_or_id=server.id)
     network_address_list = server.addresses.values()
     if not network_address_list:
+        logger.error("Server address not found, %s.", server.name)
         raise github_runner_image_builder.errors.AddressNotFoundError(
             f"No addresses found for OpenStack server {server.name}"
         )
@@ -461,6 +469,7 @@ def _get_ssh_connection(
                 exc_info=True,
             )
             continue
+    logger.error("Server SSH address not found, %s.", server.name)
     raise github_runner_image_builder.errors.AddressNotFoundError(
         f"No connectable SSH addresses found, server: {server.name}, "
         f"addresses: {server_addresses}"
@@ -486,4 +495,5 @@ def _wait_for_snapshot_complete(
         time.sleep(60)
     image = conn.get_image(name_or_id=image.id)
     if not image.status == "active":
+        logger.error("Timed out waiting for snapshot to be active, %s.", image.name)
         raise TimeoutError(f"Timed out waiting for snapshot to be active, {image.id}.")
