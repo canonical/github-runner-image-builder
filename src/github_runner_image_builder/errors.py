@@ -105,6 +105,10 @@ class FlavorNotFoundError(NotFoundError):
     """Represents an error with given OpenStack flavor not found."""
 
 
+class FlavorRequirementsNotMetError(NotFoundError):
+    """Represents an error with given OpenStack flavor not meeting the minimum requirements."""
+
+
 class NetworkNotFoundError(NotFoundError):
     """Represents an error with given OpenStack network not found."""
 

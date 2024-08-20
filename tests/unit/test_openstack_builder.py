@@ -263,8 +263,28 @@ class Flavor(typing.NamedTuple):
     ram: int
 
 
+def test__determine_flavor_min_requirements_not_met():
+    """
+    arrange: given a mocked openstack connection instance that returns flavors with matching name \
+        but not matching the minimum requirements.
+    act: when _determine_flavor is called with a name.
+    assert: FlavorRequirementsNotMetError is raised.
+    """
+    mock_connection = MagicMock()
+    mock_connection.get_flavor = MagicMock(
+        return_value=(
+            test_flavor := Flavor(name="test-flavor", id="test-id", vcpus=2, disk=2, ram=2)
+        )
+    )
+
+    with pytest.raises(errors.FlavorRequirementsNotMetError) as exc:
+        openstack_builder._determine_flavor(conn=mock_connection, flavor_name=test_flavor.name)
+
+    assert "does not meet the minimum requirements" in str(exc)
+
+
 @pytest.mark.parametrize(
-    "flavors, name, expected_flavor_id",
+    "flavors, name, expected_flavor",
     [
         pytest.param(
             (
@@ -273,32 +293,32 @@ class Flavor(typing.NamedTuple):
                 Flavor("test-flavor-2", "2", 8, 80, 16000),
             ),
             None,
-            "2",
+            Flavor("test-flavor-2", "2", 2, 30, 8192),
             id="min flavor",
         ),
         pytest.param(
             (Flavor("test-flavor-1", "1", 1, 10, 8192), Flavor("test-flavor-2", "2", 4, 30, 8192)),
             "test-flavor-2",
-            "2",
+            Flavor("test-flavor-2", "2", 4, 30, 8192),
             id="matching name",
         ),
     ],
 )
-def test__determine_flavor(flavors: typing.Any, name: str | None, expected_flavor_id: str):
+def test__determine_flavor(
+    flavors: typing.Iterable[Flavor], name: str | None, expected_flavor: Flavor
+):
     """
     arrange: given a mocked openstack connection instance that returns parametrized flavors.
     act: when _determine_flavor is called.
     assert: the smallest matching flavor is selected.
     """
-    mock_flavor = MagicMock()
-    mock_flavor.id = expected_flavor_id
     mock_connection = MagicMock()
-    mock_connection.get_flavor = MagicMock(return_value=mock_flavor)
+    mock_connection.get_flavor = MagicMock(return_value=expected_flavor)
     mock_connection.list_flavors.return_value = flavors
 
     assert (
         openstack_builder._determine_flavor(conn=mock_connection, flavor_name=name)
-        == expected_flavor_id
+        == expected_flavor.id
     )
 
 

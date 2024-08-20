@@ -265,6 +265,7 @@ def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | 
 
     Raises:
         FlavorNotFoundError: If no suitable flavor was found.
+        FlavorRequirementsNotMetError: If the provided flavor does not meet minimum requirements.
 
     Returns:
         The flavor ID to use for launching builder VM.
@@ -275,6 +276,12 @@ def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | 
                 f"Given flavor {flavor_name} not found."
             )
         logger.info("Flavor found, %s", flavor.name)
+        if not (flavor.vcpus >= MIN_CPU and flavor.ram >= MIN_RAM and flavor.disk >= MIN_DISK):
+            raise github_runner_image_builder.errors.FlavorRequirementsNotMetError(
+                f"Provided flavor {flavor_name} does not meet the minimum requirements."
+                f"Required: CPU: {MIN_CPU} MEM: {MIN_RAM}M DISK: {MIN_DISK}G. "
+                f"Got: CPU: {flavor.vcpus} MEM: {flavor.ram}M DISK: {flavor.disk}G."
+            )
         return flavor.id
     flavors: list[openstack.compute.v2.flavor.Flavor] = conn.list_flavors()
     flavors = sorted(flavors, key=lambda flavor: (flavor.vcpus, flavor.ram, flavor.disk))
