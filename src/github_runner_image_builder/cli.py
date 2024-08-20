@@ -27,7 +27,11 @@ from github_runner_image_builder.config import (
 )
 @click.group()
 def main(log_level: str | int) -> None:
-    """Run entrypoint for Github runner image builder CLI."""
+    """Run entrypoint for Github runner image builder CLI.
+
+    Args:
+        log_level: The logging verbosity to apply.
+    """
     logging.configure(log_level=log_level)
 
 

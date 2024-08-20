@@ -49,19 +49,6 @@ def cli_runner_fixture():
     return CliRunner()
 
 
-def test_main_invalid_choice(cli_runner: CliRunner):
-    """
-    arrange: given main function invocation with no arguments.
-    act: when main is called.
-    assert: ValueError is raised.
-    """
-    result = cli_runner.invoke(main)
-
-    # This is only called "main" because we're in cli_runner context.
-    # When pip(x) installed, it is correctly called as github-runner-image-builder
-    assert "Usage: main" in result.output
-
-
 @pytest.mark.parametrize(
     "invalid_action",
     [

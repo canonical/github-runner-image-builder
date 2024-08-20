@@ -12,8 +12,12 @@ LOG_FILE_PATH = LOG_FILE_DIR / "info.log"
 ERROR_LOG_FILE_PATH = LOG_FILE_DIR / "error.log"
 
 
-def configure(log_level: str | int):
-    """Configure the global log configurations."""
+def configure(log_level: str | int) -> None:
+    """Configure the global log configurations.
+
+    Args:
+        log_level: The logging verbosity level to apply.
+    """
     LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
     log_handler = logging.handlers.WatchedFileHandler(filename=LOG_FILE_PATH, encoding="utf-8")
     log_handler.setLevel(log_level.upper() if isinstance(log_level, str) else log_level)

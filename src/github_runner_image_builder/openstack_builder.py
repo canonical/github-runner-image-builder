@@ -321,7 +321,7 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
     # Only a single valid subnet should exist per environment.
     subnets: list[openstack.network.v2.subnet.Subnet] = conn.list_subnets()
     if not subnets:
-        logger.error("No vaild subnets found.")
+        logger.error("No valid subnets found.")
         raise github_runner_image_builder.errors.NetworkNotFoundError("No valid subnets found.")
     subnet = subnets[0]
     for network in networks:
@@ -402,7 +402,7 @@ def _wait_for_cloud_init_complete(
     ssh_connection = _get_ssh_connection(conn=conn, server=server, ssh_key=ssh_key)
     result: fabric.Result | None = ssh_connection.run("cloud-init status --wait", timeout=60 * 10)
     if not result or not result.ok:
-        logger.error("cloud-init status command failure, exit code: %s.", result.return_code)
+        logger.error("cloud-init status command failure, result: %s.", result)
         raise github_runner_image_builder.errors.CloudInitFailError("Invalid cloud-init status")
     return "status: done" in result.stdout
 
