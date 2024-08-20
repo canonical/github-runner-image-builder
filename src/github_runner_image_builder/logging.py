@@ -7,7 +7,7 @@ import logging
 import logging.handlers
 import pathlib
 
-LOG_FILE_DIR = pathlib.Path("/var/log/github-runner-image-builer/")
+LOG_FILE_DIR = pathlib.Path.home() / "github-runner-image-builder/log"
 LOG_FILE_PATH = LOG_FILE_DIR / "info.log"
 ERROR_LOG_FILE_PATH = LOG_FILE_DIR / "error.log"
 
