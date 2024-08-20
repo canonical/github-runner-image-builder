@@ -3,95 +3,114 @@
 
 """Image test module."""
 
-import dataclasses
+import glob
 import logging
+
+# Subprocess is used to run the application.
+import subprocess  # nosec: B404
 from pathlib import Path
 
 import pytest
+import pytest_asyncio
+from click.testing import CliRunner
 from fabric.connection import Connection as SSHConnection
-from fabric.runners import Result
+from openstack.compute.v2.image import Image
+from openstack.compute.v2.server import Server
 from openstack.connection import Connection
+from openstack.network.v2.security_group import SecurityGroup
 from pylxd import Client
 
 from github_runner_image_builder.cli import get_latest_build_id
 from github_runner_image_builder.config import IMAGE_OUTPUT_PATH
-from tests.integration.helpers import (
-    create_lxd_instance,
-    create_lxd_vm_image,
-    format_dockerhub_mirror_microk8s_command,
-)
+from tests.integration import commands, helpers, types
 
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
-class Commands:
-    """Test commands to execute.
+@pytest_asyncio.fixture(scope="module", name="openstack_server")
+async def openstack_server_fixture(
+    openstack_metadata: types.OpenstackMeta,
+    openstack_security_group: SecurityGroup,
+    openstack_image_name: str,
+    test_id: str,
+):
+    """A testing openstack instance."""
+    server_name = f"test-server-{test_id}"
+    images: list[Image] = openstack_metadata.connection.search_images(openstack_image_name)
+    assert images, "No built image found."
+    for server in helpers.create_openstack_server(
+        openstack_metadata=openstack_metadata,
+        server_name=server_name,
+        image=images[0],
+        security_group=openstack_security_group,
+    ):
+        yield server
 
-    Attributes:
-        name: The test name.
-        command: The command to execute.
-        env: Additional run envs.
+    for image in images:
+        openstack_metadata.connection.delete_image(image.id)
+
+
+@pytest_asyncio.fixture(scope="module", name="ssh_connection")
+async def ssh_connection_fixture(
+    openstack_server: Server,
+    proxy: types.ProxyConfig,
+    openstack_metadata: types.OpenstackMeta,
+    dockerhub_mirror: str | None,
+) -> SSHConnection:
+    """The openstack server ssh connection fixture."""
+    logger.info("Setting up SSH connection.")
+    ssh_connection = await helpers.wait_for_valid_connection(
+        connection=openstack_metadata.connection,
+        server_name=openstack_server.name,
+        network=openstack_metadata.network,
+        ssh_key=openstack_metadata.ssh_key.private_key,
+        proxy=proxy,
+        dockerhub_mirror=dockerhub_mirror,
+    )
+
+    return ssh_connection
+
+
+@pytest.fixture(scope="module", name="cli_run")
+def cli_run_fixture(
+    image: str,
+    cloud_name: str,
+    callback_script: Path,
+    openstack_connection: Connection,
+    openstack_image_name: str,
+):
+    """A CLI run.
+
+    This fixture assumes pipx is installed in the system and the github-runner-image-builder has
+    been installed using pipx. See testenv:integration section of tox.ini.
     """
+    # This is a locally built application - we can trust it.
+    subprocess.check_call(  # nosec: B603
+        ["/usr/bin/sudo", Path.home() / ".local/bin/github-runner-image-builder", "init"]
+    )
+    subprocess.check_call(  # nosec: B603
+        [
+            "/usr/bin/sudo",
+            Path.home() / ".local/bin/github-runner-image-builder",
+            "run",
+            cloud_name,
+            openstack_image_name,
+            "--base-image",
+            image,
+            "--keep-revisions",
+            "2",
+            "--callback-script",
+            str(callback_script.absolute()),
+        ]
+    )
 
-    name: str
-    command: str
-    env: dict | None = None
+    yield
 
-
-# This is matched with E2E test run of github-runner-operator charm.
-TEST_RUNNER_COMMANDS = (
-    Commands(name="simple hello world", command="echo hello world"),
-    Commands(name="file permission to /usr/local/bin", command="ls -ld /usr/local/bin"),
-    Commands(
-        name="file permission to /usr/local/bin (create)", command="touch /usr/local/bin/test_file"
-    ),
-    Commands(name="install microk8s", command="sudo snap install microk8s --classic"),
-    # This is a special helper command to configure dockerhub registry if available.
-    Commands(
-        name="configure dockerhub mirror",
-        command="""echo 'server = "{registry_url}"
-
-[host.{hostname}:{port}]
-capabilities = ["pull", "resolve"]
-' | sudo tee /var/snap/microk8s/current/args/certs.d/docker.io/hosts.toml && \
-sudo microk8s stop && sudo microk8s start""",
-    ),
-    Commands(name="wait for microk8s", command="microk8s status --wait-ready"),
-    Commands(
-        name="deploy nginx in microk8s",
-        command="microk8s kubectl create deployment nginx --image=nginx",
-    ),
-    Commands(
-        name="wait for nginx",
-        command="microk8s kubectl rollout status deployment/nginx --timeout=20m",
-    ),
-    Commands(name="update apt in docker", command="docker run python:3.10-slim apt-get update"),
-    Commands(name="docker version", command="docker version"),
-    Commands(name="check python3 alias", command="python --version"),
-    Commands(name="pip version", command="python3 -m pip --version"),
-    Commands(name="npm version", command="npm --version"),
-    Commands(name="shellcheck version", command="shellcheck --version"),
-    Commands(name="jq version", command="jq --version"),
-    Commands(name="yq version", command="yq --version"),
-    Commands(name="apt update", command="sudo apt-get update -y"),
-    Commands(name="install pipx", command="sudo apt-get install -y pipx"),
-    Commands(name="pipx add path", command="pipx ensurepath"),
-    Commands(name="install check-jsonschema", command="pipx install check-jsonschema"),
-    Commands(
-        name="check jsonschema",
-        command="check-jsonschema --version",
-        # pipx has been added to PATH but still requires additional PATH env since
-        # default shell is not bash in OpenStack
-        env={"PATH": "$PATH:/home/ubuntu/.local/bin"},
-    ),
-    Commands(name="unzip version", command="unzip -v"),
-    Commands(name="gh version", command="gh --version"),
-    Commands(
-        name="test sctp support", command="sudo apt-get install lksctp-tools -yq && checksctp"
-    ),
-    Commands(name="test HWE kernel", command="uname -a | grep generic"),
-)
+    openstack_image: Image
+    for openstack_image in openstack_connection.search_images(openstack_image_name):
+        openstack_connection.delete_image(openstack_image.id)
+    for image_file in glob.glob("*.img"):
+        Path(image_file).unlink(missing_ok=True)
 
 
 @pytest.mark.asyncio
@@ -105,15 +124,17 @@ async def test_image_amd(image: str, tmp_path: Path, dockerhub_mirror: str | Non
     """
     lxd = Client()
     logger.info("Creating LXD VM Image.")
-    create_lxd_vm_image(lxd_client=lxd, img_path=IMAGE_OUTPUT_PATH, image=image, tmp_path=tmp_path)
+    helpers.create_lxd_vm_image(
+        lxd_client=lxd, img_path=IMAGE_OUTPUT_PATH, image=image, tmp_path=tmp_path
+    )
     logger.info("Launching LXD instance.")
-    instance = await create_lxd_instance(lxd_client=lxd, image=image)
+    instance = await helpers.create_lxd_instance(lxd_client=lxd, image=image)
 
-    for testcmd in TEST_RUNNER_COMMANDS:
+    for testcmd in commands.TEST_RUNNER_COMMANDS:
         if testcmd == "configure dockerhub mirror":
             if not dockerhub_mirror:
                 continue
-            testcmd.command = format_dockerhub_mirror_microk8s_command(
+            testcmd.command = helpers.format_dockerhub_mirror_microk8s_command(
                 command=testcmd.command, dockerhub_mirror=dockerhub_mirror
             )
         logger.info("Running command: %s", testcmd.command)
@@ -127,6 +148,8 @@ async def test_image_amd(image: str, tmp_path: Path, dockerhub_mirror: str | Non
         assert result.exit_code == 0
 
 
+@pytest.mark.amd64
+@pytest.mark.arm64
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
 async def test_openstack_upload(openstack_connection: Connection, openstack_image_name: str):
@@ -138,8 +161,8 @@ async def test_openstack_upload(openstack_connection: Connection, openstack_imag
     assert len(openstack_connection.search_images(openstack_image_name))
 
 
-@pytest.mark.asyncio
 @pytest.mark.arm64
+@pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
 async def test_image_arm(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
     """
@@ -147,19 +170,11 @@ async def test_image_arm(ssh_connection: SSHConnection, dockerhub_mirror: str | 
     act: when the image is booted and commands are executed.
     assert: commands do not error.
     """
-    for testcmd in TEST_RUNNER_COMMANDS:
-        if testcmd == "configure dockerhub mirror":
-            if not dockerhub_mirror:
-                continue
-            testcmd.command = format_dockerhub_mirror_microk8s_command(
-                command=testcmd.command, dockerhub_mirror=dockerhub_mirror
-            )
-        logger.info("Running command: %s", testcmd.command)
-        result: Result = ssh_connection.run(testcmd.command, env=testcmd.env)
-        logger.info("Command output: %s %s %s", result.return_code, result.stdout, result.stderr)
-        assert result.return_code == 0
+    helpers.run_openstack_tests(dockerhub_mirror=dockerhub_mirror, ssh_connection=ssh_connection)
 
 
+@pytest.mark.amd64
+@pytest.mark.arm64
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
 async def test_script_callback(callback_result_path: Path):
@@ -172,12 +187,13 @@ async def test_script_callback(callback_result_path: Path):
     assert len(callback_result_path.read_text(encoding="utf-8"))
 
 
+@pytest.mark.amd64
+@pytest.mark.arm64
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
 async def test_get_image(
     cloud_name: str,
     openstack_image_name: str,
-    capsys: pytest.CaptureFixture,
     openstack_connection: Connection,
 ):
     """
@@ -185,8 +201,9 @@ async def test_get_image(
     act: when get image id is run.
     assert: the latest image matches the stdout output.
     """
-    get_latest_build_id(cloud_name, openstack_image_name)
+    result = CliRunner().invoke(get_latest_build_id, args=[cloud_name, openstack_image_name])
     image_id = openstack_connection.get_image_id(openstack_image_name)
 
-    res = capsys.readouterr()
-    assert res.out == image_id, f"Openstack image not matching, {res.out} {res.err}, {image_id}"
+    assert (
+        result.output == image_id
+    ), f"Openstack image not matching, {result.output} {result.exit_code}, {image_id}"

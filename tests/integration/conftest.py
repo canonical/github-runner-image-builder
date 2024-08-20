@@ -3,29 +3,42 @@
 
 """Fixtures for github runner image builder integration tests."""
 import logging
+import platform
 import secrets
 import string
-
-# Subprocess is used to run the application.
-import subprocess  # nosec: B404
 import typing
 from pathlib import Path
 
 import openstack
 import openstack.exceptions
 import pytest
-import pytest_asyncio
 import yaml
-from fabric.connection import Connection as SSHConnection
 from openstack.compute.v2.keypair import Keypair
-from openstack.compute.v2.server import Server
 from openstack.connection import Connection
-from openstack.image.v2.image import Image
 from openstack.network.v2.security_group import SecurityGroup
 
-from tests.integration import helpers, types
+from github_runner_image_builder import config
+from tests.integration import types
 
 logger = logging.getLogger(__name__)
+
+
+@pytest.fixture(scope="module", name="arch")
+def arch_fixture():
+    """The testing architecture."""
+    arch = platform.machine()
+    match arch:
+        case arch if arch in config.ARCHITECTURES_ARM64:
+            return config.Arch.ARM64
+        case arch if arch in config.ARCHITECTURES_X86:
+            return config.Arch.X64
+    raise ValueError(f"Unsupported testing architecture {arch}")
+
+
+@pytest.fixture(scope="module", name="test_id")
+def test_id_fixture() -> str:
+    """The random 2 char test id."""
+    return "".join(secrets.choice(string.ascii_lowercase) for _ in range(2))
 
 
 @pytest.fixture(scope="module", name="image")
@@ -43,16 +56,27 @@ def openstack_clouds_yaml_fixture(pytestconfig: pytest.Config) -> str:
     return clouds_yaml
 
 
-@pytest.fixture(scope="module", name="private_endpoint_clouds_yaml")
-def private_endpoint_clouds_yaml_fixture(pytestconfig: pytest.Config) -> typing.Optional[str]:
-    """The openstack private endpoint clouds yaml."""
-    auth_url = pytestconfig.getoption("--openstack-auth-url")
-    password = pytestconfig.getoption("--openstack-password")
-    project_domain_name = pytestconfig.getoption("--openstack-project-domain-name")
-    project_name = pytestconfig.getoption("--openstack-project-name")
-    user_domain_name = pytestconfig.getoption("--openstack-user-domain-name")
-    user_name = pytestconfig.getoption("--openstack-username")
-    region_name = pytestconfig.getoption("--openstack-region-name")
+@pytest.fixture(scope="module", name="private_endpoint_config")
+def private_endpoint_config_fixture(
+    pytestconfig: pytest.Config, arch: config.Arch
+) -> types.PrivateEndpointConfig | None:
+    """The OpenStack private endpoint configurations."""
+    if arch == config.Arch.ARM64:
+        auth_url = pytestconfig.getoption("--openstack-auth-url-arm64")
+        password = pytestconfig.getoption("--openstack-password-arm64")
+        project_domain_name = pytestconfig.getoption("--openstack-project-domain-name-arm64")
+        project_name = pytestconfig.getoption("--openstack-project-name-arm64")
+        user_domain_name = pytestconfig.getoption("--openstack-user-domain-name-arm64")
+        user_name = pytestconfig.getoption("--openstack-username-arm64")
+        region_name = pytestconfig.getoption("--openstack-region-name-arm64")
+    else:
+        auth_url = pytestconfig.getoption("--openstack-auth-url-amd64")
+        password = pytestconfig.getoption("--openstack-password-amd64")
+        project_domain_name = pytestconfig.getoption("--openstack-project-domain-name-amd64")
+        project_name = pytestconfig.getoption("--openstack-project-name-amd64")
+        user_domain_name = pytestconfig.getoption("--openstack-user-domain-name-amd64")
+        user_name = pytestconfig.getoption("--openstack-username-amd64")
+        region_name = pytestconfig.getoption("--openstack-region-name-amd64")
     if any(
         not val
         for val in (
@@ -66,33 +90,57 @@ def private_endpoint_clouds_yaml_fixture(pytestconfig: pytest.Config) -> typing.
         )
     ):
         return None
+    return types.PrivateEndpointConfig(
+        auth_url=auth_url,
+        password=password,
+        project_domain_name=project_domain_name,
+        project_name=project_name,
+        user_domain_name=user_domain_name,
+        username=user_name,
+        region_name=region_name,
+    )
+
+
+@pytest.fixture(scope="module", name="private_endpoint_clouds_yaml")
+def private_endpoint_clouds_yaml_fixture(
+    private_endpoint_config: types.PrivateEndpointConfig | None,
+) -> typing.Optional[str]:
+    """The openstack private endpoint clouds yaml."""
+    if not private_endpoint_config:
+        return None
     return string.Template(
         Path("tests/integration/data/clouds.yaml.tmpl").read_text(encoding="utf-8")
     ).substitute(
         {
-            "auth_url": auth_url,
-            "password": password,
-            "project_domain_name": project_domain_name,
-            "project_name": project_name,
-            "user_domain_name": user_domain_name,
-            "username": user_name,
-            "region_name": region_name,
+            "auth_url": private_endpoint_config["auth_url"],
+            "password": private_endpoint_config["password"],
+            "project_domain_name": private_endpoint_config["project_domain_name"],
+            "project_name": private_endpoint_config["project_name"],
+            "user_domain_name": private_endpoint_config["user_domain_name"],
+            "username": private_endpoint_config["username"],
+            "region_name": private_endpoint_config["region_name"],
         }
     )
 
 
 @pytest.fixture(scope="module", name="network_name")
-def network_name_fixture(pytestconfig: pytest.Config) -> str:
+def network_name_fixture(pytestconfig: pytest.Config, arch: config.Arch) -> str:
     """Network to use to spawn test instances under."""
-    network_name = pytestconfig.getoption("--openstack-network-name")
+    if arch == config.Arch.ARM64:
+        network_name = pytestconfig.getoption("--openstack-network-name-arm64")
+    else:
+        network_name = pytestconfig.getoption("--openstack-network-name-amd64")
     assert network_name, "Please specify the --openstack-network-name command line option"
     return network_name
 
 
 @pytest.fixture(scope="module", name="flavor_name")
-def flavor_name_fixture(pytestconfig: pytest.Config) -> str:
+def flavor_name_fixture(pytestconfig: pytest.Config, arch: config.Arch) -> str:
     """Flavor to create testing instances with."""
-    flavor_name = pytestconfig.getoption("--openstack-flavor-name")
+    if arch == config.Arch.ARM64:
+        flavor_name = pytestconfig.getoption("--openstack-flavor-name-arm64")
+    else:
+        flavor_name = pytestconfig.getoption("--openstack-flavor-name-amd64")
     assert flavor_name, "Please specify the --openstack-flavor-name command line option"
     return flavor_name
 
@@ -149,12 +197,6 @@ echo $IMAGE_ID | tee {callback_result_path}
     return callback_script
 
 
-@pytest.fixture(scope="module", name="test_id")
-def test_id_fixture() -> str:
-    """The unique test identifier."""
-    return secrets.token_hex(4)
-
-
 @pytest.fixture(scope="module", name="dockerhub_mirror")
 def dockerhub_mirror_fixture(pytestconfig: pytest.Config) -> str | None:
     """Dockerhub mirror URL."""
@@ -182,28 +224,12 @@ def ssh_key_fixture(
     openstack_connection.delete_keypair(name=keypair.name)
 
 
-class OpenstackMeta(typing.NamedTuple):
-    """A wrapper around Openstack related info.
-
-    Attributes:
-        connection: The connection instance to Openstack.
-        ssh_key: The SSH-Key created to connect to Openstack instance.
-        network: The Openstack network to create instances under.
-        flavor: The flavor to create instances with.
-    """
-
-    connection: Connection
-    ssh_key: types.SSHKey
-    network: str
-    flavor: str
-
-
 @pytest.fixture(scope="module", name="openstack_metadata")
 def openstack_metadata_fixture(
     openstack_connection: Connection, ssh_key: types.SSHKey, network_name: str, flavor_name: str
-) -> OpenstackMeta:
+) -> types.OpenstackMeta:
     """A wrapper around openstack related info."""
-    return OpenstackMeta(
+    return types.OpenstackMeta(
         connection=openstack_connection, ssh_key=ssh_key, network=network_name, flavor=flavor_name
     )
 
@@ -225,12 +251,16 @@ def openstack_security_group_fixture(openstack_connection: Connection):
     )
     # For SSH
     openstack_connection.create_security_group_rule(
+        # The code is not duplicated, this code is strictly for integration test which should not
+        # be imported from module or referenced from module.
+        # pylint: disable=R0801
         secgroup_name_or_id=security_group_name,
         port_range_min="22",
         port_range_max="22",
         protocol="tcp",
         direction="ingress",
         ethertype="IPv4",
+        # pylint: enable=R0801
     )
     # For tmate
     openstack_connection.create_security_group_rule(
@@ -247,104 +277,9 @@ def openstack_security_group_fixture(openstack_connection: Connection):
     openstack_connection.delete_security_group(security_group_name)
 
 
-@pytest_asyncio.fixture(scope="module", name="openstack_server")
-async def openstack_server_fixture(
-    openstack_metadata: OpenstackMeta,
-    openstack_security_group: SecurityGroup,
-    openstack_image_name: str,
-    test_id: str,
-):
-    """A testing openstack instance."""
-    server_name = f"test-server-{test_id}"
-    images: list[Image] = openstack_metadata.connection.search_images(openstack_image_name)
-    assert images, "No built image found."
-    try:
-        server: Server = openstack_metadata.connection.create_server(
-            name=server_name,
-            image=images[0],
-            key_name=openstack_metadata.ssh_key.keypair.name,
-            auto_ip=False,
-            # these are pre-configured values on private endpoint.
-            security_groups=[openstack_security_group.name],
-            flavor=openstack_metadata.flavor,
-            network=openstack_metadata.network,
-            timeout=60 * 20,
-            wait=True,
-        )
-        yield server
-    except openstack.exceptions.SDKException:
-        server = openstack_metadata.connection.get_server(name_or_id=server_name)
-        logger.exception("Failed to create server, %s", dict(server))
-    finally:
-        openstack_metadata.connection.delete_server(server_name, wait=True)
-        for image in images:
-            openstack_metadata.connection.delete_image(image.id)
-
-
 @pytest.fixture(scope="module", name="proxy")
 def proxy_fixture(pytestconfig: pytest.Config) -> types.ProxyConfig:
     """The environment proxy to pass on to the charm/testing model."""
     proxy = pytestconfig.getoption("--proxy")
     no_proxy = pytestconfig.getoption("--no-proxy")
     return types.ProxyConfig(http=proxy, https=proxy, no_proxy=no_proxy)
-
-
-@pytest_asyncio.fixture(scope="module", name="ssh_connection")
-async def ssh_connection_fixture(
-    openstack_server: Server,
-    openstack_metadata: OpenstackMeta,
-    proxy: types.ProxyConfig,
-    dockerhub_mirror: str | None,
-) -> SSHConnection:
-    """The openstack server ssh connection fixture."""
-    logger.info("Setting up SSH connection.")
-    ssh_connection = await helpers.wait_for_valid_connection(
-        connection=openstack_metadata.connection,
-        server_name=openstack_server.name,
-        network=openstack_metadata.network,
-        ssh_key=openstack_metadata.ssh_key.private_key,
-        proxy=proxy,
-        dockerhub_mirror=dockerhub_mirror,
-    )
-
-    return ssh_connection
-
-
-@pytest.fixture(scope="module", name="cli_run")
-def cli_run_fixture(
-    image: str,
-    cloud_name: str,
-    callback_script: Path,
-    openstack_connection: Connection,
-    openstack_image_name: str,
-):
-    """A CLI run.
-
-    This fixture assumes pipx is installed in the system and the github-runner-image-builder has
-    been installed using pipx. See testenv:integration section of tox.ini.
-    """
-    # This is a locally built application - we can trust it.
-    subprocess.check_call(  # nosec: B603
-        ["/usr/bin/sudo", Path.home() / ".local/bin/github-runner-image-builder", "init"]
-    )
-    subprocess.check_call(  # nosec: B603
-        [
-            "/usr/bin/sudo",
-            Path.home() / ".local/bin/github-runner-image-builder",
-            "run",
-            cloud_name,
-            openstack_image_name,
-            "--base-image",
-            image,
-            "--keep-revisions",
-            "2",
-            "--callback-script",
-            str(callback_script.absolute()),
-        ]
-    )
-
-    yield
-
-    openstack_image: Image
-    for openstack_image in openstack_connection.search_images(openstack_image_name):
-        openstack_connection.delete_image(openstack_image.id)

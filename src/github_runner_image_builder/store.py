@@ -10,12 +10,45 @@ from typing import cast
 import openstack
 import openstack.connection
 import openstack.exceptions
+from openstack.compute.v2.server import Server
 from openstack.image.v2.image import Image
 
 from github_runner_image_builder.config import Arch
 from github_runner_image_builder.errors import OpenstackError, UploadImageError
 
 logger = logging.getLogger(__name__)
+
+
+def create_snapshot(
+    cloud_name: str, image_name: str, server: Server, keep_revisions: int
+) -> Image:
+    """Upload image to openstack glance.
+
+    Args:
+        cloud_name: The Openstack cloud to use from clouds.yaml.
+        image_name: The image name to upload as.
+        server: The running OpenStack server to snapshot.
+        keep_revisions: The number of revisions to keep for an image.
+
+    Raises:
+        UploadImageError: If there was an error uploading the image to Openstack Glance.
+
+    Returns:
+        The created image.
+    """
+    with openstack.connect(cloud=cloud_name) as connection:
+        try:
+            image: Image = connection.create_image_snapshot(
+                name=image_name,
+                server=server.id,
+                wait=True,
+            )
+            _prune_old_images(
+                connection=connection, image_name=image_name, num_revisions=keep_revisions
+            )
+            return image
+        except openstack.exceptions.OpenStackCloudException as exc:
+            raise UploadImageError from exc
 
 
 def upload_image(
@@ -41,8 +74,8 @@ def upload_image(
             image: Image = connection.create_image(
                 name=image_name,
                 filename=str(image_path),
-                allow_duplicates=True,
                 properties={"architecture": arch.to_openstack()},
+                allow_duplicates=True,
                 wait=True,
             )
             _prune_old_images(

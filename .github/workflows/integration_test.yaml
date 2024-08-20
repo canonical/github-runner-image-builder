@@ -23,7 +23,6 @@ jobs:
           sudo apt-get install pipx -y
           pipx ensurepath
           pipx install tox
-      # need to run in sudo mode due to chroot
       - name: Run integration tests
         run: tox -e integration -- -m arm64 --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
       - name: Tmate
@@ -44,6 +43,5 @@ jobs:
           sudo apt-get install pipx -y
           pipx ensurepath
           pipx install tox
-      # need to run in sudo mode due to chroot
       - name: Run integration tests
         run: tox -e integration -- -m amd64 --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}

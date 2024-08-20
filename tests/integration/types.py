@@ -7,6 +7,7 @@ import typing
 from pathlib import Path
 
 from openstack.compute.v2.keypair import Keypair
+from openstack.connection import Connection
 
 
 class ProxyConfig(typing.NamedTuple):
@@ -35,7 +36,7 @@ class SSHKey(typing.NamedTuple):
     private_key: Path
 
 
-class PrivateEndpointConfigs(typing.TypedDict):
+class PrivateEndpointConfig(typing.TypedDict):
     """The Private endpoint configuration values.
 
     Attributes:
@@ -55,3 +56,19 @@ class PrivateEndpointConfigs(typing.TypedDict):
     user_domain_name: str
     username: str
     region_name: str
+
+
+class OpenstackMeta(typing.NamedTuple):
+    """A wrapper around Openstack related info.
+
+    Attributes:
+        connection: The connection instance to Openstack.
+        ssh_key: The SSH-Key created to connect to Openstack instance.
+        network: The Openstack network to create instances under.
+        flavor: The flavor to create instances with.
+    """
+
+    connection: Connection
+    ssh_key: SSHKey
+    network: str
+    flavor: str

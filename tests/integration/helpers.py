@@ -10,23 +10,28 @@ import platform
 import tarfile
 import time
 import urllib.parse
+from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 from string import Template
-from typing import Awaitable, Callable, ParamSpec, TypeVar, cast
+from typing import Awaitable, Callable, Generator, ParamSpec, Protocol, TypeVar, cast
 
+import openstack.exceptions
+import tenacity
 from fabric import Connection as SSHConnection
 from fabric import Result
 from invoke.exceptions import UnexpectedExit
+from openstack.compute.v2.image import Image as OpenstackImage
 from openstack.compute.v2.server import Server
 from openstack.connection import Connection
+from openstack.network.v2.security_group import SecurityGroup
 from paramiko.ssh_exception import NoValidConnectionsError, SSHException
 from pylxd import Client
-from pylxd.models.image import Image
+from pylxd.models.image import Image as LXDImage
 from pylxd.models.instance import Instance, InstanceState
 from requests_toolbelt import MultipartEncoder
 
-from tests.integration import types
+from tests.integration import commands, types
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +79,9 @@ async def wait_for(
     raise TimeoutError()
 
 
-def create_lxd_vm_image(lxd_client: Client, img_path: Path, image: str, tmp_path: Path) -> Image:
+def create_lxd_vm_image(
+    lxd_client: Client, img_path: Path, image: str, tmp_path: Path
+) -> LXDImage:
     """Create LXD VM image.
 
     1. Creates the metadata.tar.gz file with the corresponding Ubuntu OS image and a pre-defined
@@ -139,7 +146,7 @@ def _post_vm_img(
     image_data: bytes,
     metadata: bytes | None = None,
     public: bool = False,
-) -> Image:
+) -> LXDImage:
     """Create an LXD VM image.
 
     Args:
@@ -173,7 +180,7 @@ def _post_vm_img(
 
     response = client.api.images.post(data=data, headers=headers)
     operation = client.operations.wait_for_operation(response.json()["operation"])
-    return Image(client, fingerprint=operation.metadata["fingerprint"])
+    return LXDImage(client, fingerprint=operation.metadata["fingerprint"])
 
 
 async def create_lxd_instance(lxd_client: Client, image: str) -> Instance:
@@ -341,6 +348,9 @@ def _snap_ready(conn: SSHConnection) -> bool:
         return False
 
 
+@tenacity.retry(
+    wait=tenacity.wait_exponential(multiplier=2, max=30), stop=tenacity.stop_after_attempt(5)
+)
 def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None):
     """Use dockerhub mirror if provided.
 
@@ -350,7 +360,8 @@ def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | Non
     """
     if not dockerhub_mirror:
         return
-    command = f'echo {{ "registry-mirrors": ["{dockerhub_mirror}"]}} > /etc/docker/daemon.json'
+    command = f'sudo mkdir -p /etc/docker/ && \
+echo {{ \\"registry-mirrors\\": [\\"{dockerhub_mirror}\\"]}} | sudo tee /etc/docker/daemon.json'
     logger.info("Running command: %s", command)
     result: Result = conn.run(command)
     assert result.ok, "Failed to setup DockerHub mirror"
@@ -376,3 +387,116 @@ def format_dockerhub_mirror_microk8s_command(command: str, dockerhub_mirror: str
     """
     url = urllib.parse.urlparse(dockerhub_mirror)
     return command.format(registry_url=url.geturl(), hostname=url.hostname, port=url.port)
+
+
+def run_openstack_tests(dockerhub_mirror: str | None, ssh_connection: SSHConnection):
+    """Run test commands on the openstack instance via ssh.
+
+    Args:
+        dockerhub_mirror: The dockerhub mirror URL to reduce rate limiting for tests.
+        ssh_connection: The SSH connection instance to OpenStack test server.
+    """
+    for testcmd in commands.TEST_RUNNER_COMMANDS:
+        if testcmd == "configure dockerhub mirror":
+            if not dockerhub_mirror:
+                continue
+            testcmd.command = format_dockerhub_mirror_microk8s_command(
+                command=testcmd.command, dockerhub_mirror=dockerhub_mirror
+            )
+        logger.info("Running command: %s", testcmd.command)
+        result: Result = ssh_connection.run(testcmd.command, env=testcmd.env)
+        logger.info("Command output: %s %s %s", result.return_code, result.stdout, result.stderr)
+        assert result.return_code == 0
+
+
+# This is a simple interface for filtering out openstack objects.
+class CreatedAtProtocol(Protocol):  # pylint: disable=too-few-public-methods
+    """The interface for objects containing the created_at property.
+
+    Attributes:
+        created_at: The created_at timestamp of format YYYY-MM-DDTHH:MM:SSZ.
+    """
+
+    @property
+    def created_at(self) -> str:
+        """The object's creation timestamp."""
+
+
+def is_greater_than_time(instance_to_check: CreatedAtProtocol, timestamp: datetime):
+    """Return if object was created after given timestamp.
+
+    Args:
+        instance_to_check: The object to check for creation after timestamp.
+        timestamp: The timestamp to check.
+
+    Returns:
+        Whether the object was created after given timestamp.
+    """
+    created_at = datetime.strptime(instance_to_check.created_at, "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc
+    )
+    return created_at > timestamp
+
+
+# This is a simple interface for filtering out openstack objects.
+class NameProtocol(Protocol):  # pylint: disable=too-few-public-methods
+    """The interface for objects containing the name property.
+
+    Attributes:
+        name: The object name.
+    """
+
+    @property
+    def name(self) -> str:
+        """The object's name."""
+
+
+def has_name(instance_to_check: NameProtocol, name: str):
+    """Return if object has given name.
+
+    Args:
+        instance_to_check: The object to check for name equality.
+        name: The name to check.
+
+    Returns:
+        Whether the object has given name.
+    """
+    return instance_to_check.name == name
+
+
+def create_openstack_server(
+    openstack_metadata: types.OpenstackMeta,
+    server_name: str,
+    image: OpenstackImage,
+    security_group: SecurityGroup,
+) -> Generator[Server, None, None]:
+    """Create OpenStack server.
+
+    Args:
+        openstack_metadata: Wrapped openstack metadata.
+        server_name: The server name to create as.
+        image: Image used to create the server.
+        security_group: Security group in which the instance belongs to.
+
+    Yields:
+        The Openstack server instance.
+    """
+    try:
+        server: Server = openstack_metadata.connection.create_server(
+            name=server_name,
+            image=image,
+            key_name=openstack_metadata.ssh_key.keypair.name,
+            auto_ip=False,
+            # these are pre-configured values on private endpoint.
+            security_groups=[security_group.name],
+            flavor=openstack_metadata.flavor,
+            network=openstack_metadata.network,
+            timeout=60 * 20,
+            wait=True,
+        )
+        yield server
+    except openstack.exceptions.SDKException:
+        server = openstack_metadata.connection.get_server(name_or_id=server_name)
+        logger.exception("Failed to create server, %s", dict(server))
+    finally:
+        openstack_metadata.connection.delete_server(server_name, wait=True)
