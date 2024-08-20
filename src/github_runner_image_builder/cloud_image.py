@@ -9,9 +9,6 @@ import gzip  # noqa: F401 # pylint: disable=unused-import
 import hashlib
 import logging
 import typing
-import urllib.error
-import urllib.request
-import urllib.response
 from pathlib import Path
 
 import requests
@@ -100,16 +97,19 @@ def _download_base_image(base_image: BaseImage, bin_arch: str, output_filename: 
         The downloaded image path.
     """
     # The ubuntu-cloud-images is a trusted source
+    # Bandit thinks there is no timeout provided for the code below.
     try:
-        urllib.request.urlretrieve(  # nosec: B310
-            (
-                f"https://cloud-images.ubuntu.com/{base_image.value}/current/{base_image.value}"
-                f"-server-cloudimg-{bin_arch}.img"
-            ),
-            output_filename,
-        )
-    except urllib.error.URLError as exc:
+        request = requests.get(
+            f"https://cloud-images.ubuntu.com/{base_image.value}/current/{base_image.value}"
+            f"-server-cloudimg-{bin_arch}.img",
+            timeout=60 * 20,
+            stream=True,
+        )  # nosec: B310, B113
+    except requests.exceptions.HTTPError as exc:
         raise BaseImageDownloadError from exc
+    with open(output_filename, "wb") as file:
+        for chunk in request.iter_content(1024 * 1024):  # 1 MB chunks
+            file.write(chunk)
     return Path(output_filename)
 
 
@@ -157,9 +157,6 @@ def _validate_checksum(file: Path, expected_checksum: str) -> bool:
     """
     sha256 = hashlib.sha256()
     with open(file=file, mode="rb") as target_file:
-        while True:
-            data = target_file.read(CHECKSUM_BUF_SIZE)
-            if not data:
-                break
+        while data := target_file.read(CHECKSUM_BUF_SIZE):
             sha256.update(data)
     return sha256.hexdigest() == expected_checksum

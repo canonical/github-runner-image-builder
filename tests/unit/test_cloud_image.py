@@ -177,17 +177,15 @@ def test__download_base_image_error(monkeypatch: pytest.MonkeyPatch):
     # Bypass decorated retry sleep
     monkeypatch.setattr(time, "sleep", MagicMock())
     monkeypatch.setattr(
-        cloud_image.urllib.request,
-        "urlretrieve",
-        MagicMock(side_effect=cloud_image.urllib.error.URLError(reason="Content too short")),
+        cloud_image.requests,
+        "get",
+        MagicMock(side_effect=cloud_image.requests.exceptions.HTTPError()),
     )
 
-    with pytest.raises(BaseImageDownloadError) as exc:
+    with pytest.raises(BaseImageDownloadError):
         cloud_image._download_base_image(
             base_image=MagicMock(), bin_arch=MagicMock(), output_filename=MagicMock()
         )
-
-    assert "Content too short" in str(exc.getrepr())
 
 
 def test__download_base_image(monkeypatch: pytest.MonkeyPatch):
@@ -196,7 +194,9 @@ def test__download_base_image(monkeypatch: pytest.MonkeyPatch):
     act: when _download_base_image is called.
     assert: Path from output_filename input is returned.
     """
-    monkeypatch.setattr(cloud_image.urllib.request, "urlretrieve", MagicMock())
+    response_mock = MagicMock()
+    response_mock.iter_content.return_value = [b"content-1", b"content-2"]
+    monkeypatch.setattr(cloud_image.requests, "get", MagicMock(return_value=response_mock))
     test_file_name = "test_file_name"
 
     assert Path("test_file_name") == cloud_image._download_base_image(
