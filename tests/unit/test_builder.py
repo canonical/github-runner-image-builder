@@ -151,8 +151,8 @@ def test_initialize(monkeypatch: pytest.MonkeyPatch):
 
     builder.initialize()
 
-    install_mock.assert_called()
-    enable_nbd_mock.assert_called()
+    install_mock.assert_called_with()
+    enable_nbd_mock.assert_called_with()
 
 
 def test__install_dependencies_error(monkeypatch: pytest.MonkeyPatch):
@@ -320,7 +320,9 @@ def test__connect_image_to_network_block_device(monkeypatch: pytest.MonkeyPatch)
 
     builder._connect_image_to_network_block_device(image_path=MagicMock())
 
-    run_mock.assert_called()
+    run_mock.assert_called_with(
+        ["/usr/bin/mount", "-o", "rw", "/dev/nbd0p1", "/mnt/ubuntu-image"], timeout=60
+    )
 
 
 def test__replace_mounted_resolv_conf(monkeypatch: pytest.MonkeyPatch):
@@ -408,13 +410,15 @@ def test__install_yq(monkeypatch: pytest.MonkeyPatch):
     """
     # Bypass decorated retry sleep
     monkeypatch.setattr(time, "sleep", MagicMock())
-    monkeypatch.setattr(subprocess, "check_output", (run_mock := MagicMock()))
+    monkeypatch.setattr(subprocess, "check_output", (check_output_mock := MagicMock()))
     monkeypatch.setattr(shutil, "copy", (copy_mock := MagicMock()))
 
     builder._install_yq()
 
-    run_mock.assert_called()
-    copy_mock.assert_called()
+    check_output_mock.assert_called_with(
+        ["/snap/bin/go", "build", "-C", "yq_source", "-o", "/usr/bin/yq"], timeout=1200
+    )
+    copy_mock.assert_called_with(Path("/usr/bin/yq"), Path("/mnt/ubuntu-image/usr/bin/yq"))
 
 
 def test__disable_unattended_upgrades_subprocess_fail(monkeypatch: pytest.MonkeyPatch):
@@ -641,7 +645,12 @@ def test__disconnect_image_to_network_block_device(monkeypatch: pytest.MonkeyPat
 
     builder._disconnect_image_to_network_block_device()
 
-    check_mock.assert_called()
+    check_mock.assert_called_with(
+        ["/usr/bin/qemu-nbd", "--disconnect", "/dev/nbd0p1"],
+        check=True,
+        encoding="utf-8",
+        timeout=30,
+    )
 
 
 def test__compress_image_fail(monkeypatch: pytest.MonkeyPatch):
