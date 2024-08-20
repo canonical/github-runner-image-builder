@@ -20,6 +20,8 @@ jobs:
     runs-on: [ubuntu-22.04]
     steps:
       - uses: actions/checkout@v4.1.7
+        with:
+          fetch-depth: 0
       - name: Remove git edge stable
         run: |
           git tag -d stable && git push origin :refs/tags/stable

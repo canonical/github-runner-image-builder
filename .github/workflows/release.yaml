@@ -11,6 +11,8 @@ jobs:
     runs-on: [ubuntu-22.04]
     steps:
       - uses: actions/checkout@v4.1.7
+        with:
+          fetch-depth: 0
       - name: Remove git edge tag
         run: |
           git tag -d edge && git push origin :refs/tags/edge
