@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 from click.testing import CliRunner
 
-from github_runner_image_builder import cli
+from github_runner_image_builder import cli, config
 from github_runner_image_builder.cli import main
 
 
@@ -123,9 +123,9 @@ def test_initialize(monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner, flag
     cli_runner.invoke(main, args=["init", *flags])
 
     if not flags:
-        mock_builder_init_func.assert_called()
+        mock_builder_init_func.assert_called_with()
     else:
-        mock_openstack_init_func.assert_called()
+        mock_openstack_init_func.assert_called_with(arch=config.Arch.X64, cloud_name="hello")
 
 
 @pytest.mark.parametrize(
