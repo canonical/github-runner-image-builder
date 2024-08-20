@@ -73,7 +73,7 @@ def determine_cloud(cloud_name: str | None = None) -> str:
     try:
         clouds_yaml_path = next(path for path in CLOUD_YAML_PATHS if path.exists())
     except StopIteration as exc:
-        logger.exception("Unable to determine ckoud to use from clouds.yaml files.")
+        logger.exception("Unable to determine cloud to use from clouds.yaml files.")
         raise github_runner_image_builder.errors.CloudsYAMLError(
             "Unable to determine cloud to use from clouds.yaml files. "
             "Please check that clouds.yaml exists."
