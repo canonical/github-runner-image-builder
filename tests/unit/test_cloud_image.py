@@ -188,7 +188,7 @@ def test__download_base_image_error(monkeypatch: pytest.MonkeyPatch):
         )
 
 
-def test__download_base_image(monkeypatch: pytest.MonkeyPatch):
+def test__download_base_image(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """
     arrange: given monkeypatched urlretrieve function.
     act: when _download_base_image is called.
@@ -197,10 +197,13 @@ def test__download_base_image(monkeypatch: pytest.MonkeyPatch):
     response_mock = MagicMock()
     response_mock.iter_content.return_value = [b"content-1", b"content-2"]
     monkeypatch.setattr(cloud_image.requests, "get", MagicMock(return_value=response_mock))
-    test_file_name = "test_file_name"
+    test_file = tmp_path / "test_file_name"
 
-    assert Path("test_file_name") == cloud_image._download_base_image(
-        base_image=MagicMock(), bin_arch=MagicMock(), output_filename=test_file_name
+    assert (
+        test_file.name
+        == cloud_image._download_base_image(
+            base_image=MagicMock(), bin_arch=MagicMock(), output_filename=test_file.name
+        ).name
     )
 
 
