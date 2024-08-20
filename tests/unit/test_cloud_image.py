@@ -202,7 +202,7 @@ def test__download_base_image(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     assert (
         test_file.name
         == cloud_image._download_base_image(
-            base_image=MagicMock(), bin_arch=MagicMock(), output_filename=test_file.name
+            base_image=MagicMock(), bin_arch=MagicMock(), output_filename=str(test_file)
         ).name
     )
 
