@@ -51,7 +51,7 @@ CREATE_SERVER_TIMEOUT = 5 * 60  # seconds
 
 MIN_CPU = 2
 MIN_RAM = 8192  # M
-MIN_DISK = 30  # G
+MIN_DISK = 20  # G
 
 
 def determine_cloud(cloud_name: str | None = None) -> str:
