@@ -238,39 +238,43 @@ def openstack_metadata_fixture(
 def openstack_security_group_fixture(openstack_connection: Connection):
     """An ssh-connectable security group."""
     security_group_name = "github-runner-image-builder-test-security-group"
-    security_group: SecurityGroup = openstack_connection.create_security_group(
-        name=security_group_name,
-        description="For servers managed by the github-runner-image-builder app.",
+    security_group: SecurityGroup | None = openstack_connection.get_security_group(
+        name_or_id=security_group_name
     )
-    # For ping
-    openstack_connection.create_security_group_rule(
-        secgroup_name_or_id=security_group_name,
-        protocol="icmp",
-        direction="ingress",
-        ethertype="IPv4",
-    )
-    # For SSH
-    openstack_connection.create_security_group_rule(
-        # The code is not duplicated, this code is strictly for integration test which should not
-        # be imported from module or referenced from module.
-        # pylint: disable=R0801
-        secgroup_name_or_id=security_group_name,
-        port_range_min="22",
-        port_range_max="22",
-        protocol="tcp",
-        direction="ingress",
-        ethertype="IPv4",
-        # pylint: enable=R0801
-    )
-    # For tmate
-    openstack_connection.create_security_group_rule(
-        secgroup_name_or_id=security_group_name,
-        port_range_min="10022",
-        port_range_max="10022",
-        protocol="tcp",
-        direction="egress",
-        ethertype="IPv4",
-    )
+    if not security_group:
+        security_group = openstack_connection.create_security_group(
+            name=security_group_name,
+            description="For servers managed by the github-runner-image-builder app.",
+        )
+        # For ping
+        openstack_connection.create_security_group_rule(
+            secgroup_name_or_id=security_group_name,
+            protocol="icmp",
+            direction="ingress",
+            ethertype="IPv4",
+        )
+        # For SSH
+        openstack_connection.create_security_group_rule(
+            # The code is not duplicated, this code is strictly for integration test which should
+            # not be imported from module or referenced from module.
+            # pylint: disable=R0801
+            secgroup_name_or_id=security_group_name,
+            port_range_min="22",
+            port_range_max="22",
+            protocol="tcp",
+            direction="ingress",
+            ethertype="IPv4",
+            # pylint: enable=R0801
+        )
+        # For tmate
+        openstack_connection.create_security_group_rule(
+            secgroup_name_or_id=security_group_name,
+            port_range_min="10022",
+            port_range_max="10022",
+            protocol="tcp",
+            direction="egress",
+            ethertype="IPv4",
+        )
 
     yield security_group
 
