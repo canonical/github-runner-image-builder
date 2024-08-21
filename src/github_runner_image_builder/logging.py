@@ -19,9 +19,10 @@ def configure(log_level: str | int) -> None:
         log_level: The logging verbosity level to apply.
     """
     LOG_FILE_DIR.mkdir(parents=True, exist_ok=True)
-    log_handler = logging.handlers.WatchedFileHandler(filename=LOG_FILE_PATH, encoding="utf-8")
+    # use regular file handlers because rotating within chroot environment may crash the program
+    log_handler = logging.FileHandler(filename=LOG_FILE_PATH, encoding="utf-8")
     log_handler.setLevel(log_level.upper() if isinstance(log_level, str) else log_level)
-    error_log_handler = logging.handlers.WatchedFileHandler(
+    error_log_handler = logging.handlers.FileHandler(
         filename=ERROR_LOG_FILE_PATH, encoding="utf-8"
     )
     logging.basicConfig(
