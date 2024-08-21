@@ -38,16 +38,20 @@ def create_snapshot(
     """
     with openstack.connect(cloud=cloud_name) as connection:
         try:
+            logger.info("Creating image snapshot, %s %s", image_name, server.name)
             image: Image = connection.create_image_snapshot(
                 name=image_name,
                 server=server.id,
                 wait=True,
             )
+            logger.info("Pruning older snapshots, %s keeping %s.", image_name, keep_revisions)
             _prune_old_images(
                 connection=connection, image_name=image_name, num_revisions=keep_revisions
             )
+            logger.info("Snapshot created successfully, %s %s.", image_name, image.id)
             return image
         except openstack.exceptions.OpenStackCloudException as exc:
+            logger.exception("Error while creating snapshot.")
             raise UploadImageError from exc
 
 
@@ -71,6 +75,7 @@ def upload_image(
     """
     with openstack.connect(cloud=cloud_name) as connection:
         try:
+            logger.info("Uploading image %s.", image_name)
             image: Image = connection.create_image(
                 name=image_name,
                 filename=str(image_path),
@@ -78,12 +83,14 @@ def upload_image(
                 allow_duplicates=True,
                 wait=True,
             )
+            logger.info("Pruning older images %s, keeping %s.", image_name, keep_revisions)
             _prune_old_images(
                 connection=connection, image_name=image_name, num_revisions=keep_revisions
             )
+            logger.info("Image created successfully, %s %s.", image_name, image.id)
             return image.id
         except openstack.exceptions.OpenStackCloudException as exc:
-            logger.exception("Failed to upload image.")
+            logger.exception("Error while uploading image.")
             raise UploadImageError from exc
 
 
