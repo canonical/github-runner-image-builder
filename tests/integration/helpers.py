@@ -349,7 +349,8 @@ def _snap_ready(conn: SSHConnection) -> bool:
 
 
 @tenacity.retry(
-    wait=tenacity.wait_exponential(multiplier=2, max=30), stop=tenacity.stop_after_attempt(5)
+    wait=tenacity.wait_exponential(multiplier=2, min=10, max=60),
+    stop=tenacity.stop_after_attempt(5),
 )
 def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None):
     """Use dockerhub mirror if provided.

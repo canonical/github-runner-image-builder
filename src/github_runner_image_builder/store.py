@@ -38,16 +38,20 @@ def create_snapshot(
     """
     with openstack.connect(cloud=cloud_name) as connection:
         try:
+            logger.info("Creating image snapshot, %s %s", image_name, server.name)
             image: Image = connection.create_image_snapshot(
                 name=image_name,
                 server=server.id,
                 wait=True,
             )
+            logger.info("Pruning older snapshots, %s keeping %s.", image_name, keep_revisions)
             _prune_old_images(
                 connection=connection, image_name=image_name, num_revisions=keep_revisions
             )
+            logger.info("Snapshot created successfully, %s %s.", image_name, image.id)
             return image
         except openstack.exceptions.OpenStackCloudException as exc:
+            logger.exception("Error while creating snapshot.")
             raise UploadImageError from exc
 
 
@@ -71,6 +75,7 @@ def upload_image(
     """
     with openstack.connect(cloud=cloud_name) as connection:
         try:
+            logger.info("Uploading image %s.", image_name)
             image: Image = connection.create_image(
                 name=image_name,
                 filename=str(image_path),
@@ -78,11 +83,14 @@ def upload_image(
                 allow_duplicates=True,
                 wait=True,
             )
+            logger.info("Pruning older images %s, keeping %s.", image_name, keep_revisions)
             _prune_old_images(
                 connection=connection, image_name=image_name, num_revisions=keep_revisions
             )
+            logger.info("Image created successfully, %s %s.", image_name, image.id)
             return image.id
         except openstack.exceptions.OpenStackCloudException as exc:
+            logger.exception("Error while uploading image.")
             raise UploadImageError from exc
 
 
@@ -106,6 +114,7 @@ def _prune_old_images(
     for image in images_to_prune:
         try:
             if not connection.delete_image(image.id, wait=True):
+                logger.exception("Failed to delete image %s:%s.", image.name, image.id)
                 raise OpenstackError(f"Failed to delete image: {image.id}")
         except openstack.exceptions.OpenStackCloudException as exc:
             raise OpenstackError from exc
@@ -146,6 +155,7 @@ def _get_sorted_images_by_created_at(
     try:
         images = cast(list[Image], connection.search_images(image_name))
     except openstack.exceptions.OpenStackCloudException as exc:
+        logger.exception("Failed to search images with name %s.", image_name)
         raise OpenstackError from exc
 
     return sorted(images, key=lambda image: image.created_at, reverse=True)

@@ -4,6 +4,7 @@
 """Module containing configurations."""
 
 import itertools
+import logging
 import platform
 from enum import Enum
 from pathlib import Path
@@ -123,3 +124,12 @@ IMAGE_DEFAULT_APT_PACKAGES = [
     "unzip",
     "wget",
 ]
+
+_LOG_LEVELS = (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR)
+LOG_LEVELS = tuple(
+    itertools.chain(
+        _LOG_LEVELS,
+        (logging.getLevelName(level) for level in _LOG_LEVELS),
+        (logging.getLevelName(level).lower() for level in _LOG_LEVELS),
+    )
+)

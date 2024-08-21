@@ -2,24 +2,37 @@
 # See LICENSE file for licensing details.
 
 """Main entrypoint for github-runner-image-builder cli application."""
+
 # Subprocess module is used to execute trusted commands
 import subprocess  # nosec: B404
 from pathlib import Path
 
 import click
 
-from github_runner_image_builder import builder, openstack_builder, store
+from github_runner_image_builder import builder, logging, openstack_builder, store
 from github_runner_image_builder.config import (
     BASE_CHOICES,
     IMAGE_OUTPUT_PATH,
+    LOG_LEVELS,
     BaseImage,
     get_supported_arch,
 )
 
 
+@click.option(
+    "--log-level",
+    type=click.Choice(LOG_LEVELS),
+    default="info",
+    help="Configure logging verbosity.",
+)
 @click.group()
-def main() -> None:
-    """Run entrypoint for Github runner image builder CLI."""
+def main(log_level: str | int) -> None:
+    """Run entrypoint for Github runner image builder CLI.
+
+    Args:
+        log_level: The logging verbosity to apply.
+    """
+    logging.configure(log_level=log_level)
 
 
 @main.command(name="init")
