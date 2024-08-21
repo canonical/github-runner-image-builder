@@ -22,9 +22,7 @@ def configure(log_level: str | int) -> None:
     # use regular file handlers because rotating within chroot environment may crash the program
     log_handler = logging.FileHandler(filename=LOG_FILE_PATH, encoding="utf-8")
     log_handler.setLevel(log_level.upper() if isinstance(log_level, str) else log_level)
-    error_log_handler = logging.handlers.FileHandler(
-        filename=ERROR_LOG_FILE_PATH, encoding="utf-8"
-    )
+    error_log_handler = logging.FileHandler(filename=ERROR_LOG_FILE_PATH, encoding="utf-8")
     logging.basicConfig(
         level=log_level,
         handlers=(log_handler, error_log_handler),
