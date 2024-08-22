@@ -84,6 +84,7 @@ UBUNTU_USER = "ubuntu"
 DOCKER_GROUP = "docker"
 MICROK8S_GROUP = "microk8s"
 LXD_GROUP = "lxd"
+SUDOERS_GROUP = "sudo"
 UBUNTU_HOME = Path("/home/ubuntu")
 ACTIONS_RUNNER_PATH = UBUNTU_HOME / "actions-runner"
 
@@ -569,7 +570,7 @@ def _configure_system_users() -> None:
             [
                 "/usr/sbin/usermod",
                 "-aG",
-                f"{DOCKER_GROUP},{MICROK8S_GROUP},{LXD_GROUP}",
+                f"{DOCKER_GROUP},{MICROK8S_GROUP},{LXD_GROUP},{SUDOERS_GROUP}",
                 UBUNTU_USER,
             ],
             timeout=30,
