@@ -496,7 +496,7 @@ function configure_system_users() {
     echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
     echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
     /usr/sbin/groupadd microk8s
-    /usr/sbin/usermod --append --groups docker,microk8s,lxd ubuntu
+    /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
 }
 
 function configure_usr_local_bin() {
