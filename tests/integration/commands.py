@@ -24,7 +24,7 @@ class Commands:
 # This is matched with E2E test run of github-runner-operator charm.
 TEST_RUNNER_COMMANDS = (
     Commands(name="simple hello world", command="echo hello world"),
-    Commands(name="print groups", command="groups"),
+    Commands(name="print groups", command="groups | grep sudo"),
     Commands(name="file permission to /usr/local/bin", command="ls -ld /usr/local/bin"),
     Commands(
         name="file permission to /usr/local/bin (create)", command="touch /usr/local/bin/test_file"
