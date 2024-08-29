@@ -140,6 +140,13 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     help="EXPERIMENTAL: Proxy to use for external build VMs in host:port format (without scheme). "
     "Ignored if --experimental-external is not enabled",
 )
+@click.option(
+    "--upload-cloud",
+    default="",
+    help="EXPERIMENTAL: Different cloud to use to upload the externally built image. The cloud "
+    "connection parameters should exist in the clouds.yaml. Ignored if --experimental-external is"
+    " not enabled",
+)
 # click doesn't yet support dataclasses, hence all arguments are required.
 def run(  # pylint: disable=too-many-arguments
     cloud_name: str,
@@ -152,6 +159,7 @@ def run(  # pylint: disable=too-many-arguments
     flavor: str,
     network: str,
     proxy: str,
+    upload_cloud: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
 
@@ -167,6 +175,7 @@ def run(  # pylint: disable=too-many-arguments
         flavor: The Openstack flavor to create server to build images.
         network: The Openstack network to assign to server to build images.
         proxy: Proxy to use for external build VMs.
+        upload_cloud: The Opensttack cloud to use to upload externally built image.
     """
     arch = get_supported_arch()
     base = BaseImage.from_str(base_image)
@@ -184,7 +193,11 @@ def run(  # pylint: disable=too-many-arguments
             arch=arch,
             base=base,
             cloud_config=openstack_builder.CloudConfig(
-                cloud_name=cloud_name, flavor=flavor, network=network, proxy=proxy
+                cloud_name=cloud_name,
+                flavor=flavor,
+                network=network,
+                proxy=proxy,
+                upload_cloud_name=upload_cloud,
             ),
             runner_version=runner_version,
             keep_revisions=keep_revisions,

@@ -46,6 +46,7 @@ BUILDER_KEY_PATH = pathlib.Path("/home/ubuntu/.ssh/builder_key")
 
 SHARED_SECURITY_GROUP_NAME = "github-runner-image-builder-v1"
 IMAGE_SNAPSHOT_NAME = "github-runner-image-builder-snapshot-v0"
+IMAGE_SNAPSHOT_FILE_PATH = pathlib.Path("github-runner-image-snapshot.img")
 
 CREATE_SERVER_TIMEOUT = 5 * 60  # seconds
 
@@ -197,12 +198,14 @@ class CloudConfig:
         flavor: The OpenStack flavor to launch builder VMs on.
         network: The OpenStack network to launch the builder VMs on.
         proxy: The proxy to enable on builder VMs.
+        upload_cloud_name: The OpenStack cloud name to upload the snapshot to. (Default same cloud)
     """
 
     cloud_name: str
     flavor: str
     network: str
     proxy: str
+    upload_cloud_name: str | None
 
 
 def run(
@@ -254,7 +257,29 @@ def run(
         )
         logger.info("Requested snapshot, waiting for snapshot to complete: %s.", image.id)
         _wait_for_snapshot_complete(conn=conn, image=image)
+        if (
+            cloud_config.upload_cloud_name
+            # and cloud_config.cloud_name != cloud_config.upload_cloud_name
+        ):
+            logger.info("Downloading snapshot to %s.", IMAGE_SNAPSHOT_FILE_PATH)
+            conn.download_image(name_or_id=image.id, output_file=IMAGE_SNAPSHOT_FILE_PATH)
+            logger.info("Uploading downloaded snapshot to %s.", cloud_config.upload_cloud_name)
+            image = store.upload_image(
+                arch=arch,
+                cloud_name=cloud_config.upload_cloud_name,
+                image_name=IMAGE_SNAPSHOT_NAME,
+                image_path=IMAGE_SNAPSHOT_FILE_PATH,
+                keep_revisions=keep_revisions,
+            )
+            logger.info(
+                "Uploaded snapshot on cloud %s, id: %s, name: %s",
+                cloud_config.upload_cloud_name,
+                image.id,
+                image.name,
+            )
+        logger.info("Deleting builder VM: %s (%s)", builder.name, builder.id)
         conn.delete_server(name_or_id=builder.id, wait=True, timeout=5 * 60)
+        logger.info("Image builder run complete.")
     return str(image.id)
 
 

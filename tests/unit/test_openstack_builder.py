@@ -165,7 +165,32 @@ def test__create_security_group():
     connection_mock.create_security_group.assert_called()
 
 
-def test_run(monkeypatch: pytest.MonkeyPatch):
+@pytest.mark.parametrize(
+    "cloud_config",
+    [
+        pytest.param(
+            openstack_builder.CloudConfig(
+                cloud_name="test-cloud",
+                flavor="test-flavor",
+                network="test-network",
+                proxy="test-proxy",
+                upload_cloud_name="",
+            ),
+            id="no upload-cloud-name",
+        ),
+        pytest.param(
+            openstack_builder.CloudConfig(
+                cloud_name="test-cloud",
+                flavor="test-flavor",
+                network="test-network",
+                proxy="test-proxy",
+                upload_cloud_name="test-cloud-2",
+            ),
+            id="upload-cloud-name defined",
+        ),
+    ],
+)
+def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.CloudConfig):
     """
     arrange: given monkeypatched sub functions for openstack_builder.run.
     act: when run is called.
@@ -199,7 +224,7 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
     openstack_builder.run(
         arch=MagicMock(),
         base=MagicMock(),
-        cloud_config=MagicMock(),
+        cloud_config=cloud_config,
         runner_version=MagicMock(),
         keep_revisions=5,
     )
