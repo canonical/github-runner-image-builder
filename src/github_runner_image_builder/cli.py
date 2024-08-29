@@ -190,8 +190,6 @@ def run(  # pylint: disable=too-many-arguments
         )
     else:
         image_id = openstack_builder.run(
-            arch=arch,
-            base=base,
             cloud_config=openstack_builder.CloudConfig(
                 cloud_name=cloud_name,
                 flavor=flavor,
@@ -199,7 +197,12 @@ def run(  # pylint: disable=too-many-arguments
                 proxy=proxy,
                 upload_cloud_name=upload_cloud,
             ),
-            runner_version=runner_version,
+            image_config=openstack_builder.ImageConfig(
+                arch=arch,
+                base=base,
+                runner_version=runner_version,
+                name=image_name,
+            ),
             keep_revisions=keep_revisions,
         )
     if callback_script:

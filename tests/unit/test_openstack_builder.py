@@ -222,10 +222,8 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.Cl
     )
 
     openstack_builder.run(
-        arch=MagicMock(),
-        base=MagicMock(),
         cloud_config=cloud_config,
-        runner_version=MagicMock(),
+        image_config=MagicMock(),
         keep_revisions=5,
     )
 

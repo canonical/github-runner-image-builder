@@ -45,7 +45,6 @@ BUILDER_SSH_KEY_NAME = "image-builder-ssh-key"
 BUILDER_KEY_PATH = pathlib.Path("/home/ubuntu/.ssh/builder_key")
 
 SHARED_SECURITY_GROUP_NAME = "github-runner-image-builder-v1"
-IMAGE_SNAPSHOT_NAME = "github-runner-image-builder-snapshot-v0"
 IMAGE_SNAPSHOT_FILE_PATH = pathlib.Path("github-runner-image-snapshot.img")
 
 CREATE_SERVER_TIMEOUT = 5 * 60  # seconds
@@ -208,27 +207,43 @@ class CloudConfig:
     upload_cloud_name: str | None
 
 
+@dataclasses.dataclass
+class ImageConfig:
+    """The build image configuration values.
+
+    Attributes:
+        arch: The architecture of the target image.
+        base: The ubuntu base OS of the image.
+        runner_version: The GitHub runner version to install on the VM. Defaults to latest.
+        name: The image name to upload on OpenStack.
+    """
+
+    arch: Arch
+    base: BaseImage
+    runner_version: str
+    name: str
+
+
 def run(
-    arch: Arch,
-    base: BaseImage,
     cloud_config: CloudConfig,
-    runner_version: str,
+    image_config: ImageConfig,
     keep_revisions: int,
 ) -> str:
     """Run external OpenStack builder instance and create a snapshot.
 
     Args:
-        arch: The architecture of the image to seed.
-        base: The Ubuntu base to use as builder VM base.
         cloud_config: The OpenStack cloud configuration values for builder VM.
-        runner_version: The GitHub runner version to install on the VM. Defaults to latest.
+        image_config: The target image configuration values.
         keep_revisions: The number of image to keep for snapshot before deletion.
 
     Returns:
         The Openstack snapshot image ID.
     """
     cloud_init_script = _generate_cloud_init_script(
-        arch=arch, base=base, runner_version=runner_version, proxy=cloud_config.proxy
+        arch=image_config.arch,
+        base=image_config.base,
+        runner_version=image_config.runner_version,
+        proxy=cloud_config.proxy,
     )
     with openstack.connect(cloud=cloud_config.cloud_name) as conn:
         flavor = _determine_flavor(conn=conn, flavor_name=cloud_config.flavor)
@@ -236,8 +251,8 @@ def run(
         network = _determine_network(conn=conn, network_name=cloud_config.network)
         logger.info("Using network ID: %s.", network)
         builder: openstack.compute.v2.server.Server = conn.create_server(
-            name=_get_builder_name(arch=arch, base=base),
-            image=_get_base_image_name(arch=arch, base=base),
+            name=_get_builder_name(arch=image_config.arch, base=image_config.base),
+            image=_get_base_image_name(arch=image_config.arch, base=image_config.base),
             key_name=BUILDER_SSH_KEY_NAME,
             flavor=flavor,
             network=network,
@@ -251,7 +266,7 @@ def run(
         _wait_for_cloud_init_complete(conn=conn, server=builder, ssh_key=BUILDER_KEY_PATH)
         image = store.create_snapshot(
             cloud_name=cloud_config.cloud_name,
-            image_name=IMAGE_SNAPSHOT_NAME,
+            image_name=image_config.name,
             server=builder,
             keep_revisions=keep_revisions,
         )
@@ -265,9 +280,9 @@ def run(
             conn.download_image(name_or_id=image.id, output_file=IMAGE_SNAPSHOT_FILE_PATH)
             logger.info("Uploading downloaded snapshot to %s.", cloud_config.upload_cloud_name)
             image = store.upload_image(
-                arch=arch,
+                arch=image_config.arch,
                 cloud_name=cloud_config.upload_cloud_name,
-                image_name=IMAGE_SNAPSHOT_NAME,
+                image_name=image_config.name,
                 image_path=IMAGE_SNAPSHOT_FILE_PATH,
                 keep_revisions=keep_revisions,
             )

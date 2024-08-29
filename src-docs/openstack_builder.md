@@ -11,7 +11,6 @@ Module for interacting with external openstack VM image builder.
 - **CLOUD_YAML_PATHS**
 - **BUILDER_SSH_KEY_NAME**
 - **SHARED_SECURITY_GROUP_NAME**
-- **IMAGE_SNAPSHOT_NAME**
 - **CREATE_SERVER_TIMEOUT**
 - **MIN_CPU**
 - **MIN_RAM**
@@ -19,7 +18,7 @@ Module for interacting with external openstack VM image builder.
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L58"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L57"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `determine_cloud`
 
@@ -49,7 +48,7 @@ Automatically determine cloud to use from clouds.yaml by selecting the first clo
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L91"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L90"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `initialize`
 
@@ -71,16 +70,14 @@ Upload ubuntu base images to openstack to use as builder base. This is a separat
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L211"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L227"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `run`
 
 ```python
 run(
-    arch: Arch,
-    base: BaseImage,
     cloud_config: CloudConfig,
-    runner_version: str,
+    image_config: ImageConfig,
     keep_revisions: int
 ) → str
 ```
@@ -91,10 +88,8 @@ Run external OpenStack builder instance and create a snapshot.
 
 **Args:**
  
- - <b>`arch`</b>:  The architecture of the image to seed. 
- - <b>`base`</b>:  The Ubuntu base to use as builder VM base. 
  - <b>`cloud_config`</b>:  The OpenStack cloud configuration values for builder VM. 
- - <b>`runner_version`</b>:  The GitHub runner version to install on the VM. Defaults to latest. 
+ - <b>`image_config`</b>:  The target image configuration values. 
  - <b>`keep_revisions`</b>:  The number of image to keep for snapshot before deletion. 
 
 
@@ -105,7 +100,7 @@ Run external OpenStack builder instance and create a snapshot.
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L192"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L191"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `CloudConfig`
 The OpenStack cloud configuration values. 
@@ -132,6 +127,38 @@ __init__(
     proxy: str,
     upload_cloud_name: str | None
 ) → None
+```
+
+
+
+
+
+
+
+
+
+---
+
+<a href="../src/github_runner_image_builder/openstack_builder.py#L210"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+## <kbd>class</kbd> `ImageConfig`
+The build image configuration values. 
+
+
+
+**Attributes:**
+ 
+ - <b>`arch`</b>:  The architecture of the target image. 
+ - <b>`base`</b>:  The ubuntu base OS of the image. 
+ - <b>`runner_version`</b>:  The GitHub runner version to install on the VM. Defaults to latest. 
+ - <b>`name`</b>:  The image name to upload on OpenStack. 
+
+<a href="../<string>"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+### <kbd>method</kbd> `__init__`
+
+```python
+__init__(arch: Arch, base: BaseImage, runner_version: str, name: str) → None
 ```
 
 
