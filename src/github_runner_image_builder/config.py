@@ -3,6 +3,7 @@
 
 """Module containing configurations."""
 
+import dataclasses
 import itertools
 import logging
 import platform
@@ -133,3 +134,20 @@ LOG_LEVELS = tuple(
         (logging.getLevelName(level).lower() for level in _LOG_LEVELS),
     )
 )
+
+
+@dataclasses.dataclass
+class ImageConfig:
+    """The build image configuration values.
+
+    Attributes:
+        arch: The architecture of the target image.
+        base: The ubuntu base OS of the image.
+        runner_version: The GitHub runner version to install on the VM. Defaults to latest.
+        name: The image name to upload on OpenStack.
+    """
+
+    arch: Arch
+    base: BaseImage
+    runner_version: str
+    name: str

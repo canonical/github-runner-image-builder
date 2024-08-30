@@ -8,7 +8,5 @@ Main entrypoint for github-runner-image-builder cli application.
 **Global Variables**
 ---------------
 - **click**
-- **BASE_CHOICES**
-- **LOG_LEVELS**
 
 

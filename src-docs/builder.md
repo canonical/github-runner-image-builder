@@ -7,7 +7,6 @@ Module for interacting with qemu image builder.
 
 **Global Variables**
 ---------------
-- **IMAGE_DEFAULT_APT_PACKAGES**
 - **APT_DEPENDENCIES**
 - **APT_NONINTERACTIVE_ENV**
 - **SNAP_GO**
@@ -26,7 +25,7 @@ Module for interacting with qemu image builder.
 
 ---
 
-<a href="../src/github_runner_image_builder/builder.py#L99"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/builder.py#L93"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `initialize`
 
@@ -39,12 +38,12 @@ Configure the host machine to build images.
 
 ---
 
-<a href="../src/github_runner_image_builder/builder.py#L163"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/builder.py#L157"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `run`
 
 ```python
-run(arch: Arch, base_image: BaseImage, runner_version: str) → None
+run(cloud_name: str, image_config: ImageConfig, keep_revisions: int) → str
 ```
 
 Build and save the image locally. 
@@ -53,14 +52,19 @@ Build and save the image locally.
 
 **Args:**
  
- - <b>`arch`</b>:  The CPU architecture to build the image for. 
- - <b>`base_image`</b>:  The ubuntu image to use as build base. 
- - <b>`runner_version`</b>:  The GitHub runner version to embed. 
+ - <b>`cloud_name`</b>:  The OpenStack cloud to use from clouds.yaml. 
+ - <b>`image_config`</b>:  The target image configuration values. 
+ - <b>`keep_revisions`</b>:  The number of image to keep for snapshot before deletion. 
 
 
 
 **Raises:**
  
  - <b>`BuildImageError`</b>:  If there was an error building the image. 
+
+
+
+**Returns:**
+ The built image ID. 
 
 

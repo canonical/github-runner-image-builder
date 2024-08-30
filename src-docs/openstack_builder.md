@@ -70,7 +70,7 @@ Upload ubuntu base images to openstack to use as builder base. This is a separat
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L227"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L210"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `run`
 
@@ -127,38 +127,6 @@ __init__(
     proxy: str,
     upload_cloud_name: str | None
 ) → None
-```
-
-
-
-
-
-
-
-
-
----
-
-<a href="../src/github_runner_image_builder/openstack_builder.py#L210"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
-
-## <kbd>class</kbd> `ImageConfig`
-The build image configuration values. 
-
-
-
-**Attributes:**
- 
- - <b>`arch`</b>:  The architecture of the target image. 
- - <b>`base`</b>:  The ubuntu base OS of the image. 
- - <b>`runner_version`</b>:  The GitHub runner version to install on the VM. Defaults to latest. 
- - <b>`name`</b>:  The image name to upload on OpenStack. 
-
-<a href="../<string>"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
-
-### <kbd>method</kbd> `__init__`
-
-```python
-__init__(arch: Arch, base: BaseImage, runner_version: str, name: str) → None
 ```
 
 

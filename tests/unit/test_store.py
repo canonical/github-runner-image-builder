@@ -181,7 +181,7 @@ def test_upload_image(mock_connection: MagicMock):
     act: when upload_image is called.
     assert: UploadImageError is raised.
     """
-    mock_connection.create_image.return_value = MockOpenstackImageFactory(id="1")
+    mock_connection.create_image.return_value = (test_image := MockOpenstackImageFactory(id="1"))
 
     assert (
         store.upload_image(
@@ -191,7 +191,7 @@ def test_upload_image(mock_connection: MagicMock):
             image_path=MagicMock(),
             keep_revisions=MagicMock(),
         )
-        == "1"
+        == test_image
     )
 
 

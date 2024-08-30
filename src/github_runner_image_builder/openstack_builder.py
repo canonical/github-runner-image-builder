@@ -29,7 +29,7 @@ import tenacity
 import yaml
 
 import github_runner_image_builder.errors
-from github_runner_image_builder import cloud_image, store
+from github_runner_image_builder import cloud_image, config, store
 from github_runner_image_builder.config import IMAGE_DEFAULT_APT_PACKAGES, Arch, BaseImage
 
 logger = logging.getLogger(__name__)
@@ -207,26 +207,9 @@ class CloudConfig:
     upload_cloud_name: str | None
 
 
-@dataclasses.dataclass
-class ImageConfig:
-    """The build image configuration values.
-
-    Attributes:
-        arch: The architecture of the target image.
-        base: The ubuntu base OS of the image.
-        runner_version: The GitHub runner version to install on the VM. Defaults to latest.
-        name: The image name to upload on OpenStack.
-    """
-
-    arch: Arch
-    base: BaseImage
-    runner_version: str
-    name: str
-
-
 def run(
     cloud_config: CloudConfig,
-    image_config: ImageConfig,
+    image_config: config.ImageConfig,
     keep_revisions: int,
 ) -> str:
     """Run external OpenStack builder instance and create a snapshot.

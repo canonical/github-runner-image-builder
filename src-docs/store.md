@@ -57,7 +57,7 @@ upload_image(
     image_name: str,
     image_path: Path,
     keep_revisions: int
-) → str
+) → Image
 ```
 
 Upload image to openstack glance. 
@@ -81,7 +81,7 @@ Upload image to openstack glance.
 
 
 **Returns:**
- The created image ID. 
+ The created image. 
 
 
 ---

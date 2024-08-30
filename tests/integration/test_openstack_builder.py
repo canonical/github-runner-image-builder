@@ -92,7 +92,7 @@ def cli_run_fixture(
             proxy=proxy.http,
             upload_cloud_name=cloud_name,
         ),
-        image_config=openstack_builder.ImageConfig(
+        image_config=config.ImageConfig(
             arch=arch,
             base=config.BaseImage.from_str(image),
             runner_version="",
