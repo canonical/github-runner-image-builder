@@ -4,7 +4,7 @@
 
 - Install the CLI
 - Initialize the builder
-- Run the image build via the chroot method (default)
+- Run the image build
 
 ## Requirements
 
