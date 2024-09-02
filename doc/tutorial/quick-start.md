@@ -1,9 +1,9 @@
-# Quick start
+# Build your first image
 
 ## What you'll do
 
 - Install the CLI
-- Initialize the builder
+- Initialise the builder
 - Run the image build
 
 ## Requirements
@@ -21,14 +21,24 @@
 - Install the CLI
   - `pipx install git+https://github.com/canonical/github-runner-image-builder@stable`
 
-### Initialize the builder
+### Initialise the builder
 
-- `github-runner-image-builder init`
+- Run `github-runner-image-builder init` to install the dependencies for building the image.
 
 ### Run the image build
 
-- `github-runner-image-builder run <cloud-name> <image-name>`
+- Run 
+```
+CLOUD_NAME=<OpenStack cloud name from clouds.yaml>
+IMAGE_NAME=<your desired image name>
+github-runner-image-builder run <cloud-name> <image-name>
+```
+to start building the image.
 
 ### Verify that the image is available on OpenStack
 
-- `openstack image list | grep <image-name>`
+- Run `openstack image list | grep <image-name>` to see the image in "active" status.
+
+### Cleanup
+
+- Run `openstack image delete <image-name>` after you're done following the tutorial to clean up.
