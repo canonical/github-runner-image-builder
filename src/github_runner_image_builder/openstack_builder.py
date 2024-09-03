@@ -260,7 +260,7 @@ def run(
             # and cloud_config.cloud_name != cloud_config.upload_cloud_name
         ):
             logger.info("Downloading snapshot to %s.", IMAGE_SNAPSHOT_FILE_PATH)
-            conn.download_image(name_or_id=image.id, output_file=IMAGE_SNAPSHOT_FILE_PATH)
+            image.download(session=conn.session, output=IMAGE_SNAPSHOT_FILE_PATH)
             logger.info("Uploading downloaded snapshot to %s.", cloud_config.upload_cloud_name)
             image = store.upload_image(
                 arch=image_config.arch,
