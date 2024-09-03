@@ -350,7 +350,7 @@ def _snap_ready(conn: SSHConnection) -> bool:
 
 @tenacity.retry(
     wait=tenacity.wait_exponential(multiplier=2, min=10, max=60),
-    stop=tenacity.stop_after_attempt(5),
+    stop=tenacity.stop_after_attempt(10),
 )
 def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None):
     """Use dockerhub mirror if provided.
@@ -494,6 +494,10 @@ def create_openstack_server(
             network=openstack_metadata.network,
             timeout=60 * 20,
             wait=True,
+        )
+        logger.info(
+            "server console log output: %s",
+            openstack_metadata.connection.get_server_console(server=server),
         )
         yield server
     except openstack.exceptions.SDKException:

@@ -85,15 +85,19 @@ def cli_run_fixture(
     been installed using pipx. See testenv:integration section of tox.ini.
     """
     openstack_builder.run(
-        arch=arch,
-        base=config.BaseImage.from_str(image),
         cloud_config=openstack_builder.CloudConfig(
             cloud_name=cloud_name,
             flavor=openstack_metadata.flavor,
             network=openstack_metadata.network,
             proxy=proxy.http,
+            upload_cloud_name=cloud_name,
         ),
-        runner_version="",
+        image_config=config.ImageConfig(
+            arch=arch,
+            base=config.BaseImage.from_str(image),
+            runner_version="",
+            name="github-runner-image-builder-snapshot-v0",
+        ),
         keep_revisions=1,
     )
 
@@ -108,7 +112,7 @@ async def openstack_server_fixture(
 ):
     """A testing openstack instance."""
     image: Image = openstack_metadata.connection.get_image(
-        name_or_id=openstack_builder.IMAGE_SNAPSHOT_NAME
+        name_or_id="github-runner-image-builder-snapshot-v0"
     )
     server_name = f"test-image-builder-run-{test_id}"
     for server in helpers.create_openstack_server(
