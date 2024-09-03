@@ -13,9 +13,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from github_runner_image_builder import builder, cloud_image
+from github_runner_image_builder import builder, cloud_image, config
 from github_runner_image_builder.builder import (
-    Arch,
     BuildImageError,
     ChrootBaseError,
     DependencyInstallError,
@@ -219,6 +218,13 @@ def test__enable_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
             "Failed to compress image",
             id="Failed to compress image",
         ),
+        pytest.param(
+            builder.store,
+            "upload_image",
+            MagicMock(side_effect=ImageCompressError("Failed to upload image")),
+            "Failed to upload image",
+            id="Failed to upload image",
+        ),
     ],
 )
 def test_run_error(
@@ -254,9 +260,41 @@ def test_run_error(
     monkeypatch.setattr(patch_obj, sub_func, mock)
 
     with pytest.raises(BuildImageError) as exc:
-        builder.run(arch=MagicMock(), base_image=MagicMock(), runner_version=MagicMock())
+        builder.run(cloud_name=MagicMock(), image_config=MagicMock(), keep_revisions=MagicMock())
 
     assert expected_message in str(exc.getrepr())
+
+
+def test_run(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched functions of run that raises exceptions.
+    act: when run is called.
+    assert: BuildImageError is raised.
+    """
+    monkeypatch.setattr(builder, "IMAGE_MOUNT_DIR", MagicMock())
+    monkeypatch.setattr(cloud_image, "download_and_validate_image", MagicMock())
+    monkeypatch.setattr(builder, "_resize_image", MagicMock())
+    monkeypatch.setattr(builder, "_connect_image_to_network_block_device", MagicMock())
+    monkeypatch.setattr(builder, "_resize_mount_partitions", MagicMock())
+    monkeypatch.setattr(builder, "_replace_mounted_resolv_conf", MagicMock())
+    monkeypatch.setattr(builder, "_install_yq", MagicMock())
+    monkeypatch.setattr(builder, "ChrootContextManager", MagicMock())
+    monkeypatch.setattr(builder.subprocess, "check_output", MagicMock())
+    monkeypatch.setattr(builder.subprocess, "run", MagicMock())
+    monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
+    monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
+    monkeypatch.setattr(builder, "_install_yarn", MagicMock())
+    monkeypatch.setattr(builder, "_install_github_runner", MagicMock())
+    monkeypatch.setattr(builder, "_disconnect_image_to_network_block_device", MagicMock())
+    monkeypatch.setattr(builder, "_compress_image", MagicMock())
+    monkeypatch.setattr(
+        builder.store, "upload_image", MagicMock(return_value=(test_image := MagicMock()))
+    )
+
+    assert (
+        builder.run(cloud_name=MagicMock(), image_config=MagicMock(), keep_revisions=MagicMock())
+        == test_image.id
+    )
 
 
 def test__resize_image_fail(monkeypatch: pytest.MonkeyPatch):
@@ -621,7 +659,7 @@ def test__install_github_runner_error(
     monkeypatch.setattr(module, func, mock)
 
     with pytest.raises(builder.RunnerDownloadError) as exc:
-        builder._install_github_runner(arch=Arch.X64, version="")
+        builder._install_github_runner(arch=config.Arch.X64, version="")
 
     assert expected_message in str(exc.getrepr())
 
@@ -640,7 +678,7 @@ def test__install_github_runner(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(builder.pwd, "getpwnam", MagicMock())
     monkeypatch.setattr(builder.subprocess, "check_call", MagicMock())
 
-    builder._install_github_runner(arch=Arch.ARM64, version="")
+    builder._install_github_runner(arch=config.Arch.ARM64, version="")
 
 
 @pytest.mark.parametrize(

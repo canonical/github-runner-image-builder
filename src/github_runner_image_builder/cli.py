@@ -9,19 +9,12 @@ from pathlib import Path
 
 import click
 
-from github_runner_image_builder import builder, logging, openstack_builder, store
-from github_runner_image_builder.config import (
-    BASE_CHOICES,
-    IMAGE_OUTPUT_PATH,
-    LOG_LEVELS,
-    BaseImage,
-    get_supported_arch,
-)
+from github_runner_image_builder import builder, config, logging, openstack_builder, store
 
 
 @click.option(
     "--log-level",
-    type=click.Choice(LOG_LEVELS),
+    type=click.Choice(config.LOG_LEVELS),
     default="info",
     help="Configure logging verbosity.",
 )
@@ -57,7 +50,7 @@ def initialize(experimental_external: bool, cloud_name: str) -> None:
     if not experimental_external:
         builder.initialize()
         return
-    arch = get_supported_arch()
+    arch = config.get_supported_arch()
 
     openstack_builder.initialize(
         arch=arch, cloud_name=openstack_builder.determine_cloud(cloud_name=cloud_name)
@@ -88,7 +81,7 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
 @click.option(
     "-b",
     "--base-image",
-    type=click.Choice(BASE_CHOICES),
+    type=click.Choice(config.BASE_CHOICES),
     default="noble",
     help=("The Ubuntu base image to use as build base."),
 )
@@ -140,6 +133,13 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     help="EXPERIMENTAL: Proxy to use for external build VMs in host:port format (without scheme). "
     "Ignored if --experimental-external is not enabled",
 )
+@click.option(
+    "--upload-cloud",
+    default="",
+    help="EXPERIMENTAL: Different cloud to use to upload the externally built image. The cloud "
+    "connection parameters should exist in the clouds.yaml. Ignored if --experimental-external is"
+    " not enabled, as a part of external build mode parameter.",
+)
 # click doesn't yet support dataclasses, hence all arguments are required.
 def run(  # pylint: disable=too-many-arguments
     cloud_name: str,
@@ -152,6 +152,7 @@ def run(  # pylint: disable=too-many-arguments
     flavor: str,
     network: str,
     proxy: str,
+    upload_cloud: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
 
@@ -167,26 +168,36 @@ def run(  # pylint: disable=too-many-arguments
         flavor: The Openstack flavor to create server to build images.
         network: The Openstack network to assign to server to build images.
         proxy: Proxy to use for external build VMs.
+        upload_cloud: The Opensttack cloud to use to upload externally built image.
     """
-    arch = get_supported_arch()
-    base = BaseImage.from_str(base_image)
+    arch = config.get_supported_arch()
+    base = config.BaseImage.from_str(base_image)
     if not experimental_external:
-        builder.run(arch=arch, base_image=base, runner_version=runner_version)
-        image_id = store.upload_image(
-            arch=arch,
+        image_id = builder.run(
             cloud_name=cloud_name,
-            image_name=image_name,
-            image_path=IMAGE_OUTPUT_PATH,
+            image_config=config.ImageConfig(
+                arch=arch,
+                base=base,
+                runner_version=runner_version,
+                name=image_name,
+            ),
             keep_revisions=keep_revisions,
         )
     else:
         image_id = openstack_builder.run(
-            arch=arch,
-            base=base,
             cloud_config=openstack_builder.CloudConfig(
-                cloud_name=cloud_name, flavor=flavor, network=network, proxy=proxy
+                cloud_name=cloud_name,
+                flavor=flavor,
+                network=network,
+                proxy=proxy,
+                upload_cloud_name=upload_cloud,
             ),
-            runner_version=runner_version,
+            image_config=config.ImageConfig(
+                arch=arch,
+                base=base,
+                runner_version=runner_version,
+                name=image_name,
+            ),
             keep_revisions=keep_revisions,
         )
     if callback_script:

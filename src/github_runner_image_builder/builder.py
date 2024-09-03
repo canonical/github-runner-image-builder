@@ -23,14 +23,8 @@ from pathlib import Path
 
 import requests
 
-from github_runner_image_builder import cloud_image
+from github_runner_image_builder import cloud_image, config, store
 from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextManager
-from github_runner_image_builder.config import (
-    IMAGE_DEFAULT_APT_PACKAGES,
-    IMAGE_OUTPUT_PATH,
-    Arch,
-    BaseImage,
-)
 from github_runner_image_builder.errors import (
     BuildImageError,
     DependencyInstallError,
@@ -162,16 +156,23 @@ def _enable_network_block_device() -> None:
         raise NetworkBlockDeviceError from exc
 
 
-def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
+def run(
+    cloud_name: str,
+    image_config: config.ImageConfig,
+    keep_revisions: int,
+) -> str:
     """Build and save the image locally.
 
     Args:
-        arch: The CPU architecture to build the image for.
-        base_image: The ubuntu image to use as build base.
-        runner_version: The GitHub runner version to embed.
+        cloud_name: The OpenStack cloud to use from clouds.yaml.
+        image_config: The target image configuration values.
+        keep_revisions: The number of image to keep for snapshot before deletion.
 
     Raises:
         BuildImageError: If there was an error building the image.
+
+    Returns:
+        The built image ID.
     """
     # ensure clean state - if there were errors within the chroot environment (e.g. network error)
     # this guarantees retry-ability
@@ -180,7 +181,9 @@ def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
 
     IMAGE_MOUNT_DIR.mkdir(parents=True, exist_ok=True)
     logger.info("Downloading base image.")
-    base_image_path = cloud_image.download_and_validate_image(arch=arch, base_image=base_image)
+    base_image_path = cloud_image.download_and_validate_image(
+        arch=image_config.arch, base_image=image_config.base
+    )
     logger.info("Resizing base image.")
     _resize_image(image_path=base_image_path)
     logger.info("Connecting image to network block device.")
@@ -195,7 +198,7 @@ def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
     _replace_mounted_resolv_conf()
     try:
         with ChrootContextManager(IMAGE_MOUNT_DIR):
-            _install_apt_packages(base_image=base_image)
+            _install_apt_packages(base_image=image_config.base)
             logger.info("Disabling unattended upgrades.")
             _disable_unattended_upgrades()
             logger.info("Enabling network optimization policy.")
@@ -207,7 +210,7 @@ def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
             logger.info("Installing Yarn.")
             _install_yarn()
             logger.info("Installing GitHub runner.")
-            _install_github_runner(arch=arch, version=runner_version)
+            _install_github_runner(arch=image_config.arch, version=image_config.runner_version)
             logger.info("Changing ownership of home directory.")
             _chown_home()
     except ChrootBaseError as exc:
@@ -219,6 +222,15 @@ def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
 
     logger.info("Compressing image.")
     _compress_image(base_image_path)
+
+    image = store.upload_image(
+        arch=image_config.arch,
+        cloud_name=cloud_name,
+        image_name=image_config.name,
+        image_path=config.IMAGE_OUTPUT_PATH,
+        keep_revisions=keep_revisions,
+    )
+    return image.id
 
 
 def _disconnect_image_to_network_block_device(check: bool = True) -> None:
@@ -471,7 +483,7 @@ def _replace_mounted_resolv_conf() -> None:
     shutil.copy(str(HOST_RESOLV_CONF_PATH), str(MOUNTED_RESOLV_CONF_PATH))
 
 
-def _install_apt_packages(base_image: BaseImage) -> None:
+def _install_apt_packages(base_image: config.BaseImage) -> None:
     """Install APT packages on the chroot env.
 
     Args:
@@ -491,7 +503,7 @@ def _install_apt_packages(base_image: BaseImage) -> None:
             "install",
             "-y",
             "--no-install-recommends",
-            *IMAGE_DEFAULT_APT_PACKAGES,
+            *config.IMAGE_DEFAULT_APT_PACKAGES,
         ],
         timeout=60 * 20,
         env=APT_NONINTERACTIVE_ENV,
@@ -505,7 +517,7 @@ def _install_apt_packages(base_image: BaseImage) -> None:
             "-y",
             # https://ubuntu.com/kernel/lifecycle installs recommended packages
             "--install-recommends",
-            IMAGE_HWE_PKG_FORMAT.format(VERSION=BaseImage.get_version(base_image)),
+            IMAGE_HWE_PKG_FORMAT.format(VERSION=config.BaseImage.get_version(base_image)),
         ],
         timeout=60 * 20,
         env=APT_NONINTERACTIVE_ENV,
@@ -684,7 +696,7 @@ def _install_yarn() -> None:
         raise YarnInstallError from exc
 
 
-def _install_github_runner(arch: Arch, version: str) -> None:
+def _install_github_runner(arch: config.Arch, version: str) -> None:
     """Download and install github runner.
 
     Args:
@@ -817,7 +829,7 @@ def _compress_image(image: Path) -> None:
                 "-O",  # output format
                 "qcow2",
                 str(image),
-                str(IMAGE_OUTPUT_PATH),
+                str(config.IMAGE_OUTPUT_PATH),
             ],
             timeout=60 * 10,
         )

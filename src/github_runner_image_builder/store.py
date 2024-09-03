@@ -57,7 +57,7 @@ def create_snapshot(
 
 def upload_image(
     arch: Arch, cloud_name: str, image_name: str, image_path: Path, keep_revisions: int
-) -> str:
+) -> Image:
     """Upload image to openstack glance.
 
     Args:
@@ -71,7 +71,7 @@ def upload_image(
         UploadImageError: If there was an error uploading the image to Openstack Glance.
 
     Returns:
-        The created image ID.
+        The created image.
     """
     with openstack.connect(cloud=cloud_name) as connection:
         try:
@@ -88,7 +88,7 @@ def upload_image(
                 connection=connection, image_name=image_name, num_revisions=keep_revisions
             )
             logger.info("Image created successfully, %s %s.", image_name, image.id)
-            return image.id
+            return image
         except openstack.exceptions.OpenStackCloudException as exc:
             logger.exception("Error while uploading image.")
             raise UploadImageError from exc
