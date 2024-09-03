@@ -247,6 +247,8 @@ def run(
         )
         logger.info("Launched builder, waiting for cloud-init to complete: %s.", builder.id)
         _wait_for_cloud_init_complete(conn=conn, server=builder, ssh_key=BUILDER_KEY_PATH)
+        log_output = conn.get_server_console(server=builder)
+        logger.info("Bulid output: %s", log_output)
         image = store.create_snapshot(
             cloud_name=cloud_config.cloud_name,
             image_name=image_config.name,

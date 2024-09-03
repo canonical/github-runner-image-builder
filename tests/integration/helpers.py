@@ -495,6 +495,10 @@ def create_openstack_server(
             timeout=60 * 20,
             wait=True,
         )
+        logger.info(
+            "server console log output: %s",
+            openstack_metadata.connection.get_server_console(server=server),
+        )
         yield server
     except openstack.exceptions.SDKException:
         server = openstack_metadata.connection.get_server(name_or_id=server_name)
