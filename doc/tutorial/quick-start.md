@@ -27,11 +27,11 @@
 
 ### Run the image build
 
-- Run 
+- Choose the OpenStack <cloud-name> from the clouds.yaml file, and set the desired image name as <image-name>.
 ```
-CLOUD_NAME=<OpenStack cloud name from clouds.yaml>
-IMAGE_NAME=<your desired image name>
-github-runner-image-builder run <cloud-name> <image-name>
+CLOUD_NAME=<cloud-name>
+IMAGE_NAME=<image-name>
+github-runner-image-builder run $CLOUD_NAME $IMAGE_NAME
 ```
 to start building the image.
 
@@ -44,4 +44,4 @@ https://docs.openstack.org/python-openstackclient/pike/cli/command-objects/serve
 
 ### Cleanup
 
-- Run `openstack image delete <image-name>` after you're done following the tutorial to clean up.
+- To clean up, run `openstack image delete <image-name>` after you're done following the tutorial .
