@@ -38,6 +38,9 @@ to start building the image.
 ### Verify that the image is available on OpenStack
 
 - Run `openstack image list | grep <image-name>` to see the image in "active" status.
+- You can also create a server with the image above to check the contents installed on the image.
+For more information, refer to the official OpenStack documentation on creating servers here:
+https://docs.openstack.org/python-openstackclient/pike/cli/command-objects/server.html#server-create
 
 ### Cleanup
 

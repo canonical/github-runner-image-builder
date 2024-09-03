@@ -138,7 +138,7 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     default="",
     help="EXPERIMENTAL: Different cloud to use to upload the externally built image. The cloud "
     "connection parameters should exist in the clouds.yaml. Ignored if --experimental-external is"
-    " not enabled",
+    " not enabled, as a part of external build mode parameter.",
 )
 # click doesn't yet support dataclasses, hence all arguments are required.
 def run(  # pylint: disable=too-many-arguments

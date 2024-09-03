@@ -257,10 +257,7 @@ def run(
         )
         logger.info("Requested snapshot, waiting for snapshot to complete: %s.", image.id)
         _wait_for_snapshot_complete(conn=conn, image=image)
-        if (
-            cloud_config.upload_cloud_name
-            # and cloud_config.cloud_name != cloud_config.upload_cloud_name
-        ):
+        if cloud_config.upload_cloud_name:
             logger.info("Downloading snapshot to %s.", IMAGE_SNAPSHOT_FILE_PATH)
             conn.download_image(
                 name_or_id=image.id, output_file=IMAGE_SNAPSHOT_FILE_PATH, stream=True
