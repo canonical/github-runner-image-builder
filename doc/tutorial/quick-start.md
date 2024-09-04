@@ -27,13 +27,14 @@
 
 ### Run the image build
 
-- Choose the OpenStack <cloud-name> from the clouds.yaml file, and set the desired image name as <image-name>.
+- Choose the OpenStack `<cloud-name>` from the clouds.yaml file, and set the desired image name as `<image-name>`.
 ```
 CLOUD_NAME=<cloud-name>
 IMAGE_NAME=<image-name>
 github-runner-image-builder run $CLOUD_NAME $IMAGE_NAME
 ```
-to start building the image.
+
+This event begins building the image.
 
 ### Verify that the image is available on OpenStack
 
