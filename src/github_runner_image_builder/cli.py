@@ -30,9 +30,11 @@ def main(log_level: str | int) -> None:
 
 @main.command(name="init")
 @click.option(
-    "--experimental-external",
-    default=False,
-    help="EXPERIMENTAL: Use external Openstack builder to build images.",
+    "--arch",
+    type=click.Choice((config.Arch.ARM64, config.Arch.X64)),
+    default=None,
+    help="Image architecture to initialize for. Defaults the host architecture. "
+    "Ignored if --experimental-external is not enabled",
 )
 @click.option(
     "--cloud-name",
@@ -40,17 +42,23 @@ def main(log_level: str | int) -> None:
     help="The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in paths of "
     "the following order: current directory, ~/.config/openstack, /etc/openstack.",
 )
-def initialize(experimental_external: bool, cloud_name: str) -> None:
+@click.option(
+    "--experimental-external",
+    default=False,
+    help="EXPERIMENTAL: Use external Openstack builder to build images.",
+)
+def initialize(arch: config.Arch | None, cloud_name: str, experimental_external: bool) -> None:
     """Initialize builder CLI function wrapper.
 
     Args:
-        experimental_external: Whether to use external Openstack builder to build images.
+        arch: The architecture to build for.
         cloud_name: The cloud name to use from clouds.yaml.
+        experimental_external: Whether to use external Openstack builder to build images.
     """
     if not experimental_external:
         builder.initialize()
         return
-    arch = config.get_supported_arch()
+    arch = arch if arch else config.get_supported_arch()
 
     openstack_builder.initialize(
         arch=arch, cloud_name=openstack_builder.determine_cloud(cloud_name=cloud_name)
@@ -78,6 +86,12 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
 @main.command(name="run")
 @click.argument("cloud_name")
 @click.argument("image_name")
+@click.option(
+    "--arch",
+    type=click.Choice((config.Arch.ARM64, config.Arch.X64)),
+    default=None,
+    help="Image architecture to initialize for. Defaults the host architecture.",
+)
 @click.option(
     "-b",
     "--base-image",
@@ -142,6 +156,7 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
 )
 # click doesn't yet support dataclasses, hence all arguments are required.
 def run(  # pylint: disable=too-many-arguments
+    arch: config.Arch | None,
     cloud_name: str,
     image_name: str,
     base_image: str,
@@ -157,6 +172,7 @@ def run(  # pylint: disable=too-many-arguments
     """Build a cloud image using chroot and upload it to OpenStack.
 
     Args:
+        arch: The architecture to run build for.
         cloud_name: The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in
             paths of the following order: current directory, ~/.config/openstack, /etc/openstack.
         image_name: The image name uploaded to Openstack.
@@ -170,7 +186,7 @@ def run(  # pylint: disable=too-many-arguments
         proxy: Proxy to use for external build VMs.
         upload_cloud: The Opensttack cloud to use to upload externally built image.
     """
-    arch = config.get_supported_arch()
+    arch = arch if arch else config.get_supported_arch()
     base = config.BaseImage.from_str(base_image)
     if not experimental_external:
         image_id = builder.run(
