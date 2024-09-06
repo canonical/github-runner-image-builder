@@ -29,7 +29,7 @@ import tenacity
 import yaml
 
 import github_runner_image_builder.errors
-from github_runner_image_builder import cloud_image, config, store
+from github_runner_image_builder import cloud_image, config, store, utils
 from github_runner_image_builder.config import IMAGE_DEFAULT_APT_PACKAGES, Arch, BaseImage
 
 logger = logging.getLogger(__name__)
@@ -246,7 +246,9 @@ def run(
             wait=True,
         )
         logger.info("Launched builder, waiting for cloud-init to complete: %s.", builder.id)
-        _wait_for_cloud_init_complete(conn=conn, server=builder, ssh_key=BUILDER_KEY_PATH)
+        # The openstack libs prints to stdout, meddling with image ID output. Suppress it.
+        with utils.suppress_stdout():
+            _wait_for_cloud_init_complete(conn=conn, server=builder, ssh_key=BUILDER_KEY_PATH)
         log_output = conn.get_server_console(server=builder)
         logger.info("Build output: %s", log_output)
         image = store.create_snapshot(

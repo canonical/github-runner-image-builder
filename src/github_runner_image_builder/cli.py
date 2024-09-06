@@ -216,6 +216,7 @@ def run(  # pylint: disable=too-many-arguments
             ),
             keep_revisions=keep_revisions,
         )
+    click.echo(image_id, nl=False)
     if callback_script:
         # The callback script is a user trusted script.
         subprocess.check_call([str(callback_script), image_id])  # nosec: B603
