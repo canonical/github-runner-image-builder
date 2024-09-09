@@ -9,7 +9,7 @@ import logging
 import os
 import sys
 import time
-from typing import Callable, Optional, Type, TypeVar
+from typing import Callable, Generator, Optional, Type, TypeVar
 
 from typing_extensions import ParamSpec
 
@@ -106,9 +106,9 @@ def retry(  # pylint: disable=too-many-arguments
 
 
 @contextlib.contextmanager
-def suppress_stdout():
-    """Supress writing to the standard output."""
-    with open(os.devnull, "w") as devnull:
+def suppress_stdout() -> Generator[None, None, None]:
+    """Suppress writing to the standard output."""
+    with open(os.devnull, "w", encoding="utf-8") as devnull:
         old_stdout = sys.stdout
         sys.stdout = devnull
         try:

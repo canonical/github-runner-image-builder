@@ -49,9 +49,9 @@ Parameterize the decorator for adding retry to functions.
 ## <kbd>function</kbd> `suppress_stdout`
 
 ```python
-suppress_stdout()
+suppress_stdout() → Generator[NoneType, NoneType, NoneType]
 ```
 
-Supress writing to the standard output. 
+Suppress writing to the standard output. 
 
 
