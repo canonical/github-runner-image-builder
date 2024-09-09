@@ -199,6 +199,9 @@ def run(  # pylint: disable=too-many-arguments
             ),
             keep_revisions=keep_revisions,
         )
+        # 2024/07/09: Only print image_id for chroot building for backwards compatibility. To be
+        # deprecated when external builder is in stable.
+        click.echo(image_id, nl=False)
     else:
         image_id = openstack_builder.run(
             cloud_config=openstack_builder.CloudConfig(
@@ -216,6 +219,7 @@ def run(  # pylint: disable=too-many-arguments
             ),
             keep_revisions=keep_revisions,
         )
+        click.echo(f"Image build success:\n{image_id}", nl=False)
     if callback_script:
         # The callback script is a user trusted script.
         subprocess.check_call([str(callback_script), image_id])  # nosec: B603
