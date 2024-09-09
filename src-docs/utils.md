@@ -8,7 +8,7 @@ Utilities used by the app.
 
 ---
 
-<a href="../src/github_runner_image_builder/utils.py#L26"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/utils.py#L23"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `retry`
 
@@ -40,18 +40,5 @@ Parameterize the decorator for adding retry to functions.
 
 **Returns:**
  The function decorator for retry. 
-
-
----
-
-<a href="../utils/suppress_stdout#L108"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
-
-## <kbd>function</kbd> `suppress_stdout`
-
-```python
-suppress_stdout() → Generator[NoneType, NoneType, NoneType]
-```
-
-Suppress writing to the standard output. 
 
 

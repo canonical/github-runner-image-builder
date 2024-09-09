@@ -3,13 +3,10 @@
 
 """Utilities used by the app."""
 
-import contextlib
 import functools
 import logging
-import os
-import sys
 import time
-from typing import Callable, Generator, Optional, Type, TypeVar
+from typing import Callable, Optional, Type, TypeVar
 
 from typing_extensions import ParamSpec
 
@@ -103,15 +100,3 @@ def retry(  # pylint: disable=too-many-arguments
         return fn_with_retry
 
     return retry_decorator
-
-
-@contextlib.contextmanager
-def suppress_stdout() -> Generator[None, None, None]:
-    """Suppress writing to the standard output."""
-    with open(os.devnull, "w", encoding="utf-8") as devnull:
-        old_stdout = sys.stdout
-        sys.stdout = devnull
-        try:
-            yield
-        finally:
-            sys.stdout = old_stdout
