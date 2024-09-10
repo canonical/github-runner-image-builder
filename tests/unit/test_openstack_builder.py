@@ -513,6 +513,7 @@ function install_yarn() {
 function install_yq() {
     /usr/bin/sudo snap install go --classic
     /usr/bin/git clone https://github.com/mikefarah/yq.git
+    /snap/bin/go mod tidy -C yq
     /snap/bin/go build -C yq -o /usr/bin/yq
     /usr/bin/rm -rf yq
     /usr/bin/sudo snap remove go
