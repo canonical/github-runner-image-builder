@@ -463,6 +463,8 @@ def test__generate_cloud_init_script():
         # pylint: disable=R0801
         == """#!/bin/bash
 
+set -e
+
 function configure_proxy() {
     local proxy="$1"
     if [[ -z "$proxy" ]]; then
@@ -489,6 +491,8 @@ table ip aproxy {
 EOF
     echo "Configuring aproxy"
     /usr/bin/sudo snap set aproxy proxy=${proxy} listen=:8444;
+    echo "Wait for aproxy to start"
+    sleep 5
 }
 
 function install_apt_packages() {
@@ -518,7 +522,8 @@ function configure_system_users() {
     /usr/bin/id -u ubuntu &>/dev/null || useradd --create-home ubuntu
     echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
     echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
-    /usr/sbin/groupadd microk8s
+    /usr/sbin/groupadd -f microk8s
+    /usr/sbin/groupadd -f docker
     /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
 }
 
@@ -534,11 +539,12 @@ function install_yarn() {
 }
 
 function install_yq() {
-    /usr/bin/sudo snap install go --classic
-    /usr/bin/git clone https://github.com/mikefarah/yq.git
-    /snap/bin/go build -C yq -o /usr/bin/yq
-    /usr/bin/rm -rf yq
-    /usr/bin/sudo snap remove go
+    /usr/bin/sudo -E /usr/bin/snap install go --classic
+    /usr/bin/sudo -E /usr/bin/git clone https://github.com/mikefarah/yq.git
+    /usr/bin/sudo -E /snap/bin/go mod tidy -C yq
+    /usr/bin/sudo -E /snap/bin/go build -C yq -o /usr/bin/yq
+    /usr/bin/sudo -E /usr/bin/rm -rf yq
+    /usr/bin/sudo -E /usr/bin/snap remove go
 }
 
 function install_github_runner() {
@@ -577,7 +583,9 @@ disable_unattended_upgrades
 configure_system_users
 configure_usr_local_bin
 install_yarn
-install_yq
+# install yq with ubuntu user due to GOPATH related go configuration settings
+export -f install_yq
+su ubuntu -c "bash -c 'install_yq'"
 install_github_runner "$github_runner_version" "$github_runner_arch"\
 """
     )

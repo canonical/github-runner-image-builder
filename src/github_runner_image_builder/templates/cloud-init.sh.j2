@@ -34,11 +34,11 @@ EOF
 function install_apt_packages() {
     local packages="$1"
     local hwe_version="$2"
-    echo Updating apt packages
+    echo "Updating apt packages"
     DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get update -y
-    echo Installing apt packages $packages
+    echo "Installing apt packages $packages"
     DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --no-install-recommends ${packages}
-    echo Installing linux-generic-hwe-${hwe_version}
+    echo "Installing linux-generic-hwe-${hwe_version}"
     DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --install-recommends linux-generic-hwe-${hwe_version}
 }
 
