@@ -436,7 +436,7 @@ def _install_yq() -> None:
             )
             logger.info("git pull out: %s", output)
         output = subprocess.check_output(  # nosec: B603
-            ["/snap/bin/go", "mod tidy", "-C", str(YQ_REPOSITORY_PATH)],
+            ["/snap/bin/go", "mod", "tidy", "-C", str(YQ_REPOSITORY_PATH)],
             timeout=20 * 60,
         )
         logger.info("go mod tidy out: %s", output)
