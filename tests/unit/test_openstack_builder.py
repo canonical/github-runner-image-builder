@@ -184,9 +184,19 @@ def test__create_security_group():
                 flavor="test-flavor",
                 network="test-network",
                 proxy="test-proxy",
-                upload_cloud_names=["test-cloud-2"],
+                upload_cloud_names=["test-cloud-1"],
             ),
-            id="upload-cloud-name defined",
+            id="single upload-cloud-name defined",
+        ),
+        pytest.param(
+            openstack_builder.CloudConfig(
+                cloud_name="test-cloud",
+                flavor="test-flavor",
+                network="test-network",
+                proxy="test-proxy",
+                upload_cloud_names=["test-cloud-1", "test-cloud-2"],
+            ),
+            id="multiple upload-cloud-name defined",
         ),
     ],
 )
