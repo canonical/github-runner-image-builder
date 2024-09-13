@@ -148,14 +148,14 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "Ignored if --experimental-external is not enabled",
 )
 @click.option(
-    "--upload-cloud",
+    "--upload-clouds",
     default="",
-    help="EXPERIMENTAL: Different cloud to use to upload the externally built image. The cloud "
-    "connection parameters should exist in the clouds.yaml. Ignored if --experimental-external is"
-    " not enabled, as a part of external build mode parameter.",
+    help="EXPERIMENTAL: Comma separated list of different clouds to use to upload the externally "
+    "built image. The cloud connection parameters should exist in the clouds.yaml. Ignored if "
+    "--experimental-external is not enabled, as a part of external build mode parameter.",
 )
 # click doesn't yet support dataclasses, hence all arguments are required.
-def run(  # pylint: disable=too-many-arguments
+def run(  # pylint: disable=too-many-arguments, too-many-locals
     arch: config.Arch | None,
     cloud_name: str,
     image_name: str,
@@ -167,7 +167,7 @@ def run(  # pylint: disable=too-many-arguments
     flavor: str,
     network: str,
     proxy: str,
-    upload_cloud: str,
+    upload_clouds: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
 
@@ -184,7 +184,7 @@ def run(  # pylint: disable=too-many-arguments
         flavor: The Openstack flavor to create server to build images.
         network: The Openstack network to assign to server to build images.
         proxy: Proxy to use for external build VMs.
-        upload_cloud: The Opensttack cloud to use to upload externally built image.
+        upload_clouds: The Openstack cloud to use to upload externally built image.
     """
     arch = arch if arch else config.get_supported_arch()
     base = config.BaseImage.from_str(base_image)
@@ -203,13 +203,19 @@ def run(  # pylint: disable=too-many-arguments
         # deprecated when external builder is in stable.
         click.echo(image_id, nl=False)
     else:
-        image_id = openstack_builder.run(
+        # coverage thinks this line can lead to exit.
+        upload_cloud_names = (  # pragma: no cover
+            [cloud_name.strip() for cloud_name in upload_clouds.split(",")]
+            if upload_clouds
+            else None
+        )
+        image_ids = openstack_builder.run(
             cloud_config=openstack_builder.CloudConfig(
                 cloud_name=cloud_name,
                 flavor=flavor,
                 network=network,
                 proxy=proxy,
-                upload_cloud_name=upload_cloud,
+                upload_cloud_names=upload_cloud_names,
             ),
             image_config=config.ImageConfig(
                 arch=arch,
@@ -219,7 +225,7 @@ def run(  # pylint: disable=too-many-arguments
             ),
             keep_revisions=keep_revisions,
         )
-        click.echo(f"Image build success:\n{image_id}", nl=False)
+        click.echo(f"Image build success:\n{image_ids}", nl=False)
     if callback_script:
         # The callback script is a user trusted script.
-        subprocess.check_call([str(callback_script), image_id])  # nosec: B603
+        subprocess.check_call([str(callback_script), image_ids])  # nosec: B603

@@ -90,7 +90,7 @@ def cli_run_fixture(
             flavor=openstack_metadata.flavor,
             network=openstack_metadata.network,
             proxy=proxy.http,
-            upload_cloud_name=cloud_name,
+            upload_cloud_names=[cloud_name],
         ),
         image_config=config.ImageConfig(
             arch=arch,

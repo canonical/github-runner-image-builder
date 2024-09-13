@@ -128,7 +128,8 @@ IMAGE_DEFAULT_APT_PACKAGES = [
 
 _LOG_LEVELS = (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR)
 LOG_LEVELS = tuple(
-    itertools.chain(
+    str(level)
+    for level in itertools.chain(
         _LOG_LEVELS,
         (logging.getLevelName(level) for level in _LOG_LEVELS),
         (logging.getLevelName(level).lower() for level in _LOG_LEVELS),
