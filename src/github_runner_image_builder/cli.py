@@ -189,7 +189,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals
     arch = arch if arch else config.get_supported_arch()
     base = config.BaseImage.from_str(base_image)
     if not experimental_external:
-        image_id = builder.run(
+        image_ids = builder.run(
             cloud_name=cloud_name,
             image_config=config.ImageConfig(
                 arch=arch,
@@ -201,7 +201,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals
         )
         # 2024/07/09: Only print image_id for chroot building for backwards compatibility. To be
         # deprecated when external builder is in stable.
-        click.echo(image_id, nl=False)
+        click.echo(image_ids, nl=False)
     else:
         # coverage thinks this line can lead to exit.
         upload_cloud_names = (  # pragma: no cover
