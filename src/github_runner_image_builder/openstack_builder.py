@@ -511,7 +511,7 @@ def _wait_for_snapshot_complete(
             return
         time.sleep(60)
     image = conn.get_image(name_or_id=image.id)
-    if not image.status == "active":
+    if not image or not image.status == "active":
         logger.error("Timed out waiting for snapshot to be active, %s.", image.name)
         raise TimeoutError(f"Timed out waiting for snapshot to be active, {image.id}.")
 
