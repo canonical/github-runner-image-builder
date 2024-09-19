@@ -238,5 +238,4 @@ def test_run(
         command,
     )
 
-    print(result.stdout)
     assert result.exit_code == 0
