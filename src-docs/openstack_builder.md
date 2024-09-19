@@ -19,7 +19,7 @@ Module for interacting with external openstack VM image builder.
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L57"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L58"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `determine_cloud`
 
@@ -49,7 +49,7 @@ Automatically determine cloud to use from clouds.yaml by selecting the first clo
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L90"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L91"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `initialize`
 
@@ -71,7 +71,11 @@ Upload ubuntu base images to openstack to use as builder base. This is a separat
 
 ---
 
+<<<<<<< HEAD
 <a href="../src/github_runner_image_builder/openstack_builder.py#L208"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+=======
+<a href="../src/github_runner_image_builder/openstack_builder.py#L212"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+>>>>>>> 4eabac6 (feat: multicloud upload (#27))
 
 ## <kbd>function</kbd> `run`
 
@@ -105,7 +109,7 @@ Run external OpenStack builder instance and create a snapshot.
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L191"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L192"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `CloudConfig`
 The OpenStack cloud configuration values. 
@@ -118,13 +122,27 @@ The OpenStack cloud configuration values.
  - <b>`flavor`</b>:  The OpenStack flavor to launch builder VMs on. 
  - <b>`network`</b>:  The OpenStack network to launch the builder VMs on. 
  - <b>`proxy`</b>:  The proxy to enable on builder VMs. 
+<<<<<<< HEAD
+=======
+ - <b>`upload_cloud_names`</b>:  The OpenStack cloud names to upload the snapshot to. (Defaults to             the same cloud) 
+>>>>>>> 4eabac6 (feat: multicloud upload (#27))
 
 <a href="../<string>"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
 ```python
+<<<<<<< HEAD
 __init__(cloud_name: str, flavor: str, network: str, proxy: str) → None
+=======
+__init__(
+    cloud_name: str,
+    flavor: str,
+    network: str,
+    proxy: str,
+    upload_cloud_names: Optional[Iterable[str]]
+) → None
+>>>>>>> 4eabac6 (feat: multicloud upload (#27))
 ```
 
 
