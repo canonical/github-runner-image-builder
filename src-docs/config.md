@@ -77,7 +77,7 @@ The ubuntu OS base image to build and deploy runners on.
 
 ---
 
-<a href="../src/github_runner_image_builder/config.py#L139"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/config.py#L140"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `ImageConfig`
 The build image configuration values. 

@@ -8,6 +8,7 @@ import logging
 import pathlib
 import shutil
 import time
+import typing
 
 import fabric
 import jinja2
@@ -197,14 +198,15 @@ class CloudConfig:
         flavor: The OpenStack flavor to launch builder VMs on.
         network: The OpenStack network to launch the builder VMs on.
         proxy: The proxy to enable on builder VMs.
-        upload_cloud_name: The OpenStack cloud name to upload the snapshot to. (Default same cloud)
+        upload_cloud_names: The OpenStack cloud names to upload the snapshot to. (Defaults to \
+            the same cloud)
     """
 
     cloud_name: str
     flavor: str
     network: str
     proxy: str
-    upload_cloud_name: str | None
+    upload_cloud_names: typing.Iterable[str] | None
 
 
 def run(
@@ -257,29 +259,20 @@ def run(
         )
         logger.info("Requested snapshot, waiting for snapshot to complete: %s.", image.id)
         _wait_for_snapshot_complete(conn=conn, image=image)
-        if cloud_config.upload_cloud_name:
-            logger.info("Downloading snapshot to %s.", IMAGE_SNAPSHOT_FILE_PATH)
-            conn.download_image(
-                name_or_id=image.id, output_file=IMAGE_SNAPSHOT_FILE_PATH, stream=True
-            )
-            logger.info("Uploading downloaded snapshot to %s.", cloud_config.upload_cloud_name)
-            image = store.upload_image(
+        images = _upload_to_clouds(
+            conn=conn,
+            image=image,
+            upload_cloud_names=cloud_config.upload_cloud_names,
+            upload_cloud_config=_UploadCloudConfig(
                 arch=image_config.arch,
-                cloud_name=cloud_config.upload_cloud_name,
                 image_name=image_config.name,
-                image_path=IMAGE_SNAPSHOT_FILE_PATH,
                 keep_revisions=keep_revisions,
-            )
-            logger.info(
-                "Uploaded snapshot on cloud %s, id: %s, name: %s",
-                cloud_config.upload_cloud_name,
-                image.id,
-                image.name,
-            )
+            ),
+        )
         logger.info("Deleting builder VM: %s (%s)", builder.name, builder.id)
         conn.delete_server(name_or_id=builder.id, wait=True, timeout=5 * 60)
         logger.info("Image builder run complete.")
-    return str(image.id)
+    return ",".join(str(image.id) for image in images)
 
 
 def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | None) -> str:
@@ -518,6 +511,62 @@ def _wait_for_snapshot_complete(
             return
         time.sleep(60)
     image = conn.get_image(name_or_id=image.id)
-    if not image.status == "active":
+    if not image or not image.status == "active":
         logger.error("Timed out waiting for snapshot to be active, %s.", image.name)
         raise TimeoutError(f"Timed out waiting for snapshot to be active, {image.id}.")
+
+
+@dataclasses.dataclass
+class _UploadCloudConfig:
+    """The upload clouds arguments wrapper.
+
+    Attributes:
+        arch: The architecture of the image to use as build base.
+        image_name: The name to upload the image as.
+        keep_revisions: Number of revisions to keep before deletion.
+    """
+
+    arch: Arch
+    image_name: str
+    keep_revisions: int
+
+
+def _upload_to_clouds(
+    conn: openstack.connection.Connection,
+    image: openstack.compute.v2.image.Image,
+    upload_cloud_names: typing.Iterable[str] | None,
+    upload_cloud_config: _UploadCloudConfig,
+) -> tuple[openstack.compute.v2.image.Image, ...]:
+    """Upload the snapshot image to different clouds.
+
+    Args:
+        conn: The OpenStack connection instance.
+        image: The snapshot image to upload.
+        upload_cloud_names: The clouds to upload the image to.
+        upload_cloud_config: The upload image configuration.
+
+    Returns:
+        The uploaded cloud images.
+    """
+    if not upload_cloud_names:
+        return (image,)
+    logger.info("Downloading snapshot to %s.", IMAGE_SNAPSHOT_FILE_PATH)
+    conn.download_image(name_or_id=image.id, output_file=IMAGE_SNAPSHOT_FILE_PATH, stream=True)
+    images: list[openstack.compute.v2.image.Image] = []
+    for cloud_name in upload_cloud_names:
+        logger.info("Uploading downloaded snapshot to %s.", cloud_name)
+        image = store.upload_image(
+            arch=upload_cloud_config.arch,
+            cloud_name=cloud_name,
+            image_name=upload_cloud_config.image_name,
+            image_path=IMAGE_SNAPSHOT_FILE_PATH,
+            keep_revisions=upload_cloud_config.keep_revisions,
+        )
+        images.append(image)
+        logger.info(
+            "Uploaded snapshot on cloud %s, id: %s, name: %s",
+            cloud_name,
+            image.id,
+            image.name,
+        )
+    return tuple(images)
