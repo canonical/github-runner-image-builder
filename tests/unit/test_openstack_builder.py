@@ -608,7 +608,10 @@ install_yarn
 export -f install_yq
 su ubuntu -c "bash -c 'install_yq'"
 install_github_runner "$github_runner_version" "$github_runner_arch"
-chown_home\
+chown_home
+# Make sure the disk is synced for snapshot
+sync
+echo "Finished sync"\
 """
     )
     # pylint: enable=R0801
