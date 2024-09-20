@@ -11,7 +11,6 @@ Module for interacting with external openstack VM image builder.
 - **CLOUD_YAML_PATHS**
 - **BUILDER_SSH_KEY_NAME**
 - **SHARED_SECURITY_GROUP_NAME**
-- **IMAGE_SNAPSHOT_NAME**
 - **CREATE_SERVER_TIMEOUT**
 - **MIN_CPU**
 - **MIN_RAM**
@@ -71,20 +70,14 @@ Upload ubuntu base images to openstack to use as builder base. This is a separat
 
 ---
 
-<<<<<<< HEAD
-<a href="../src/github_runner_image_builder/openstack_builder.py#L208"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
-=======
 <a href="../src/github_runner_image_builder/openstack_builder.py#L212"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
->>>>>>> 4eabac6 (feat: multicloud upload (#27))
 
 ## <kbd>function</kbd> `run`
 
 ```python
 run(
-    arch: Arch,
-    base: BaseImage,
     cloud_config: CloudConfig,
-    runner_version: str,
+    image_config: ImageConfig,
     keep_revisions: int
 ) → str
 ```
@@ -95,10 +88,8 @@ Run external OpenStack builder instance and create a snapshot.
 
 **Args:**
  
- - <b>`arch`</b>:  The architecture of the image to seed. 
- - <b>`base`</b>:  The Ubuntu base to use as builder VM base. 
  - <b>`cloud_config`</b>:  The OpenStack cloud configuration values for builder VM. 
- - <b>`runner_version`</b>:  The GitHub runner version to install on the VM. Defaults to latest. 
+ - <b>`image_config`</b>:  The target image configuration values. 
  - <b>`keep_revisions`</b>:  The number of image to keep for snapshot before deletion. 
 
 
@@ -122,19 +113,13 @@ The OpenStack cloud configuration values.
  - <b>`flavor`</b>:  The OpenStack flavor to launch builder VMs on. 
  - <b>`network`</b>:  The OpenStack network to launch the builder VMs on. 
  - <b>`proxy`</b>:  The proxy to enable on builder VMs. 
-<<<<<<< HEAD
-=======
  - <b>`upload_cloud_names`</b>:  The OpenStack cloud names to upload the snapshot to. (Defaults to             the same cloud) 
->>>>>>> 4eabac6 (feat: multicloud upload (#27))
 
 <a href="../<string>"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
 ```python
-<<<<<<< HEAD
-__init__(cloud_name: str, flavor: str, network: str, proxy: str) → None
-=======
 __init__(
     cloud_name: str,
     flavor: str,
@@ -142,7 +127,6 @@ __init__(
     proxy: str,
     upload_cloud_names: Optional[Iterable[str]]
 ) → None
->>>>>>> 4eabac6 (feat: multicloud upload (#27))
 ```
 
 

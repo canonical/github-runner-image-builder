@@ -282,9 +282,11 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(builder.subprocess, "check_output", MagicMock())
     monkeypatch.setattr(builder.subprocess, "run", MagicMock())
     monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
+    monkeypatch.setattr(builder, "_enable_network_fair_queuing_congestion", MagicMock())
     monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
     monkeypatch.setattr(builder, "_install_yarn", MagicMock())
     monkeypatch.setattr(builder, "_install_github_runner", MagicMock())
+    monkeypatch.setattr(builder, "_chown_home", MagicMock())
     monkeypatch.setattr(builder, "_disconnect_image_to_network_block_device", MagicMock())
     monkeypatch.setattr(builder, "_compress_image", MagicMock())
     monkeypatch.setattr(
