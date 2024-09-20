@@ -53,6 +53,10 @@ class UnattendedUpgradeDisableError(BuildImageError):
     """Represents an error while disabling unattended-upgrade related services."""
 
 
+class NetworkFairQueuingEnableError(BuildImageError):
+    """Represents an error while enabling network fair queueing policy."""
+
+
 class SystemUserConfigurationError(BuildImageError):
     """Represents an error while adding user to chroot env."""
 
@@ -75,6 +79,10 @@ class RunnerDownloadError(BuildImageError):
 
 class ImageCompressError(BuildImageError):
     """Represents an error while compressing cloud-img."""
+
+
+class HomeDirectoryChangeOwnershipError(BuildImageError):
+    """Represents an error while changing ubuntu home directory."""
 
 
 class OpenstackBaseError(Exception):

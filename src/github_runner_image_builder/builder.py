@@ -34,10 +34,12 @@ from github_runner_image_builder.config import (
 from github_runner_image_builder.errors import (
     BuildImageError,
     DependencyInstallError,
+    HomeDirectoryChangeOwnershipError,
     ImageCompressError,
     ImageConnectError,
     ImageResizeError,
     NetworkBlockDeviceError,
+    NetworkFairQueuingEnableError,
     PermissionConfigurationError,
     ResizePartitionError,
     RunnerDownloadError,
@@ -196,6 +198,8 @@ def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
             _install_apt_packages(base_image=base_image)
             logger.info("Disabling unattended upgrades.")
             _disable_unattended_upgrades()
+            logger.info("Enabling network optimization policy.")
+            _enable_network_fair_queuing_congestion()
             logger.info("Configuring system users.")
             _configure_system_users()
             logger.info("Configuring /usr/local/bin directory.")
@@ -204,6 +208,8 @@ def run(arch: Arch, base_image: BaseImage, runner_version: str) -> None:
             _install_yarn()
             logger.info("Installing GitHub runner.")
             _install_github_runner(arch=arch, version=runner_version)
+            logger.info("Changing ownership of home directory.")
+            _chown_home()
     except ChrootBaseError as exc:
         logger.exception("Error chrooting into %s", IMAGE_MOUNT_DIR)
         raise BuildImageError from exc
@@ -552,6 +558,36 @@ def _disable_unattended_upgrades() -> None:
         raise UnattendedUpgradeDisableError from exc
 
 
+def _enable_network_fair_queuing_congestion() -> None:
+    """Disable unatteneded upgrades to prevent apt locks.
+
+    Raises:
+        NetworkFairQueuingEnableError: If there was an error disabling unattended upgrade related
+            services.
+    """
+    try:
+        output = subprocess.check_output(
+            ["/usr/bin/systemctl", "net.core.default_qdisc=fq"], timeout=30
+        )  # nosec: B603
+        logger.info("net core default_qdisk out: %s", output)
+        output = subprocess.check_output(
+            ["/usr/bin/systemctl", "net.ipv4.tcp_congestion_control=bbr"], timeout=30
+        )  # nosec: B603
+        # There is no need to test the log output.
+        logger.info("net.ipv4.tcp_congestion_control=bbr out: %s", output)  # pragma: nocover
+    except subprocess.CalledProcessError as exc:
+        logger.exception(
+            "Error enabling network congestion policy, cmd: %s, code: %s, err: %s",
+            exc.cmd,
+            exc.returncode,
+            exc.output,
+        )
+        raise NetworkFairQueuingEnableError from exc
+    except subprocess.SubprocessError as exc:
+        logger.exception("Error enabling network congestion policy.")
+        raise NetworkFairQueuingEnableError from exc
+
+
 def _configure_system_users() -> None:
     """Configure system users.
 
@@ -731,6 +767,31 @@ def _get_github_runner_version(version: str) -> str:
     ):
         raise _FetchVersionError("Failed to get latest runner version, invalid redirect.")
     return latest_version.lstrip("v")
+
+
+def _chown_home() -> None:
+    """Change the ownership of Ubuntu home directory.
+
+    Raises:
+        HomeDirectoryChangeOwnershipError: If there was an error changing the home directory
+        ownership to ubuntu:ubuntu.
+    """
+    try:
+        subprocess.check_call(
+            ["/usr/bin/chown", "--recursive", "ubuntu:ubuntu", "/home/ubuntu"],  # nosec
+            timeout=60 * 10,
+        )
+    except subprocess.CalledProcessError as exc:
+        logger.exception(
+            "Error changing home directory ownership, cmd: %s, code: %s, err: %s",
+            exc.cmd,
+            exc.returncode,
+            exc.output,
+        )
+        raise HomeDirectoryChangeOwnershipError from exc
+    except subprocess.SubprocessError as exc:
+        logger.exception("Error changing home directory ownership command.")
+        raise HomeDirectoryChangeOwnershipError from exc
 
 
 # Image compression might fail for arbitrary reasons - retrying usually solves this.

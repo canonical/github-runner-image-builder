@@ -19,10 +19,12 @@ from github_runner_image_builder.builder import (
     BuildImageError,
     ChrootBaseError,
     DependencyInstallError,
+    HomeDirectoryChangeOwnershipError,
     ImageCompressError,
     ImageConnectError,
     ImageResizeError,
     NetworkBlockDeviceError,
+    NetworkFairQueuingEnableError,
     PermissionConfigurationError,
     ResizePartitionError,
     SystemUserConfigurationError,
@@ -242,9 +244,11 @@ def test_run_error(
     monkeypatch.setattr(builder.subprocess, "check_output", MagicMock())
     monkeypatch.setattr(builder.subprocess, "run", MagicMock())
     monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
+    monkeypatch.setattr(builder, "_enable_network_fair_queuing_congestion", MagicMock())
     monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
     monkeypatch.setattr(builder, "_install_yarn", MagicMock())
     monkeypatch.setattr(builder, "_install_github_runner", MagicMock())
+    monkeypatch.setattr(builder, "_chown_home", MagicMock())
     monkeypatch.setattr(builder, "_disconnect_image_to_network_block_device", MagicMock())
     monkeypatch.setattr(builder, "_compress_image", MagicMock())
     monkeypatch.setattr(patch_obj, sub_func, mock)
@@ -446,6 +450,45 @@ def test__disable_unattended_upgrades_subprocess_fail(monkeypatch: pytest.Monkey
     assert "Failed to disable unattended upgrades" in str(exc.getrepr())
 
 
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(
+            subprocess.CalledProcessError(1, [], "Something happened", ""),
+            id="called process error",
+        ),
+        pytest.param(
+            subprocess.SubprocessError(),
+            id="general subprocess error",
+        ),
+    ],
+)
+def test__enable_network_fair_queuing_congestion_fail(
+    monkeypatch: pytest.MonkeyPatch,
+    error: subprocess.CalledProcessError | subprocess.SubprocessError,
+):
+    """
+    arrange: given a monkeypatched subprocess run function that raises SubprocessError.
+    act: when _enable_network_fair_queuing_congestion is called.
+    assert: the NetworkFairQueuingEnableError is raised.
+    """
+    # Pylint thinks the testing mock patches are duplicate code (side effects are different).
+    # pylint: disable=duplicate-code
+    monkeypatch.setattr(
+        subprocess,
+        "check_output",
+        MagicMock(
+            side_effect=[
+                *([None]),
+                error,
+            ]
+        ),
+    )
+
+    with pytest.raises(NetworkFairQueuingEnableError):
+        builder._enable_network_fair_queuing_congestion()
+
+
 def test__configure_system_users(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched subprocess run calls that raises an exception.
@@ -614,6 +657,38 @@ def test__get_github_runner_version_user_defined(version: str, expected_version:
     assert: the user provided version is returned.
     """
     assert builder._get_github_runner_version(version=version) == expected_version
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(
+            subprocess.CalledProcessError(1, [], "Something happened", ""),
+            id="called process error",
+        ),
+        pytest.param(
+            subprocess.SubprocessError(),
+            id="general subprocess error",
+        ),
+    ],
+)
+def test__chown_home_fail(
+    monkeypatch: pytest.MonkeyPatch,
+    error: subprocess.CalledProcessError | subprocess.SubprocessError,
+):
+    """
+    arrange: given a monkeypatched process calls that fails.
+    act: when _disconnect_image_to_network_block_device is called.
+    assert: ImageMountError is raised.
+    """
+    monkeypatch.setattr(
+        subprocess,
+        "check_call",
+        MagicMock(side_effect=error),
+    )
+
+    with pytest.raises(HomeDirectoryChangeOwnershipError):
+        builder._chown_home()
 
 
 def test__disconnect_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
