@@ -596,7 +596,10 @@ install_yarn
 # install yq with ubuntu user due to GOPATH related go configuration settings
 export -f install_yq
 su ubuntu -c "bash -c 'install_yq'"
-install_github_runner "$github_runner_version" "$github_runner_arch"\
+install_github_runner "$github_runner_version" "$github_runner_arch"
+# Make sure the disk is synced for snapshot
+sync
+echo "Finished sync"\
 """
     )
     # pylint: enable=R0801
