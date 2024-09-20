@@ -135,6 +135,8 @@ def test_subprocess_func_errors(
     )
     # Bypass decorated retry sleep
     monkeypatch.setattr(time, "sleep", MagicMock())
+    monkeypatch.setattr(shutil, "rmtree", MagicMock())
+    monkeypatch.setattr(shutil, "copy", MagicMock())
 
     with pytest.raises(exc):
         getattr(builder, func)(*args)
@@ -360,7 +362,19 @@ def test__resize_mount_partitions(monkeypatch: pytest.MonkeyPatch):
     assert "resize error" in str(exc.getrepr())
 
 
-def test__install_yq_error(monkeypatch: pytest.MonkeyPatch):
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(
+            subprocess.CalledProcessError(1, [], "", "Go build error."), id="CalledProcessError"
+        ),
+        pytest.param(subprocess.SubprocessError(), id="General subprocess error"),
+    ],
+)
+def test__install_yq_error(
+    monkeypatch: pytest.MonkeyPatch,
+    error: subprocess.CalledProcessError | subprocess.SubprocessError,
+):
     """
     arrange: given a monkeypatched subprocess.run function that raises an error.
     act: when _install_yq is called.
@@ -368,12 +382,14 @@ def test__install_yq_error(monkeypatch: pytest.MonkeyPatch):
     """
     # Bypass decorated retry sleep
     monkeypatch.setattr(time, "sleep", MagicMock())
+    monkeypatch.setattr(shutil, "rmtree", MagicMock())
+    monkeypatch.setattr(shutil, "copy", MagicMock())
     monkeypatch.setattr(
         subprocess,
         "check_output",
         MagicMock(
             # tried 3 times via retry
-            side_effect=[None, subprocess.CalledProcessError(1, [], "", "Go build error.")]
+            side_effect=[None, error]
             * 3
         ),
     )
@@ -382,24 +398,6 @@ def test__install_yq_error(monkeypatch: pytest.MonkeyPatch):
         builder._install_yq()
 
     assert "Go build error" in str(exc.getrepr())
-
-
-def test__install_yq_already_exists(monkeypatch: pytest.MonkeyPatch):
-    """
-    arrange: given a monkeypatched yq mocked path that already exists.
-    act: when _install_yq is called.
-    assert: Mock functions are called.
-    """
-    # Bypass decorated retry sleep
-    monkeypatch.setattr(time, "sleep", MagicMock())
-    monkeypatch.setattr(builder, "YQ_REPOSITORY_PATH", MagicMock(return_value=True))
-    monkeypatch.setattr(subprocess, "check_output", (run_mock := MagicMock()))
-    monkeypatch.setattr(shutil, "copy", (copy_mock := MagicMock()))
-
-    builder._install_yq()
-
-    run_mock.assert_called()
-    copy_mock.assert_called()
 
 
 def test__install_yq(monkeypatch: pytest.MonkeyPatch):
@@ -411,6 +409,7 @@ def test__install_yq(monkeypatch: pytest.MonkeyPatch):
     # Bypass decorated retry sleep
     monkeypatch.setattr(time, "sleep", MagicMock())
     monkeypatch.setattr(subprocess, "check_output", (check_output_mock := MagicMock()))
+    monkeypatch.setattr(shutil, "rmtree", (rmtree_mock := MagicMock()))
     monkeypatch.setattr(shutil, "copy", (copy_mock := MagicMock()))
 
     builder._install_yq()
@@ -418,6 +417,7 @@ def test__install_yq(monkeypatch: pytest.MonkeyPatch):
     check_output_mock.assert_called_with(
         ["/snap/bin/go", "build", "-C", "yq_source", "-o", "/usr/bin/yq"], timeout=1200
     )
+    rmtree_mock.assert_called_with(builder.YQ_REPOSITORY_PATH, ignore_errors=True)
     copy_mock.assert_called_with(Path("/usr/bin/yq"), Path("/mnt/ubuntu-image/usr/bin/yq"))
 
 
