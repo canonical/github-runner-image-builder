@@ -527,10 +527,11 @@ function disable_unattended_upgrades() {
 }
 
 function enable_network_fair_queuing_congestion() {
-    /usr/bin/cat <<EOF | /usr/bin/sudo /usr/bin/tee -a
+    /usr/bin/cat <<EOF | /usr/bin/sudo /usr/bin/tee -a /etc/sysctl.conf
     net.core.default_qdisc=fq
     net.ipv4.tcp_congestion_control=bbr
     EOF
+    /usr/bin/systctl -p
 }
 
 function configure_system_users() {

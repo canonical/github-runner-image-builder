@@ -506,27 +506,45 @@ def test__disable_unattended_upgrades_subprocess_fail(monkeypatch: pytest.Monkey
 def test__enable_network_fair_queuing_congestion_fail(
     monkeypatch: pytest.MonkeyPatch,
     error: subprocess.CalledProcessError | subprocess.SubprocessError,
+    tmp_path: Path,
 ):
     """
     arrange: given a monkeypatched subprocess run function that raises SubprocessError.
     act: when _enable_network_fair_queuing_congestion is called.
     assert: the NetworkFairQueuingEnableError is raised.
     """
+    monkeypatch.setattr(builder, "SYSCTL_CONF_PATH", (tmp_path / "sysctl.conf"))
     # Pylint thinks the testing mock patches are duplicate code (side effects are different).
     # pylint: disable=duplicate-code
     monkeypatch.setattr(
         subprocess,
         "check_output",
         MagicMock(
-            side_effect=[
-                *([None]),
-                error,
-            ]
+            side_effect=error,
         ),
     )
 
     with pytest.raises(NetworkFairQueuingEnableError):
         builder._enable_network_fair_queuing_congestion()
+
+
+def test__enable_network_fair_queuing_congestion(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """
+    arrange: given monkeypatched sysctl.conf path and sysctl subprocess run.
+    act: when _enable_network_fair_queuing_congestion is called.
+    assert: the configuration are written correctly and config reload is called.
+    """
+    monkeypatch.setattr(subprocess, "check_output", (mock_subprocess_call := MagicMock()))
+    monkeypatch.setattr(builder, "SYSCTL_CONF_PATH", test_path := tmp_path / "sysctl.conf")
+
+    builder._enable_network_fair_queuing_congestion()
+
+    mock_subprocess_call.assert_called_once_with(
+        ["/usr/bin/sudo", "-E", "/usr/bin/sysctl", "-p"], timeout=30
+    )
+    config_contents = test_path.read_text(encoding="utf-8")
+    assert "net.core.default_qdisc=fq" in config_contents
+    assert "net.ipv4.tcp_congestion_control=bbr" in config_contents
 
 
 def test__configure_system_users(monkeypatch: pytest.MonkeyPatch):

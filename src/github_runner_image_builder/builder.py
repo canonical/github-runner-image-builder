@@ -90,6 +90,7 @@ YQ_REPOSITORY_PATH = Path("yq_source")
 HOST_YQ_BIN_PATH = Path("/usr/bin/yq")
 MOUNTED_YQ_BIN_PATH = IMAGE_MOUNT_DIR / "usr/bin/yq"
 IMAGE_HWE_PKG_FORMAT = "linux-generic-hwe-{VERSION}"
+SYSCTL_CONF_PATH = Path("/etc/sysctl.conf")
 
 
 def initialize() -> None:
@@ -577,16 +578,14 @@ def _enable_network_fair_queuing_congestion() -> None:
         NetworkFairQueuingEnableError: If there was an error disabling unattended upgrade related
             services.
     """
+    with open(SYSCTL_CONF_PATH, mode="a", encoding="utf-8") as sysctl_file:
+        sysctl_file.write("net.core.default_qdisc=fq")
+        sysctl_file.write("net.ipv4.tcp_congestion_control=bbr")
     try:
         output = subprocess.check_output(
-            ["/usr/bin/systemctl", "net.core.default_qdisc=fq"], timeout=30
+            ["/usr/bin/sudo", "-E", "/usr/bin/sysctl", "-p"], timeout=30
         )  # nosec: B603
-        logger.info("net core default_qdisk out: %s", output)
-        output = subprocess.check_output(
-            ["/usr/bin/systemctl", "net.ipv4.tcp_congestion_control=bbr"], timeout=30
-        )  # nosec: B603
-        # There is no need to test the log output.
-        logger.info("net.ipv4.tcp_congestion_control=bbr out: %s", output)  # pragma: nocover
+        logger.info("Sysctl reload out: %s", output)
     except subprocess.CalledProcessError as exc:
         logger.exception(
             "Error enabling network congestion policy, cmd: %s, code: %s, err: %s",
