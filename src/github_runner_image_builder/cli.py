@@ -141,7 +141,7 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "Ignored if --experimental-external is not enabled",
 )
 # click doesn't yet support dataclasses, hence all arguments are required.
-def run(  # pylint: disable=R0917,too-many-arguments
+def run(  # pylint: disable=too-many-arguments, too-many-positional-arguments
     cloud_name: str,
     image_name: str,
     base_image: str,

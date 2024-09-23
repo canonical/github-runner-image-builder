@@ -20,7 +20,7 @@ ReturnT = TypeVar("ReturnT")
 
 
 # This decorator has default arguments, one extra argument is not a problem.
-def retry(  # pylint: disable=R0917,too-many-arguments
+def retry(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     exception: Type[Exception] = Exception,
     tries: int = 1,
     delay: float = 0,
