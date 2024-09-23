@@ -583,7 +583,7 @@ def _enable_network_fair_queuing_congestion() -> None:
         sysctl_file.write("net.ipv4.tcp_congestion_control=bbr")
     try:
         output = subprocess.check_output(
-            ["/usr/bin/sudo", "-E", "/usr/bin/sysctl", "-p"], timeout=30
+            ["/usr/bin/sudo", "-E", "/usr/sbin/sysctl", "-p"], timeout=30
         )  # nosec: B603
         logger.info("Sysctl reload out: %s", output)
     except subprocess.CalledProcessError as exc:

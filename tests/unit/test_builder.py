@@ -540,7 +540,7 @@ def test__enable_network_fair_queuing_congestion(monkeypatch: pytest.MonkeyPatch
     builder._enable_network_fair_queuing_congestion()
 
     mock_subprocess_call.assert_called_once_with(
-        ["/usr/bin/sudo", "-E", "/usr/bin/sysctl", "-p"], timeout=30
+        ["/usr/bin/sudo", "-E", "/usr/sbin/sysctl", "-p"], timeout=30
     )
     config_contents = test_path.read_text(encoding="utf-8")
     assert "net.core.default_qdisc=fq" in config_contents
