@@ -531,7 +531,7 @@ function enable_network_fair_queuing_congestion() {
     net.core.default_qdisc=fq
     net.ipv4.tcp_congestion_control=bbr
     EOF
-    /usr/bin/systctl -p
+    /usr/sbin/systctl -p
 }
 
 function configure_system_users() {
