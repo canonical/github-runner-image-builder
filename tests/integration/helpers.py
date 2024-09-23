@@ -230,7 +230,7 @@ def _instance_running(instance: Instance) -> bool:
 
 
 # All the arguments are necessary
-async def wait_for_valid_connection(  # pylint: disable=too-many-arguments
+async def wait_for_valid_connection(  # pylint: disable=R0917,too-many-arguments
     connection: Connection,
     server_name: str,
     network: str,
