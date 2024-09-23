@@ -53,10 +53,6 @@ class UnattendedUpgradeDisableError(BuildImageError):
     """Represents an error while disabling unattended-upgrade related services."""
 
 
-class NetworkFairQueuingEnableError(BuildImageError):
-    """Represents an error while enabling network fair queueing policy."""
-
-
 class SystemUserConfigurationError(BuildImageError):
     """Represents an error while adding user to chroot env."""
 

@@ -33,7 +33,6 @@ from github_runner_image_builder.errors import (
     ImageConnectError,
     ImageResizeError,
     NetworkBlockDeviceError,
-    NetworkFairQueuingEnableError,
     PermissionConfigurationError,
     ResizePartitionError,
     RunnerDownloadError,
@@ -572,31 +571,10 @@ def _disable_unattended_upgrades() -> None:
 
 
 def _enable_network_fair_queuing_congestion() -> None:
-    """Disable unatteneded upgrades to prevent apt locks.
-
-    Raises:
-        NetworkFairQueuingEnableError: If there was an error disabling unattended upgrade related
-            services.
-    """
+    """Enable bbr traffic congestion algorithm."""
     with open(SYSCTL_CONF_PATH, mode="a", encoding="utf-8") as sysctl_file:
         sysctl_file.write("net.core.default_qdisc=fq")
         sysctl_file.write("net.ipv4.tcp_congestion_control=bbr")
-    try:
-        output = subprocess.check_output(
-            ["/usr/bin/sudo", "-E", "/usr/sbin/sysctl", "-p"], timeout=30
-        )  # nosec: B603
-        logger.info("Sysctl reload out: %s", output)
-    except subprocess.CalledProcessError as exc:
-        logger.exception(
-            "Error enabling network congestion policy, cmd: %s, code: %s, err: %s",
-            exc.cmd,
-            exc.returncode,
-            exc.output,
-        )
-        raise NetworkFairQueuingEnableError from exc
-    except subprocess.SubprocessError as exc:
-        logger.exception("Error enabling network congestion policy.")
-        raise NetworkFairQueuingEnableError from exc
 
 
 def _configure_system_users() -> None:
