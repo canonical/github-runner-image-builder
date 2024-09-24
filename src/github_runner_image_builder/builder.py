@@ -573,8 +573,8 @@ def _disable_unattended_upgrades() -> None:
 def _enable_network_fair_queuing_congestion() -> None:
     """Enable bbr traffic congestion algorithm."""
     with open(SYSCTL_CONF_PATH, mode="a", encoding="utf-8") as sysctl_file:
-        sysctl_file.write("net.core.default_qdisc=fq")
-        sysctl_file.write("net.ipv4.tcp_congestion_control=bbr")
+        sysctl_file.write("net.core.default_qdisc=fq\n")
+        sysctl_file.write("net.ipv4.tcp_congestion_control=bbr\n")
 
 
 def _configure_system_users() -> None:
