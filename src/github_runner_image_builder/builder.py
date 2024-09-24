@@ -423,20 +423,14 @@ def _install_yq() -> None:
         YQBuildError: If there was an error building yq from source.
     """
     try:
-        if not YQ_REPOSITORY_PATH.exists():
-            output = subprocess.check_output(  # nosec: B603
-                ["/usr/bin/git", "clone", str(YQ_REPOSITORY_URL), str(YQ_REPOSITORY_PATH)],
-                timeout=60 * 10,
-            )
-            logger.info("git clone out: %s", output)
-        else:
-            output = subprocess.check_output(  # nosec: B603
-                ["/usr/bin/git", "-C", str(YQ_REPOSITORY_PATH), "pull"],
-                timeout=60 * 10,
-            )
-            logger.info("git pull out: %s", output)
+        shutil.rmtree(YQ_REPOSITORY_PATH, ignore_errors=True)
         output = subprocess.check_output(  # nosec: B603
-            ["/snap/bin/go", "mod", "tidy", "-C", str(YQ_REPOSITORY_PATH)],
+            ["/usr/bin/git", "clone", str(YQ_REPOSITORY_URL), str(YQ_REPOSITORY_PATH)],
+            timeout=60 * 10,
+        )
+        logger.info("git clone out: %s", output)
+        output = subprocess.check_output(  # nosec: B603
+            ["/snap/bin/go", "mod", "-C", str(YQ_REPOSITORY_PATH), "tidy"],
             timeout=20 * 60,
         )
         logger.info("go mod tidy out: %s", output)

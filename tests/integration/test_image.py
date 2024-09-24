@@ -60,10 +60,12 @@ async def ssh_connection_fixture(
     """The openstack server ssh connection fixture."""
     logger.info("Setting up SSH connection.")
     ssh_connection = await helpers.wait_for_valid_connection(
-        connection=openstack_metadata.connection,
-        server_name=openstack_server.name,
-        network=openstack_metadata.network,
-        ssh_key=openstack_metadata.ssh_key.private_key,
+        connection_params=helpers.OpenStackConnectionParams(
+            connection=openstack_metadata.connection,
+            server_name=openstack_server.name,
+            network=openstack_metadata.network,
+            ssh_key=openstack_metadata.ssh_key.private_key,
+        ),
         proxy=proxy,
         dockerhub_mirror=dockerhub_mirror,
     )
