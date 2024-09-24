@@ -77,6 +77,10 @@ class ImageCompressError(BuildImageError):
     """Represents an error while compressing cloud-img."""
 
 
+class HomeDirectoryChangeOwnershipError(BuildImageError):
+    """Represents an error while changing ubuntu home directory."""
+
+
 class OpenstackBaseError(Exception):
     """Represents an error while interacting with Openstack."""
 

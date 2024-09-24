@@ -28,6 +28,7 @@ from github_runner_image_builder.chroot import ChrootBaseError, ChrootContextMan
 from github_runner_image_builder.errors import (
     BuildImageError,
     DependencyInstallError,
+    HomeDirectoryChangeOwnershipError,
     ImageCompressError,
     ImageConnectError,
     ImageResizeError,
@@ -88,6 +89,7 @@ YQ_REPOSITORY_PATH = Path("yq_source")
 HOST_YQ_BIN_PATH = Path("/usr/bin/yq")
 MOUNTED_YQ_BIN_PATH = IMAGE_MOUNT_DIR / "usr/bin/yq"
 IMAGE_HWE_PKG_FORMAT = "linux-generic-hwe-{VERSION}"
+SYSCTL_CONF_PATH = Path("/etc/sysctl.conf")
 
 
 def initialize() -> None:
@@ -199,6 +201,8 @@ def run(
             _install_apt_packages(base_image=image_config.base)
             logger.info("Disabling unattended upgrades.")
             _disable_unattended_upgrades()
+            logger.info("Enabling network optimization policy.")
+            _enable_network_fair_queuing_congestion()
             logger.info("Configuring system users.")
             _configure_system_users()
             logger.info("Configuring /usr/local/bin directory.")
@@ -207,6 +211,8 @@ def run(
             _install_yarn()
             logger.info("Installing GitHub runner.")
             _install_github_runner(arch=image_config.arch, version=image_config.runner_version)
+            logger.info("Changing ownership of home directory.")
+            _chown_home()
     except ChrootBaseError as exc:
         logger.exception("Error chrooting into %s", IMAGE_MOUNT_DIR)
         raise BuildImageError from exc
@@ -564,6 +570,13 @@ def _disable_unattended_upgrades() -> None:
         raise UnattendedUpgradeDisableError from exc
 
 
+def _enable_network_fair_queuing_congestion() -> None:
+    """Enable bbr traffic congestion algorithm."""
+    with open(SYSCTL_CONF_PATH, mode="a", encoding="utf-8") as sysctl_file:
+        sysctl_file.write("net.core.default_qdisc=fq\n")
+        sysctl_file.write("net.ipv4.tcp_congestion_control=bbr\n")
+
+
 def _configure_system_users() -> None:
     """Configure system users.
 
@@ -743,6 +756,31 @@ def _get_github_runner_version(version: str) -> str:
     ):
         raise _FetchVersionError("Failed to get latest runner version, invalid redirect.")
     return latest_version.lstrip("v")
+
+
+def _chown_home() -> None:
+    """Change the ownership of Ubuntu home directory.
+
+    Raises:
+        HomeDirectoryChangeOwnershipError: If there was an error changing the home directory
+        ownership to ubuntu:ubuntu.
+    """
+    try:
+        subprocess.check_call(
+            ["/usr/bin/chown", "--recursive", "ubuntu:ubuntu", "/home/ubuntu"],  # nosec
+            timeout=60 * 10,
+        )
+    except subprocess.CalledProcessError as exc:
+        logger.exception(
+            "Error changing home directory ownership, cmd: %s, code: %s, err: %s",
+            exc.cmd,
+            exc.returncode,
+            exc.output,
+        )
+        raise HomeDirectoryChangeOwnershipError from exc
+    except subprocess.SubprocessError as exc:
+        logger.exception("Error changing home directory ownership command.")
+        raise HomeDirectoryChangeOwnershipError from exc
 
 
 # Image compression might fail for arbitrary reasons - retrying usually solves this.

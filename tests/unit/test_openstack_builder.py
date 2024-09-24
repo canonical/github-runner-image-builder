@@ -526,6 +526,14 @@ function disable_unattended_upgrades() {
     /usr/bin/apt-get remove -y unattended-upgrades
 }
 
+function enable_network_fair_queuing_congestion() {
+    /usr/bin/cat <<EOF | /usr/bin/sudo /usr/bin/tee -a /etc/sysctl.conf
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+EOF
+    /usr/sbin/sysctl -p
+}
+
 function configure_system_users() {
     echo "Configuring ubuntu user"
     # only add ubuntu user if ubuntu does not exist
@@ -575,9 +583,12 @@ linux-$arch-$version.tar.gz"
     /usr/bin/mkdir -p /home/ubuntu/actions-runner
     /usr/bin/tar -xvzf "actions-runner-linux-$arch-$version.tar.gz" --directory /home/ubuntu/\
 actions-runner
-    /usr/bin/chown --recursive ubuntu:ubuntu /home/ubuntu/actions-runner
 
     rm "actions-runner-linux-$arch-$version.tar.gz"
+}
+
+function chown_home() {
+    /usr/bin/chown --recursive ubuntu:ubuntu /home/ubuntu/
 }
 
 proxy="test.proxy.internal:3128"
@@ -590,6 +601,7 @@ github_runner_arch="x64"
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
 disable_unattended_upgrades
+enable_network_fair_queuing_congestion
 configure_system_users
 configure_usr_local_bin
 install_yarn
@@ -597,6 +609,7 @@ install_yarn
 export -f install_yq
 su ubuntu -c "bash -c 'install_yq'"
 install_github_runner "$github_runner_version" "$github_runner_arch"
+chown_home
 # Make sure the disk is synced for snapshot
 sync
 echo "Finished sync"\

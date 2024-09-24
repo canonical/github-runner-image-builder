@@ -155,7 +155,7 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "--experimental-external is not enabled, as a part of external build mode parameter.",
 )
 # click doesn't yet support dataclasses, hence all arguments are required.
-def run(  # pylint: disable=too-many-arguments, too-many-locals
+def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     arch: config.Arch | None,
     cloud_name: str,
     image_name: str,

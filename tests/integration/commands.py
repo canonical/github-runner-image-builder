@@ -74,4 +74,12 @@ sudo microk8s stop && sudo microk8s start""",
         name="test sctp support", command="sudo apt-get install lksctp-tools -yq && checksctp"
     ),
     Commands(name="test HWE kernel", command="uname -a | grep generic"),
+    Commands(
+        name="test network congestion policy(fq)",
+        command="sudo sysctl -a | grep 'net.core.default_qdisc = fq'",
+    ),
+    Commands(
+        name="test network congestion policy",
+        command="sudo sysctl -a | grep 'net.ipv4.tcp_congestion_control = bbr'",
+    ),
 )

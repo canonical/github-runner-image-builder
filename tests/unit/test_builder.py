@@ -18,6 +18,7 @@ from github_runner_image_builder.builder import (
     BuildImageError,
     ChrootBaseError,
     DependencyInstallError,
+    HomeDirectoryChangeOwnershipError,
     ImageCompressError,
     ImageConnectError,
     ImageResizeError,
@@ -248,9 +249,11 @@ def test_run_error(
     monkeypatch.setattr(builder.subprocess, "check_output", MagicMock())
     monkeypatch.setattr(builder.subprocess, "run", MagicMock())
     monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
+    monkeypatch.setattr(builder, "_enable_network_fair_queuing_congestion", MagicMock())
     monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
     monkeypatch.setattr(builder, "_install_yarn", MagicMock())
     monkeypatch.setattr(builder, "_install_github_runner", MagicMock())
+    monkeypatch.setattr(builder, "_chown_home", MagicMock())
     monkeypatch.setattr(builder, "_disconnect_image_to_network_block_device", MagicMock())
     monkeypatch.setattr(builder, "_compress_image", MagicMock())
     monkeypatch.setattr(patch_obj, sub_func, mock)
@@ -278,9 +281,11 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(builder.subprocess, "check_output", MagicMock())
     monkeypatch.setattr(builder.subprocess, "run", MagicMock())
     monkeypatch.setattr(builder, "_disable_unattended_upgrades", MagicMock())
+    monkeypatch.setattr(builder, "_enable_network_fair_queuing_congestion", MagicMock())
     monkeypatch.setattr(builder, "_configure_system_users", MagicMock())
     monkeypatch.setattr(builder, "_install_yarn", MagicMock())
     monkeypatch.setattr(builder, "_install_github_runner", MagicMock())
+    monkeypatch.setattr(builder, "_chown_home", MagicMock())
     monkeypatch.setattr(builder, "_disconnect_image_to_network_block_device", MagicMock())
     monkeypatch.setattr(builder, "_compress_image", MagicMock())
     monkeypatch.setattr(
@@ -484,6 +489,21 @@ def test__disable_unattended_upgrades_subprocess_fail(monkeypatch: pytest.Monkey
     assert "Failed to disable unattended upgrades" in str(exc.getrepr())
 
 
+def test__enable_network_fair_queuing_congestion(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """
+    arrange: given monkeypatched sysctl.conf path and sysctl subprocess run.
+    act: when _enable_network_fair_queuing_congestion is called.
+    assert: the configuration are written correctly and config reload is called.
+    """
+    monkeypatch.setattr(builder, "SYSCTL_CONF_PATH", test_path := tmp_path / "sysctl.conf")
+
+    builder._enable_network_fair_queuing_congestion()
+
+    config_contents = test_path.read_text(encoding="utf-8")
+    assert "net.core.default_qdisc=fq" in config_contents
+    assert "net.ipv4.tcp_congestion_control=bbr" in config_contents
+
+
 def test__configure_system_users(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given a monkeypatched subprocess run calls that raises an exception.
@@ -652,6 +672,38 @@ def test__get_github_runner_version_user_defined(version: str, expected_version:
     assert: the user provided version is returned.
     """
     assert builder._get_github_runner_version(version=version) == expected_version
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(
+            subprocess.CalledProcessError(1, [], "Something happened", ""),
+            id="called process error",
+        ),
+        pytest.param(
+            subprocess.SubprocessError(),
+            id="general subprocess error",
+        ),
+    ],
+)
+def test__chown_home_fail(
+    monkeypatch: pytest.MonkeyPatch,
+    error: subprocess.CalledProcessError | subprocess.SubprocessError,
+):
+    """
+    arrange: given a monkeypatched process calls that fails.
+    act: when _disconnect_image_to_network_block_device is called.
+    assert: ImageMountError is raised.
+    """
+    monkeypatch.setattr(
+        subprocess,
+        "check_call",
+        MagicMock(side_effect=error),
+    )
+
+    with pytest.raises(HomeDirectoryChangeOwnershipError):
+        builder._chown_home()
 
 
 def test__disconnect_image_to_network_block_device_fail(monkeypatch: pytest.MonkeyPatch):
