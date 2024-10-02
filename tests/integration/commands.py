@@ -24,6 +24,8 @@ class Commands:
 # This is matched with E2E test run of github-runner-operator charm.
 TEST_RUNNER_COMMANDS = (
     Commands(name="simple hello world", command="echo hello world"),
+    # skopeo does not exist by default, apt-get update must be run before
+    Commands(name="apt updated", command="sudo apt install -y skopeo"),
     Commands(name="print groups", command="groups | grep sudo"),
     Commands(name="file permission to /usr/local/bin", command="ls -ld /usr/local/bin"),
     Commands(
