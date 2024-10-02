@@ -46,7 +46,7 @@ Upload image to openstack glance.
 
 ---
 
-<a href="../src/github_runner_image_builder/store.py#L58"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/store.py#L60"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `upload_image`
 
@@ -86,7 +86,7 @@ Upload image to openstack glance.
 
 ---
 
-<a href="../src/github_runner_image_builder/store.py#L123"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/store.py#L125"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `get_latest_build_id`
 

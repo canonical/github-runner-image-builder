@@ -38,6 +38,8 @@ def create_snapshot(
     """
     with openstack.connect(cloud=cloud_name) as connection:
         try:
+            logger.info("Stopping server to snapshot, %s", server.name)
+            server.stop(session=connection.session)
             logger.info("Creating image snapshot, %s %s", image_name, server.name)
             image: Image = connection.create_image_snapshot(
                 name=image_name,
