@@ -46,7 +46,6 @@ BUILDER_SSH_KEY_NAME = "image-builder-ssh-key"
 BUILDER_KEY_PATH = pathlib.Path("/home/ubuntu/.ssh/builder_key")
 
 SHARED_SECURITY_GROUP_NAME = "github-runner-image-builder-v1"
-IMAGE_SNAPSHOT_FILE_PATH = pathlib.Path("github-runner-image-snapshot.img")
 
 CREATE_SERVER_TIMEOUT = 5 * 60  # seconds
 
@@ -236,7 +235,9 @@ def run(
         network = _determine_network(conn=conn, network_name=cloud_config.network)
         logger.info("Using network ID: %s.", network)
         builder: openstack.compute.v2.server.Server = conn.create_server(
-            name=_get_builder_name(arch=image_config.arch, base=image_config.base),
+            name=_get_builder_name(
+                arch=image_config.arch, base=image_config.base, name=image_config.name
+            ),
             image=_get_base_image_name(arch=image_config.arch, base=image_config.base),
             key_name=BUILDER_SSH_KEY_NAME,
             flavor=flavor,
@@ -379,17 +380,18 @@ def _generate_cloud_init_script(
     )
 
 
-def _get_builder_name(arch: Arch, base: BaseImage) -> str:
+def _get_builder_name(arch: Arch, base: BaseImage, name: str) -> str:
     """Get builder VM name.
 
     Args:
         arch: The architecture of the image to seed.
         base: The ubuntu base image.
+        name: The name of the target image to build.
 
     Returns:
         The builder VM name launched on OpenStack.
     """
-    return f"image-builder-{base.value}-{arch.value}"
+    return f"image-builder-{base.value}-{arch.value}-{name}"
 
 
 @tenacity.retry(
@@ -550,8 +552,9 @@ def _upload_to_clouds(
     """
     if not upload_cloud_names:
         return (image,)
-    logger.info("Downloading snapshot to %s.", IMAGE_SNAPSHOT_FILE_PATH)
-    conn.download_image(name_or_id=image.id, output_file=IMAGE_SNAPSHOT_FILE_PATH, stream=True)
+    file_path = pathlib.Path(f"{image.name}.snapshot")
+    logger.info("Downloading snapshot to %s.", file_path)
+    conn.download_image(name_or_id=image.id, output_file=file_path, stream=True)
     images: list[openstack.compute.v2.image.Image] = []
     for cloud_name in upload_cloud_names:
         logger.info("Uploading downloaded snapshot to %s.", cloud_name)
@@ -559,7 +562,7 @@ def _upload_to_clouds(
             arch=upload_cloud_config.arch,
             cloud_name=cloud_name,
             image_name=upload_cloud_config.image_name,
-            image_path=IMAGE_SNAPSHOT_FILE_PATH,
+            image_path=file_path,
             keep_revisions=upload_cloud_config.keep_revisions,
         )
         images.append(image)
