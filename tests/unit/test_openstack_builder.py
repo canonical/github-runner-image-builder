@@ -93,7 +93,7 @@ def test_initialize(monkeypatch: pytest.MonkeyPatch):
         openstack_builder, "_create_security_group", (create_security_group_mock := MagicMock())
     )
 
-    openstack_builder.initialize(MagicMock(), MagicMock())
+    openstack_builder.initialize(MagicMock(), MagicMock(), MagicMock())
 
     download_mock.assert_called()
     upload_mock.assert_called()
@@ -113,7 +113,7 @@ def test__create_keypair_already_exists(monkeypatch: pytest.MonkeyPatch, tmp_pat
     monkeypatch.setattr(openstack_builder, "BUILDER_KEY_PATH", tmp_key_path)
     connection_mock = MagicMock()
 
-    openstack_builder._create_keypair(conn=connection_mock)
+    openstack_builder._create_keypair(conn=connection_mock, prefix="")
 
     connection_mock.create_keypair.assert_not_called()
 
@@ -132,7 +132,7 @@ def test__create_keypair(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
     connection_mock.create_keypair.return_value = (mock_key := MagicMock())
     mock_key.private_key = "ssh-key-contents"
 
-    openstack_builder._create_keypair(conn=connection_mock)
+    openstack_builder._create_keypair(conn=connection_mock, prefix="")
 
     connection_mock.create_keypair.assert_called()
     assert tmp_path.exists()
@@ -173,6 +173,7 @@ def test__create_security_group():
                 cloud_name="test-cloud",
                 flavor="test-flavor",
                 network="test-network",
+                prefix="",
                 proxy="test-proxy",
                 upload_cloud_names=[],
             ),
@@ -183,6 +184,7 @@ def test__create_security_group():
                 cloud_name="test-cloud",
                 flavor="test-flavor",
                 network="test-network",
+                prefix="",
                 proxy="test-proxy",
                 upload_cloud_names=["test-cloud-1"],
             ),
@@ -193,6 +195,7 @@ def test__create_security_group():
                 cloud_name="test-cloud",
                 flavor="test-flavor",
                 network="test-network",
+                prefix="",
                 proxy="test-proxy",
                 upload_cloud_names=["test-cloud-1", "test-cloud-2"],
             ),

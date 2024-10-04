@@ -112,7 +112,9 @@ def test_initialize(monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner, flag
     if not flags:
         mock_builder_init_func.assert_called_with()
     else:
-        mock_openstack_init_func.assert_called_with(arch=config.Arch.X64, cloud_name="hello")
+        mock_openstack_init_func.assert_called_with(
+            arch=config.Arch.X64, cloud_name="hello", prefix=""
+        )
 
 
 @pytest.mark.parametrize(
