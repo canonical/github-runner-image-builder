@@ -138,6 +138,57 @@ LOG_LEVELS = tuple(
 
 
 @dataclasses.dataclass
+class Snap:
+    """The snap to install.
+
+    Attributes:
+        name: The snap to install.
+        channel: The snap channel to install from.
+        classic: Whether the snap should be installed in --classic mode.
+    """
+
+    name: str
+    channel: str
+    classic: bool
+
+    @classmethod
+    def from_str(cls, value: str) -> "Snap":
+        """Parse snap datastruct from string.
+
+        Args:
+            value: The string value to parse.
+
+        Raises:
+            ValueError: if there was an error parsing the snap configuration from input string.
+
+        Returns:
+            The parsed snap dataclass.
+        """
+        values = value.split(":")
+        if len(values) < 2:
+            raise ValueError("The snap should be in <name>:<channel>:<classic>")
+        if len(values) == 2:
+            return cls(
+                name=values[0],
+                channel=values[1],
+                classic=False,
+            )
+        return cls(
+            name=values[0],
+            channel=values[1],
+            classic=values[2].lower() == "true",
+        )
+
+    def to_string(self) -> str:
+        """Format to cloud-init installable string.
+
+        Returns:
+            The <name>:<channel>:<classic> formatted string for cloud-init script.
+        """
+        return f"{self.name}:{self.channel}:{str(self.classic).lower()}"
+
+
+@dataclasses.dataclass
 class ImageConfig:
     """The build image configuration values.
 
@@ -146,9 +197,11 @@ class ImageConfig:
         base: The ubuntu base OS of the image.
         runner_version: The GitHub runner version to install on the VM. Defaults to latest.
         name: The image name to upload on OpenStack.
+        snaps: list of snaps to install.
     """
 
     arch: Arch
     base: BaseImage
     runner_version: str
     name: str
+    snaps: list[Snap]

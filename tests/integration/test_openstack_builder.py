@@ -97,6 +97,7 @@ def cli_run_fixture(
             base=config.BaseImage.from_str(image),
             runner_version="",
             name="github-runner-image-builder-snapshot-v0",
+            snaps=[config.Snap(name="juju", channel="3.1/stable", classic=False)],
         ),
         keep_revisions=1,
     )

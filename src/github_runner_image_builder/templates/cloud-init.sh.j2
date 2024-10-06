@@ -42,6 +42,21 @@ function install_apt_packages() {
     DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --install-recommends linux-generic-hwe-${hwe_version}
 }
 
+function install_snap_packages() {
+    # space separated snaps in <package>:<channel>:<classic> format.
+    local packages="$1"
+    echo "Installing snap packages"
+    for package in $packages; do
+        IFS=':' read -r name channel classic <<< "$package"
+        classic_flag=""
+        if [[ "$classic" == "true" ]]; then
+            classic_flag="--classic"
+        fi
+        echo "Installing snap $name channel:$channel flag:$classic_flag"
+        snap install "$name" --channel="$channel" $classic_flag
+    done
+}
+
 function disable_unattended_upgrades() {
     echo "Disabling unattended upgrades"
     /usr/bin/systemctl disable apt-daily.timer
@@ -115,12 +130,14 @@ function chown_home() {
 
 proxy="{{ PROXY_URL }}"
 apt_packages="{{ APT_PACKAGES }}"
+snap_packages="{{ SNAP_PACKAGES }}"
 hwe_version="{{ HWE_VERSION }}"
 github_runner_version="{{ RUNNER_VERSION }}"
 github_runner_arch="{{ RUNNER_ARCH }}"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
+install_snap_packages "$snap_packages"
 disable_unattended_upgrades
 enable_network_fair_queuing_congestion
 configure_system_users

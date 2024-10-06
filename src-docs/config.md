@@ -79,6 +79,84 @@ The ubuntu OS base image to build and deploy runners on.
 
 <a href="../src/github_runner_image_builder/config.py#L140"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
+## <kbd>class</kbd> `Snap`
+The snap to install. 
+
+
+
+**Attributes:**
+ 
+ - <b>`name`</b>:  The snap to install. 
+ - <b>`channel`</b>:  The snap channel to install from. 
+ - <b>`classic`</b>:  Whether the snap should be installed in --classic mode. 
+
+<a href="../<string>"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+### <kbd>method</kbd> `__init__`
+
+```python
+__init__(name: str, channel: str, classic: bool) → None
+```
+
+
+
+
+
+
+
+
+---
+
+<a href="../src/github_runner_image_builder/config.py#L154"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+### <kbd>classmethod</kbd> `from_str`
+
+```python
+from_str(value: str) → Snap
+```
+
+Parse snap datastruct from string. 
+
+
+
+**Args:**
+ 
+ - <b>`value`</b>:  The string value to parse. 
+
+
+
+**Raises:**
+ 
+ - <b>`ValueError`</b>:  if there was an error parsing the snap configuration from input string. 
+
+
+
+**Returns:**
+ The parsed snap dataclass. 
+
+---
+
+<a href="../src/github_runner_image_builder/config.py#L182"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+### <kbd>method</kbd> `to_string`
+
+```python
+to_string() → str
+```
+
+Format to cloud-init installable string. 
+
+
+
+**Returns:**
+ 
+ - <b>`The <name>`</b>: <channel>:<classic> formatted string for cloud-init script. 
+
+
+---
+
+<a href="../src/github_runner_image_builder/config.py#L191"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
 ## <kbd>class</kbd> `ImageConfig`
 The build image configuration values. 
 
@@ -90,13 +168,20 @@ The build image configuration values.
  - <b>`base`</b>:  The ubuntu base OS of the image. 
  - <b>`runner_version`</b>:  The GitHub runner version to install on the VM. Defaults to latest. 
  - <b>`name`</b>:  The image name to upload on OpenStack. 
+ - <b>`snaps`</b>:  list of snaps to install. 
 
 <a href="../<string>"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(arch: Arch, base: BaseImage, runner_version: str, name: str) → None
+__init__(
+    arch: Arch,
+    base: BaseImage,
+    runner_version: str,
+    name: str,
+    snaps: list[Snap]
+) → None
 ```
 
 

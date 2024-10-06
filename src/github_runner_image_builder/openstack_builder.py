@@ -31,7 +31,7 @@ import yaml
 
 import github_runner_image_builder.errors
 from github_runner_image_builder import cloud_image, config, store
-from github_runner_image_builder.config import IMAGE_DEFAULT_APT_PACKAGES, Arch, BaseImage
+from github_runner_image_builder.config import IMAGE_DEFAULT_APT_PACKAGES, Arch, BaseImage, Snap
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +229,7 @@ def run(
         base=image_config.base,
         runner_version=image_config.runner_version,
         proxy=cloud_config.proxy,
+        snaps=image_config.snaps,
     )
     with openstack.connect(cloud=cloud_config.cloud_name) as conn:
         flavor = _determine_flavor(conn=conn, flavor_name=cloud_config.flavor)
@@ -349,18 +350,16 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
 
 
 def _generate_cloud_init_script(
-    arch: Arch,
-    base: BaseImage,
-    runner_version: str,
-    proxy: str,
+    arch: Arch, base: BaseImage, runner_version: str, proxy: str, snaps: list[Snap]
 ) -> str:
     """Generate userdata for installing GitHub runner image components.
 
     Args:
         arch: The GitHub runner architecture to download.
         base: The ubuntu base image.
-        runner_version: The GitHub runner version to pin.
         proxy: The proxy to enable while setting up the VM.
+        runner_version: The GitHub runner version to pin.
+        snaps: list of snaps to install.
 
     Returns:
         The cloud-init script to create snapshot image.
@@ -373,6 +372,7 @@ def _generate_cloud_init_script(
     return template.render(
         PROXY_URL=proxy,
         APT_PACKAGES=" ".join(IMAGE_DEFAULT_APT_PACKAGES),
+        SNAP_PACKAGES=" ".join(snap.to_string() for snap in snaps),
         HWE_VERSION=BaseImage.get_version(base),
         RUNNER_VERSION=runner_version,
         RUNNER_ARCH=arch.value,

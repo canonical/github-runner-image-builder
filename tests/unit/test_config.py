@@ -13,6 +13,7 @@ import pytest
 from github_runner_image_builder.config import (
     Arch,
     BaseImage,
+    Snap,
     UnsupportedArchitectureError,
     get_supported_arch,
 )
@@ -126,3 +127,61 @@ def test_base_image_get_version(base_image: BaseImage, expected_version: str):
     assert: expected image version is returned.
     """
     assert BaseImage.get_version(base=base_image) == expected_version
+
+
+def test_snap_from_str_error():
+    """
+    arrange: given an invalid snap string input.
+    act: when Snap.from_str is called.
+    assert: ValueError is raised.
+    """
+    with pytest.raises(ValueError):
+        Snap.from_str(value="invalid input")
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        pytest.param(
+            "juju:3.1/stable",
+            Snap(name="juju", channel="3.1/stable", classic=False),
+            id="optional classic value",
+        ),
+        pytest.param(
+            "microk8s:1.29-strict/stable:true",
+            Snap(name="microk8s", channel="1.29-strict/stable", classic=True),
+            id="optional classic value",
+        ),
+    ],
+)
+def test_snap_from_str(value: str, expected: Snap):
+    """
+    arrange: given a snap string input.
+    act: when Snap.from_str is called.
+    assert: expected snap is parsed.
+    """
+    assert Snap.from_str(value=value) == expected
+
+
+@pytest.mark.parametrize(
+    "snap, expected",
+    [
+        pytest.param(
+            Snap(name="juju", channel="3.1/stable", classic=False),
+            "juju:3.1/stable:false",
+            id="optional classic value",
+        ),
+        pytest.param(
+            Snap(name="microk8s", channel="1.29-strict/stable", classic=True),
+            "microk8s:1.29-strict/stable:true",
+            id="optional classic value",
+        ),
+    ],
+)
+def test_snap_to_str(snap: Snap, expected: str):
+    """
+    arrange: given a snap.
+    act: when Snap.to_str is called.
+    assert: expected snap is parsed to string.
+    """
+    assert snap.to_string() == expected

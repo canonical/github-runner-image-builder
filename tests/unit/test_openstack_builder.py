@@ -468,6 +468,9 @@ def test__generate_cloud_init_script():
             base=openstack_builder.BaseImage.JAMMY,
             runner_version="",
             proxy="test.proxy.internal:3128",
+            snaps=[
+                openstack_builder.config.Snap(name="juju", channel="3.1/stable", classic=False)
+            ],
         )
         # The templated script contains similar lines to helper for setting up proxy.
         # pylint: disable=R0801
@@ -515,6 +518,21 @@ function install_apt_packages() {
     echo "Installing linux-generic-hwe-${hwe_version}"
     DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --install-recommends linux-generic-\
 hwe-${hwe_version}
+}
+
+function install_snap_packages() {
+    # space separated snaps in <package>:<channel>:<classic> format.
+    local packages="$1"
+    echo "Installing snap packages"
+    for package in $packages; do
+        IFS=':' read -r name channel classic <<< "$package"
+        classic_flag=""
+        if [[ "$classic" == "true" ]]; then
+            classic_flag="--classic"
+        fi
+        echo "Installing snap $name channel:$channel flag:$classic_flag"
+        snap install "$name" --channel="$channel" $classic_flag
+    done
 }
 
 function disable_unattended_upgrades() {
@@ -594,12 +612,14 @@ function chown_home() {
 proxy="test.proxy.internal:3128"
 apt_packages="build-essential docker.io gh jq npm python3-dev python3-pip python-is-python3 \
 shellcheck tar time unzip wget"
+snap_packages="juju:3.1/stable:false"
 hwe_version="22.04"
 github_runner_version=""
 github_runner_arch="x64"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
+install_snap_packages "$snap_packages"
 disable_unattended_upgrades
 enable_network_fair_queuing_congestion
 configure_system_users

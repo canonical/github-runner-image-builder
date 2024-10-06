@@ -148,6 +148,12 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "Ignored if --experimental-external is not enabled",
 )
 @click.option(
+    "--snap",
+    multiple=True,
+    help="EXPERIMENTAL: Snap to install in snap:channel:classic"
+    " format. Only applicable with --experimental-external mode.",
+)
+@click.option(
     "--upload-clouds",
     default="",
     help="EXPERIMENTAL: Comma separated list of different clouds to use to upload the externally "
@@ -167,6 +173,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     flavor: str,
     network: str,
     proxy: str,
+    snap: list[str],
     upload_clouds: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
@@ -184,6 +191,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         flavor: The Openstack flavor to create server to build images.
         network: The Openstack network to assign to server to build images.
         proxy: Proxy to use for external build VMs.
+        snap: The list of snaps to install in <snap>:<channel>:<classic> format.
         upload_clouds: The Openstack cloud to use to upload externally built image.
     """
     arch = arch if arch else config.get_supported_arch()
@@ -192,10 +200,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         image_ids = builder.run(
             cloud_name=cloud_name,
             image_config=config.ImageConfig(
-                arch=arch,
-                base=base,
-                runner_version=runner_version,
-                name=image_name,
+                arch=arch, base=base, name=image_name, runner_version=runner_version, snaps=[]
             ),
             keep_revisions=keep_revisions,
         )
@@ -222,6 +227,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 base=base,
                 runner_version=runner_version,
                 name=image_name,
+                snaps=list(config.Snap.from_str(snap_str) for snap_str in snap),
             ),
             keep_revisions=keep_revisions,
         )
