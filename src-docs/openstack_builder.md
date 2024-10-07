@@ -17,7 +17,7 @@ Module for interacting with external openstack VM image builder.
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L55"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L60"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `determine_cloud`
 
@@ -47,7 +47,7 @@ Automatically determine cloud to use from clouds.yaml by selecting the first clo
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L88"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L93"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `initialize`
 
@@ -70,7 +70,7 @@ Upload ubuntu base images to openstack to use as builder base. This is a separat
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L228"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L233"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `run`
 
@@ -100,7 +100,7 @@ Run external OpenStack builder instance and create a snapshot.
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L206"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L211"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `CloudConfig`
 The OpenStack cloud configuration values. 
