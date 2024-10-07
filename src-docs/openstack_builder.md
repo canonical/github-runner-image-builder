@@ -9,7 +9,6 @@ Module for interacting with external openstack VM image builder.
 ---------------
 - **IMAGE_DEFAULT_APT_PACKAGES**
 - **CLOUD_YAML_PATHS**
-- **BUILDER_SSH_KEY_NAME**
 - **SHARED_SECURITY_GROUP_NAME**
 - **CREATE_SERVER_TIMEOUT**
 - **MIN_CPU**
@@ -18,7 +17,7 @@ Module for interacting with external openstack VM image builder.
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L58"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L55"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `determine_cloud`
 
@@ -48,12 +47,12 @@ Automatically determine cloud to use from clouds.yaml by selecting the first clo
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L91"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L88"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `initialize`
 
 ```python
-initialize(arch: Arch, cloud_name: str) → None
+initialize(arch: Arch, cloud_name: str, prefix: str) → None
 ```
 
 Initialize the OpenStack external image builder. 
@@ -66,11 +65,12 @@ Upload ubuntu base images to openstack to use as builder base. This is a separat
  
  - <b>`arch`</b>:  The architecture of the image to seed. 
  - <b>`cloud_name`</b>:  The cloud to use from the clouds.yaml file. 
+ - <b>`prefix`</b>:  The prefix to use for OpenStack resource names. 
 
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L212"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L228"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `run`
 
@@ -100,7 +100,7 @@ Run external OpenStack builder instance and create a snapshot.
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L192"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L206"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `CloudConfig`
 The OpenStack cloud configuration values. 
@@ -112,6 +112,7 @@ The OpenStack cloud configuration values.
  - <b>`cloud_name`</b>:  The OpenStack cloud name to use. 
  - <b>`flavor`</b>:  The OpenStack flavor to launch builder VMs on. 
  - <b>`network`</b>:  The OpenStack network to launch the builder VMs on. 
+ - <b>`prefix`</b>:  The prefix to use for OpenStack resource names. 
  - <b>`proxy`</b>:  The proxy to enable on builder VMs. 
  - <b>`upload_cloud_names`</b>:  The OpenStack cloud names to upload the snapshot to. (Defaults to             the same cloud) 
 
@@ -124,6 +125,7 @@ __init__(
     cloud_name: str,
     flavor: str,
     network: str,
+    prefix: str,
     proxy: str,
     upload_cloud_names: Optional[Iterable[str]]
 ) → None

@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.amd64
 @pytest.mark.arm64
-def test_initialize(openstack_connection: Connection, arch: config.Arch, cloud_name: str):
+def test_initialize(
+    openstack_connection: Connection, arch: config.Arch, cloud_name: str, test_id: str
+):
     """
     arrange: given an openstack cloud instance.
     act: when openstack builder is initialized.
@@ -39,7 +41,7 @@ def test_initialize(openstack_connection: Connection, arch: config.Arch, cloud_n
     """
     test_start_time = datetime.now(tz=timezone.utc)
 
-    openstack_builder.initialize(arch=arch, cloud_name=cloud_name)
+    openstack_builder.initialize(arch=arch, cloud_name=cloud_name, prefix=test_id)
 
     # 1.
     images: list[Image] = openstack_connection.list_images()
@@ -68,15 +70,16 @@ def test_initialize(openstack_connection: Connection, arch: config.Arch, cloud_n
     assert openstack_connection.get_security_group(
         name_or_id=openstack_builder.SHARED_SECURITY_GROUP_NAME
     )
-    assert openstack_connection.get_keypair(name_or_id=openstack_builder.BUILDER_SSH_KEY_NAME)
+    assert openstack_connection.get_keypair(
+        name_or_id=openstack_builder._get_keyname(prefix=test_id)
+    )
 
 
 @pytest.fixture(scope="module", name="cli_run")
 def cli_run_fixture(
-    arch: config.Arch,
-    image: str,
-    cloud_name: str,
+    image_config: types.ImageConfig,
     openstack_metadata: types.OpenstackMeta,
+    test_id: str,
     proxy: types.ProxyConfig,
 ):
     """A CLI run.
@@ -86,17 +89,18 @@ def cli_run_fixture(
     """
     openstack_builder.run(
         cloud_config=openstack_builder.CloudConfig(
-            cloud_name=cloud_name,
+            cloud_name=openstack_metadata.cloud_name,
             flavor=openstack_metadata.flavor,
             network=openstack_metadata.network,
             proxy=proxy.http,
-            upload_cloud_names=[cloud_name],
+            prefix=test_id,
+            upload_cloud_names=[openstack_metadata.cloud_name],
         ),
         image_config=config.ImageConfig(
-            arch=arch,
-            base=config.BaseImage.from_str(image),
+            arch=image_config.arch,
+            base=config.BaseImage.from_str(image_config.image),
             runner_version="",
-            name="github-runner-image-builder-snapshot-v0",
+            name=f"{test_id}-image-builder-test",
         ),
         keep_revisions=1,
     )
@@ -112,7 +116,7 @@ async def openstack_server_fixture(
 ):
     """A testing openstack instance."""
     image: Image = openstack_metadata.connection.get_image(
-        name_or_id="github-runner-image-builder-snapshot-v0"
+        name_or_id=f"{test_id}-image-builder-test"
     )
     server_name = f"test-image-builder-run-{test_id}"
     for server in helpers.create_openstack_server(

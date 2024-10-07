@@ -47,13 +47,22 @@ def main(log_level: str | int) -> None:
     default=False,
     help="EXPERIMENTAL: Use external Openstack builder to build images.",
 )
-def initialize(arch: config.Arch | None, cloud_name: str, experimental_external: bool) -> None:
+@click.option(
+    "--prefix",
+    default="",
+    help="Name of the OpenStack resources to prefix with. Used to run the image builder in "
+    "parallel under same OpenStack project. Ignored if --experimental-external is not enabled",
+)
+def initialize(
+    arch: config.Arch | None, cloud_name: str, experimental_external: bool, prefix: str
+) -> None:
     """Initialize builder CLI function wrapper.
 
     Args:
         arch: The architecture to build for.
         cloud_name: The cloud name to use from clouds.yaml.
         experimental_external: Whether to use external Openstack builder to build images.
+        prefix: The prefix to use for OpenStack resource names.
     """
     if not experimental_external:
         builder.initialize()
@@ -61,7 +70,9 @@ def initialize(arch: config.Arch | None, cloud_name: str, experimental_external:
     arch = arch if arch else config.get_supported_arch()
 
     openstack_builder.initialize(
-        arch=arch, cloud_name=openstack_builder.determine_cloud(cloud_name=cloud_name)
+        arch=arch,
+        cloud_name=openstack_builder.determine_cloud(cloud_name=cloud_name),
+        prefix=prefix,
     )
 
 
@@ -142,6 +153,12 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "Ignored if --experimental-external is not enabled",
 )
 @click.option(
+    "--prefix",
+    default="",
+    help="Name of the OpenStack resources to prefix with. Used to run the image builder in "
+    "parallel under same OpenStack project. Ignored if --experimental-external is not enabled",
+)
+@click.option(
     "--proxy",
     default="",
     help="EXPERIMENTAL: Proxy to use for external build VMs in host:port format (without scheme). "
@@ -166,6 +183,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     experimental_external: bool,
     flavor: str,
     network: str,
+    prefix: str,
     proxy: str,
     upload_clouds: str,
 ) -> None:
@@ -183,6 +201,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         experimental_external: Whether to use external OpenStack builder.
         flavor: The Openstack flavor to create server to build images.
         network: The Openstack network to assign to server to build images.
+        prefix: The prefix to use for OpenStack resource names.
         proxy: Proxy to use for external build VMs.
         upload_clouds: The Openstack cloud to use to upload externally built image.
     """
@@ -214,6 +233,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 cloud_name=cloud_name,
                 flavor=flavor,
                 network=network,
+                prefix=prefix,
                 proxy=proxy,
                 upload_cloud_names=upload_cloud_names,
             ),
