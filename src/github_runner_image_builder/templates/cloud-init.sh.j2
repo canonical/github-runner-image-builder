@@ -2,6 +2,8 @@
 
 set -e
 
+hostnamectl set-hostname github-runner
+
 function configure_proxy() {
     local proxy="$1"
     if [[ -z "$proxy" ]]; then
@@ -90,6 +92,17 @@ function install_yq() {
     /usr/bin/sudo -E /usr/bin/snap remove go
 }
 
+function install_juju() {
+    local channel="$1"
+    if [[ -z "$channel" ]]; then
+        echo "Juju channel not provided, skipping installation."
+        return
+    fi
+    /usr/bin/sudo -E /snap/bin/lxd init --auto
+    /usr/bin/sudo -E /usr/bin/snap install juju --channel="$channel"
+    /snap/bin/juju bootstrap localhost localhost
+}
+
 function install_github_runner() {
     version="$1"
     arch="$2"
@@ -118,6 +131,7 @@ apt_packages="{{ APT_PACKAGES }}"
 hwe_version="{{ HWE_VERSION }}"
 github_runner_version="{{ RUNNER_VERSION }}"
 github_runner_arch="{{ RUNNER_ARCH }}"
+juju_channel="{{ JUJU_CHANNEL }}"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
@@ -131,6 +145,7 @@ export -f install_yq
 su ubuntu -c "bash -c 'install_yq'"
 install_github_runner "$github_runner_version" "$github_runner_arch"
 chown_home
+install_juju "$juju_channel"
 # Make sure the disk is synced for snapshot
 sync
 echo "Finished sync"

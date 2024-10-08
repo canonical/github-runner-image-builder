@@ -147,6 +147,12 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "Ignored if --experimental-external is not enabled",
 )
 @click.option(
+    "--juju",
+    default="",
+    help="Juju channel to install and bootstrap. E.g. to install Juju 3.1/stable, pass the values "
+    "--juju=3.1/stable",
+)
+@click.option(
     "--network",
     default="",
     help="EXPERIMENTAL: OpenStack network to launch the external build run VMs under. "
@@ -182,6 +188,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     runner_version: str,
     experimental_external: bool,
     flavor: str,
+    juju: str,
     network: str,
     prefix: str,
     proxy: str,
@@ -200,6 +207,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         runner_version: GitHub runner version to pin.
         experimental_external: Whether to use external OpenStack builder.
         flavor: The Openstack flavor to create server to build images.
+        juju: The Juju channel to install and bootstrap.
         network: The Openstack network to assign to server to build images.
         prefix: The prefix to use for OpenStack resource names.
         proxy: Proxy to use for external build VMs.
@@ -213,6 +221,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                juju=juju,
                 runner_version=runner_version,
                 name=image_name,
             ),
@@ -240,6 +249,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                juju=juju,
                 runner_version=runner_version,
                 name=image_name,
             ),

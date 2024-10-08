@@ -101,6 +101,7 @@ def cli_run_fixture(
             base=config.BaseImage.from_str(image_config.image),
             runner_version="",
             name=f"{test_id}-image-builder-test",
+            juju="3.1/stable",
         ),
         keep_revisions=1,
     )

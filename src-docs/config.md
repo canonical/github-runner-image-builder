@@ -88,6 +88,7 @@ The build image configuration values.
  
  - <b>`arch`</b>:  The architecture of the target image. 
  - <b>`base`</b>:  The ubuntu base OS of the image. 
+ - <b>`juju`</b>:  The Juju channel to install and bootstrap. 
  - <b>`runner_version`</b>:  The GitHub runner version to install on the VM. Defaults to latest. 
  - <b>`name`</b>:  The image name to upload on OpenStack. 
 
@@ -96,7 +97,13 @@ The build image configuration values.
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(arch: Arch, base: BaseImage, runner_version: str, name: str) → None
+__init__(
+    arch: Arch,
+    base: BaseImage,
+    juju: str,
+    runner_version: str,
+    name: str
+) → None
 ```
 
 

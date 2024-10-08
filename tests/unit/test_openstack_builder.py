@@ -469,6 +469,7 @@ def test__generate_cloud_init_script():
         openstack_builder._generate_cloud_init_script(
             arch=openstack_builder.Arch.X64,
             base=openstack_builder.BaseImage.JAMMY,
+            juju="3.1/stable",
             runner_version="",
             proxy="test.proxy.internal:3128",
         )
@@ -477,6 +478,8 @@ def test__generate_cloud_init_script():
         == """#!/bin/bash
 
 set -e
+
+hostnamectl set-hostname github-runner
 
 function configure_proxy() {
     local proxy="$1"
@@ -568,6 +571,17 @@ function install_yq() {
     /usr/bin/sudo -E /usr/bin/snap remove go
 }
 
+function install_juju() {
+    local channel="$1"
+    if [[ -z "$channel" ]]; then
+        echo "Juju channel not provided, skipping installation."
+        return
+    fi
+    /usr/bin/sudo -E /snap/bin/lxd init --auto
+    /usr/bin/sudo -E /usr/bin/snap install juju --channel="$channel"
+    /snap/bin/juju bootstrap localhost localhost
+}
+
 function install_github_runner() {
     version="$1"
     arch="$2"
@@ -600,6 +614,7 @@ shellcheck tar time unzip wget"
 hwe_version="22.04"
 github_runner_version=""
 github_runner_arch="x64"
+juju_channel="3.1/stable"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
@@ -613,6 +628,7 @@ export -f install_yq
 su ubuntu -c "bash -c 'install_yq'"
 install_github_runner "$github_runner_version" "$github_runner_arch"
 chown_home
+install_juju "$juju_channel"
 # Make sure the disk is synced for snapshot
 sync
 echo "Finished sync"\
