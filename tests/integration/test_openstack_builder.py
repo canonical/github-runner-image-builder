@@ -71,7 +71,7 @@ def test_initialize(
         name_or_id=openstack_builder.SHARED_SECURITY_GROUP_NAME
     )
     assert openstack_connection.get_keypair(
-        name_or_id=openstack_builder._get_keyname(prefix=test_id)
+        name_or_id=openstack_builder._get_keypair_name(prefix=test_id)
     )
 
 

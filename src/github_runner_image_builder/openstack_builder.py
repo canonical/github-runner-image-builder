@@ -154,7 +154,7 @@ def _create_keypair(conn: openstack.connection.Connection, prefix: str) -> None:
         conn: The Openstach connection instance.
         prefix: The prefix to use for OpenStack resource names.
     """
-    key_name = _get_keyname(prefix=prefix)
+    key_name = _get_keypair_name(prefix=prefix)
     key = conn.get_keypair(name_or_id=key_name)
     if key and BUILDER_KEY_PATH.exists():
         return
@@ -168,7 +168,7 @@ def _create_keypair(conn: openstack.connection.Connection, prefix: str) -> None:
     BUILDER_KEY_PATH.chmod(0o400)
 
 
-def _get_keyname(prefix: str) -> str:
+def _get_keypair_name(prefix: str) -> str:
     """Get OpenStack key name.
 
     Args:
@@ -254,9 +254,9 @@ def run(
     builder_name = _get_builder_name(
         arch=image_config.arch, base=image_config.base, prefix=cloud_config.prefix
     )
-    builder_key_name = _get_keyname(prefix=cloud_config.prefix)
+    builder_key_name = _get_keypair_name(prefix=cloud_config.prefix)
     with openstack.connect(cloud=cloud_config.cloud_name) as conn:
-        _ensure_openstack_resources(
+        _prepare_openstack_resources(
             conn=conn,
             builder_name=builder_name,
             key_name=builder_key_name,
@@ -306,7 +306,7 @@ def run(
     return ",".join(str(image.id) for image in images)
 
 
-def _ensure_openstack_resources(
+def _prepare_openstack_resources(
     conn: openstack.connection.Connection, builder_name: str, key_name: str, prefix: str
 ) -> None:
     """Ensure that OpenStack resources are in expected state.
@@ -369,8 +369,7 @@ def _get_key_fingerprint() -> str:
     key_data = base64.b64decode(key_base64)
     # ignore B324:hashlib use of weak MD5 - OpenStack generates keys with this algo.
     md5_hash = hashlib.md5(key_data).hexdigest()  # nosec: B324
-    # Ignore flake8 whitespace before : error since it conflicts with black formatter.
-    return ":".join(md5_hash[i : i + 2] for i in range(0, len(md5_hash), 2))  # noqa: E203
+    return ":".join(md5_hash[i : i + 2] for i in range(0, len(md5_hash), 2))
 
 
 def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | None) -> str:

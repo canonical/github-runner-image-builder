@@ -213,7 +213,7 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.Cl
         openstack_builder, "_generate_cloud_init_script", (generate_cloud_init_mock := MagicMock())
     )
     monkeypatch.setattr(
-        openstack_builder, "_ensure_openstack_resources", (ensure_resources_mock := MagicMock())
+        openstack_builder, "_prepare_openstack_resources", (ensure_resources_mock := MagicMock())
     )
     monkeypatch.setattr(
         openstack_builder, "_determine_flavor", (determine_flavor_mock := MagicMock())
@@ -254,10 +254,10 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.Cl
     connection_mock.delete_server.assert_called()
 
 
-def test__ensure_openstack_resources_invalid_resources(monkeypatch: pytest.MonkeyPatch):
+def test__prepare_openstack_resources_invalid_resources(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given monkeypatched openstack functions that return invalid openstack state.
-    act: when _ensure_openstack_resources is called.
+    act: when _prepare_openstack_resources is called.
     assert: recovery functions are called.
     """
     monkeypatch.setattr(openstack_builder, "_create_keypair", create_keypair_mock := MagicMock())
@@ -269,7 +269,7 @@ def test__ensure_openstack_resources_invalid_resources(monkeypatch: pytest.Monke
     connection_mock.search_security_groups.return_value = [MagicMock(), MagicMock()]
     connection_mock.search_servers.return_value = [MagicMock(), MagicMock()]
 
-    openstack_builder._ensure_openstack_resources(
+    openstack_builder._prepare_openstack_resources(
         conn=connection_mock, builder_name="test", key_name="test", prefix="test"
     )
 
@@ -279,10 +279,10 @@ def test__ensure_openstack_resources_invalid_resources(monkeypatch: pytest.Monke
     connection_mock.delete_server.assert_called()
 
 
-def test__ensure_openstack_resources(monkeypatch: pytest.MonkeyPatch):
+def test__prepare_openstack_resources(monkeypatch: pytest.MonkeyPatch):
     """
     arrange: given clean OpenStack resources state.
-    act: when _ensure_openstack_resources is called.
+    act: when _prepare_openstack_resources is called.
     assert: no recovery functions are called.
     """
     monkeypatch.setattr(openstack_builder, "_create_keypair", create_keypair_mock := MagicMock())
@@ -300,7 +300,7 @@ def test__ensure_openstack_resources(monkeypatch: pytest.MonkeyPatch):
     connection_mock.search_security_groups.return_value = [MagicMock()]
     connection_mock.search_servers.return_value = []
 
-    openstack_builder._ensure_openstack_resources(
+    openstack_builder._prepare_openstack_resources(
         conn=connection_mock, builder_name="test", key_name="test", prefix="test"
     )
 
