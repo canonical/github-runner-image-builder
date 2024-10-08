@@ -75,8 +75,8 @@ def test_initialize(
     )
 
 
-@pytest.fixture(scope="module", name="cli_run")
-def cli_run_fixture(
+@pytest.fixture(scope="module", name="image_ids")
+def image_ids_fixture(
     image_config: types.ImageConfig,
     openstack_metadata: types.OpenstackMeta,
     test_id: str,
@@ -87,7 +87,7 @@ def cli_run_fixture(
     This fixture assumes pipx is installed in the system and the github-runner-image-builder has
     been installed using pipx. See testenv:integration section of tox.ini.
     """
-    openstack_builder.run(
+    image_ids = openstack_builder.run(
         cloud_config=openstack_builder.CloudConfig(
             cloud_name=openstack_metadata.cloud_name,
             flavor=openstack_metadata.flavor,
@@ -104,6 +104,7 @@ def cli_run_fixture(
         ),
         keep_revisions=1,
     )
+    return image_ids.split(",")
 
 
 @pytest.fixture(scope="module", name="make_dangling_resources")
@@ -138,11 +139,10 @@ async def openstack_server_fixture(
     openstack_metadata: types.OpenstackMeta,
     openstack_security_group: SecurityGroup,
     test_id: str,
+    image_ids: list[str],
 ):
     """A testing openstack instance."""
-    image: Image = openstack_metadata.connection.get_image(
-        name_or_id=f"{test_id}-image-builder-test"
-    )
+    image: Image = openstack_metadata.connection.get_image(name_or_id=image_ids[0])
     server_name = f"test-image-builder-run-{test_id}"
     for server in helpers.create_openstack_server(
         openstack_metadata=openstack_metadata,
@@ -182,7 +182,7 @@ async def ssh_connection_fixture(
 
 @pytest.mark.amd64
 @pytest.mark.arm64
-@pytest.mark.usefixtures("cli_run, make_dangling_resources")
+@pytest.mark.usefixtures("make_dangling_resources")
 async def test_run(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
     """
     arrange: given openstack cloud instance.
