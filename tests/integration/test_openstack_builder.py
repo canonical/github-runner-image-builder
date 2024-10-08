@@ -201,6 +201,9 @@ async def test_openstack_state(
     arrange: given CLI run after dangling OpenStack resources creation.
     act: None.
     assert: Dangling resources are cleaned up.
+
+    This test is dependent on the previons test_run test. Running a new test image building run
+    is too costly at the moment.
     """
     server = openstack_metadata.connection.get_server(
         name_or_id=openstack_builder._get_builder_name(

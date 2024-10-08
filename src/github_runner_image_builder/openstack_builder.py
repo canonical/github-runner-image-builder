@@ -356,8 +356,7 @@ def _get_key_fingerprint() -> str:
     Returns:
         The MD5 fingerprint hash of the ssh public key.
     """
-    with open(BUILDER_KEY_PATH, "rb") as key_file:
-        key_data = key_file.read()
+    key_data = BUILDER_KEY_PATH.read_bytes()
     private_key = serialization.load_pem_private_key(
         key_data, password=None, backend=default_backend()
     )
