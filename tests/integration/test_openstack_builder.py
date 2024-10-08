@@ -106,6 +106,26 @@ def cli_run_fixture(
     )
 
 
+@pytest.fixture(scope="module", name="make_dangling_resources")
+async def make_dangling_resources_fixture(
+    openstack_metadata: types.OpenstackMeta, test_id: str, image_config: types.ImageConfig
+):
+    """Make OpenStack resources that imitates failed run."""
+    keypair = openstack_metadata.connection.create_keypair(
+        openstack_builder._get_keypair_name(prefix=test_id)
+    )
+    server = openstack_metadata.connection.create_server(
+        name=openstack_builder._get_builder_name(
+            arch=image_config.arch, base=config.BaseImage(image_config.image), prefix=test_id
+        )
+    )
+
+    yield
+
+    openstack_metadata.connection.delete_keypair(name=keypair.name)
+    openstack_metadata.connection.delete_server(name_or_id=server.id)
+
+
 # the code is similar but the fixture source is localized and is different.
 # pylint: disable=R0801
 @pytest_asyncio.fixture(scope="module", name="openstack_server")
@@ -157,7 +177,7 @@ async def ssh_connection_fixture(
 
 @pytest.mark.amd64
 @pytest.mark.arm64
-@pytest.mark.usefixtures("cli_run")
+@pytest.mark.usefixtures("cli_run, make_dangling_resources")
 async def test_run(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
     """
     arrange: given openstack cloud instance.
@@ -165,3 +185,26 @@ async def test_run(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
     assert: an image snapshot of working VM is created with the ability to run expected commands.
     """
     helpers.run_openstack_tests(dockerhub_mirror=dockerhub_mirror, ssh_connection=ssh_connection)
+
+
+@pytest.mark.amd64
+@pytest.mark.arm64
+async def test_openstack_state(
+    openstack_metadata: types.OpenstackMeta, test_id: str, image_config: types.ImageConfig
+):
+    """
+    arrange: given CLI run after dangling OpenStack resources creation.
+    act: None.
+    assert: Dangling resources are cleaned up.
+    """
+    server = openstack_metadata.connection.get_server(
+        name_or_id=openstack_builder._get_builder_name(
+            arch=image_config.arch, base=config.BaseImage(image_config.image), prefix=test_id
+        )
+    )
+    assert not server, "Server not cleaned up."
+
+    keypair = openstack_metadata.connection.get_keypair(
+        name_or_id=openstack_builder._get_keypair_name(prefix=test_id)
+    )
+    assert keypair, "Keypair not exists."
