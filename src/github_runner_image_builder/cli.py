@@ -94,6 +94,32 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     )
 
 
+# The arguments are necessary input for click validation function.
+def _validate_juju_channel(
+    ctx: click.Context, param: click.Parameter, value: str  # pylint: disable=unused-argument
+) -> str:
+    """Validate juju channel string input.
+
+    Args:
+        ctx: Click context argument.
+        param: Click parameter argument.
+        value: The value passed into --juju option.
+
+    Raises:
+        BadParameter: If invalid juju channel was passed in.
+
+    Returns:
+        The validated Juju channel option.
+    """
+    if not value:
+        return ""
+    try:
+        [version, track] = value.strip().split("/")
+        return f"{version}/{track}"
+    except ValueError as exc:
+        raise click.BadParameter("format must be '<version>/<track>'") from exc
+
+
 @main.command(name="run")
 @click.argument("cloud_name")
 @click.argument("image_name")
@@ -148,6 +174,7 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
 )
 @click.option(
     "--juju",
+    callback=_validate_juju_channel,
     default="",
     help="Juju channel to install and bootstrap. E.g. to install Juju 3.1/stable, pass the values "
     "--juju=3.1/stable",

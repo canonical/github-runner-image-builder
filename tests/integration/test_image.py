@@ -133,6 +133,8 @@ async def test_image_amd(image: str, tmp_path: Path, dockerhub_mirror: str | Non
     instance = await helpers.create_lxd_instance(lxd_client=lxd, image=image)
 
     for testcmd in commands.TEST_RUNNER_COMMANDS:
+        if testcmd.external:
+            continue
         if testcmd == "configure dockerhub mirror":
             if not dockerhub_mirror:
                 continue
