@@ -248,6 +248,7 @@ def run(
     cloud_init_script = _generate_cloud_init_script(
         arch=image_config.arch,
         base=image_config.base,
+        microk8s_channel=image_config.microk8s,
         runner_version=image_config.runner_version,
         proxy=cloud_config.proxy,
     )
@@ -462,6 +463,7 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
 def _generate_cloud_init_script(
     arch: Arch,
     base: BaseImage,
+    microk8s_channel: str,
     runner_version: str,
     proxy: str,
 ) -> str:
@@ -470,6 +472,7 @@ def _generate_cloud_init_script(
     Args:
         arch: The GitHub runner architecture to download.
         base: The ubuntu base image.
+        microk8s_channel: The MicroK8s channel to install.
         runner_version: The GitHub runner version to pin.
         proxy: The proxy to enable while setting up the VM.
 
@@ -485,6 +488,7 @@ def _generate_cloud_init_script(
         PROXY_URL=proxy,
         APT_PACKAGES=" ".join(IMAGE_DEFAULT_APT_PACKAGES),
         HWE_VERSION=BaseImage.get_version(base),
+        MICROK8S_CHANNEL=microk8s_channel,
         RUNNER_VERSION=runner_version,
         RUNNER_ARCH=arch.value,
     )

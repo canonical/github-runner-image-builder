@@ -213,6 +213,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                microk8s="",
                 runner_version=runner_version,
                 name=image_name,
             ),
@@ -240,6 +241,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                microk8s="",
                 runner_version=runner_version,
                 name=image_name,
             ),
