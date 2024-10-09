@@ -102,7 +102,7 @@ function install_microk8s() {
     if [[ "$channel" != *"strict"* ]]; then
         classic_flag="--classic"
     fi
-    /usr/bin/snap install microk8s --channel="$channel" "$classic_flag"
+    /usr/bin/snap install microk8s --channel="$channel" $classic_flag
     /snap/bin/microk8s status --wait-ready
 }
 
