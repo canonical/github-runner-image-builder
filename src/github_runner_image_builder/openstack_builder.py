@@ -247,11 +247,7 @@ def run(
         The Openstack snapshot image ID.
     """
     cloud_init_script = _generate_cloud_init_script(
-        arch=image_config.arch,
-        base=image_config.base,
-        microk8s_channel=image_config.microk8s,
-        juju=image_config.juju,
-        runner_version=image_config.runner_version,
+        image_config=image_config,
         proxy=cloud_config.proxy,
     )
     builder_name = _get_builder_name(
@@ -463,21 +459,13 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
 
 
 def _generate_cloud_init_script(
-    arch: Arch,
-    base: BaseImage,
-    microk8s_channel: str,
-    juju: str,
-    runner_version: str,
+    image_config: config.ImageConfig,
     proxy: str,
 ) -> str:
     """Generate userdata for installing GitHub runner image components.
 
     Args:
-        arch: The GitHub runner architecture to download.
-        base: The ubuntu base image.
-        microk8s_channel: The MicroK8s channel to install.
-        juju: The juju channel to install.
-        runner_version: The GitHub runner version to pin.
+        image_config: The target image configuration values.
         proxy: The proxy to enable while setting up the VM.
 
     Returns:
@@ -491,11 +479,11 @@ def _generate_cloud_init_script(
     return template.render(
         PROXY_URL=proxy,
         APT_PACKAGES=" ".join(IMAGE_DEFAULT_APT_PACKAGES),
-        HWE_VERSION=BaseImage.get_version(base),
-        MICROK8S_CHANNEL=microk8s_channel,
-        JUJU_CHANNEL=juju,
-        RUNNER_VERSION=runner_version,
-        RUNNER_ARCH=arch.value,
+        HWE_VERSION=BaseImage.get_version(image_config.base),
+        MICROK8S_CHANNEL=image_config.microk8s,
+        JUJU_CHANNEL=image_config.juju,
+        RUNNER_VERSION=image_config.runner_version,
+        RUNNER_ARCH=image_config.arch.value,
     )
 
 
