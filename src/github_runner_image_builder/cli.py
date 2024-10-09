@@ -94,6 +94,32 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     )
 
 
+# The arguments are necessary input for click validation function.
+def _validate_juju_channel(
+    ctx: click.Context, param: click.Parameter, value: str  # pylint: disable=unused-argument
+) -> str:
+    """Validate juju channel string input.
+
+    Args:
+        ctx: Click context argument.
+        param: Click parameter argument.
+        value: The value passed into --juju option.
+
+    Raises:
+        BadParameter: If invalid juju channel was passed in.
+
+    Returns:
+        The validated Juju channel option.
+    """
+    if not value:
+        return ""
+    try:
+        [version, track] = value.strip().split("/")
+        return f"{version}/{track}"
+    except ValueError as exc:
+        raise click.BadParameter("format must be '<version>/<track>'") from exc
+
+
 @main.command(name="run")
 @click.argument("cloud_name")
 @click.argument("image_name")
@@ -147,6 +173,13 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "Ignored if --experimental-external is not enabled",
 )
 @click.option(
+    "--juju",
+    callback=_validate_juju_channel,
+    default="",
+    help="Juju channel to install and bootstrap. E.g. to install Juju 3.1/stable, pass the values "
+    "--juju=3.1/stable",
+)
+@click.option(
     "--network",
     default="",
     help="EXPERIMENTAL: OpenStack network to launch the external build run VMs under. "
@@ -182,6 +215,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     runner_version: str,
     experimental_external: bool,
     flavor: str,
+    juju: str,
     network: str,
     prefix: str,
     proxy: str,
@@ -200,6 +234,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         runner_version: GitHub runner version to pin.
         experimental_external: Whether to use external OpenStack builder.
         flavor: The Openstack flavor to create server to build images.
+        juju: The Juju channel to install and bootstrap.
         network: The Openstack network to assign to server to build images.
         prefix: The prefix to use for OpenStack resource names.
         proxy: Proxy to use for external build VMs.
@@ -213,6 +248,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                juju=juju,
                 runner_version=runner_version,
                 name=image_name,
             ),
@@ -240,6 +276,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                juju=juju,
                 runner_version=runner_version,
                 name=image_name,
             ),

@@ -14,11 +14,13 @@ class Commands:
         name: The test name.
         command: The command to execute.
         env: Additional run envs.
+        external: OpenStack VM test only (Chroot unsupported test).
     """
 
     name: str
     command: str
     env: dict | None = None
+    external: bool = False
 
 
 # This is matched with E2E test run of github-runner-operator charm.
@@ -82,4 +84,5 @@ sudo microk8s stop && sudo microk8s start""",
         name="test network congestion policy",
         command="sudo sysctl -a | grep 'net.ipv4.tcp_congestion_control = bbr'",
     ),
+    Commands(name="test juju installed", command="juju version | grep 3.1", external=True),
 )

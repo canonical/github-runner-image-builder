@@ -144,11 +144,13 @@ class ImageConfig:
     Attributes:
         arch: The architecture of the target image.
         base: The ubuntu base OS of the image.
+        juju: The Juju channel to install and bootstrap.
         runner_version: The GitHub runner version to install on the VM. Defaults to latest.
         name: The image name to upload on OpenStack.
     """
 
     arch: Arch
     base: BaseImage
+    juju: str
     runner_version: str
     name: str

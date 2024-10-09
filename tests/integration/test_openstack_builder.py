@@ -101,6 +101,7 @@ def image_ids_fixture(
             base=config.BaseImage.from_str(image_config.image),
             runner_version="",
             name=f"{test_id}-image-builder-test",
+            juju="3.1/stable",
         ),
         keep_revisions=1,
     )
@@ -189,7 +190,9 @@ async def test_run(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
     act: when run (build image) is called.
     assert: an image snapshot of working VM is created with the ability to run expected commands.
     """
-    helpers.run_openstack_tests(dockerhub_mirror=dockerhub_mirror, ssh_connection=ssh_connection)
+    helpers.run_openstack_tests(
+        dockerhub_mirror=dockerhub_mirror, ssh_connection=ssh_connection, external=True
+    )
 
 
 @pytest.mark.amd64
