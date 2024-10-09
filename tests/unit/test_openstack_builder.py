@@ -213,6 +213,9 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.Cl
         openstack_builder, "_generate_cloud_init_script", (generate_cloud_init_mock := MagicMock())
     )
     monkeypatch.setattr(
+        openstack_builder, "_prepare_openstack_resources", (ensure_resources_mock := MagicMock())
+    )
+    monkeypatch.setattr(
         openstack_builder, "_determine_flavor", (determine_flavor_mock := MagicMock())
     )
     monkeypatch.setattr(
@@ -241,6 +244,7 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.Cl
     )
 
     generate_cloud_init_mock.assert_called()
+    ensure_resources_mock.assert_called()
     determine_flavor_mock.assert_called()
     determine_network_mock.assert_called()
     wait_cloud_init_mock.assert_called()
@@ -248,6 +252,107 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.Cl
     create_image_snapshot.assert_called()
     connection_mock.create_server.assert_called()
     connection_mock.delete_server.assert_called()
+
+
+def test__prepare_openstack_resources_invalid_resources(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given monkeypatched openstack functions that return invalid openstack state.
+    act: when _prepare_openstack_resources is called.
+    assert: recovery functions are called.
+    """
+    monkeypatch.setattr(openstack_builder, "_create_keypair", create_keypair_mock := MagicMock())
+    monkeypatch.setattr(
+        openstack_builder, "_create_security_group", create_security_group_mock := MagicMock()
+    )
+    connection_mock = MagicMock()
+    connection_mock.get_keypair.return_value = None
+    connection_mock.search_security_groups.return_value = [MagicMock(), MagicMock()]
+    connection_mock.search_servers.return_value = [MagicMock(), MagicMock()]
+
+    openstack_builder._prepare_openstack_resources(
+        conn=connection_mock, builder_name="test", key_name="test", prefix="test"
+    )
+
+    create_keypair_mock.assert_called_once()
+    create_security_group_mock.assert_called_once()
+    connection_mock.delete_security_group.assert_called()
+    connection_mock.delete_server.assert_called()
+
+
+def test__prepare_openstack_resources(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given clean OpenStack resources state.
+    act: when _prepare_openstack_resources is called.
+    assert: no recovery functions are called.
+    """
+    monkeypatch.setattr(openstack_builder, "_create_keypair", create_keypair_mock := MagicMock())
+    monkeypatch.setattr(
+        openstack_builder,
+        "_get_key_fingerprint",
+        MagicMock(return_value=(fingerprint_mock := MagicMock())),
+    )
+    monkeypatch.setattr(
+        openstack_builder, "_create_security_group", create_security_group_mock := MagicMock()
+    )
+    connection_mock = MagicMock()
+    connection_mock.get_keypair.return_value = (keypair_mock := MagicMock())
+    keypair_mock.fingerprint = fingerprint_mock
+    connection_mock.search_security_groups.return_value = [MagicMock()]
+    connection_mock.search_servers.return_value = []
+
+    openstack_builder._prepare_openstack_resources(
+        conn=connection_mock, builder_name="test", key_name="test", prefix="test"
+    )
+
+    create_keypair_mock.assert_not_called()
+    create_security_group_mock.assert_not_called()
+    connection_mock.delete_security_group.assert_not_called()
+    connection_mock.delete_server.assert_not_called()
+
+
+def test__get_key_fingerprint(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path):
+    """
+    arrange: given monkeypatched BUILDER_KEY_PATH that contains a mock ssh private key.
+    act: when _get_key_fingerprint is called.
+    assert: expected MD5 hash is generated.
+    """
+    test_key_file = tmp_path / "test-key"
+    test_key_file.write_text(
+        """-----BEGIN RSA PRIVATE KEY-----
+MIIEogIBAAKCAQEAq95LRs57Vw5wq6YP7H0Dimw6zMVs8eMl86xyp938JG0bTXs3
+ekyo5WH+QltDkLxBd8PInjUcHwEeci8+4dQq5JwTSX/2rgHKhoEX3ePDlohRbLpR
+ccaIPbFcIoNSqaZ8nuO37zwcbNWVv6BJlYdMlPVyPaGclAvN7NDpqHeV7b5JtOGU
+lZOS/DbsKqCXNBpiqUsqRAaBSGF8yvEnoJSHtrTTN9HkPW1Ssf8NfCo4X3V+/E2v
+7eUdAuu7buCRZ3W0qaez7Et3I0Zktp8fDXFdo30eZ+qXUU7hrai52Se7TGQ6iTGO
+fbAgGMdtbEReuXMxRUGBYwIeYQodtQ+yyirVPwIDAQABAoIBABJJjOjz1NvmhXE+
+Mjjk9G4o0KOJPkEJUmMjLkVTsXM5c3ZDGMbCnBYMNJRgRvLXlSpmgqo9gciAGKU9
+sbXbGtVIZiT5S14ogqGH4D+T70kifXIm675CHwJcJNmR75xtl++wJe98Deo8BRBm
+wG2l/9gPEHYjrsLHSW9cAKtpo2JbIu76MyHbVk7TGQ7Rnho6cNvM/dM1IL3S2Jgd
+3wjEQIDia+k57lImm+czkkvKUd/geAkx+Qv6ngUVpdIrBoG0iccFvKQK3+hWQ3e6
+VEf2Up+LAh/gtpVsNwQLwEsJ+o1VjmTNhGHEjJjzi7tCwf/xKXy4q78jtpbIatCr
+xUrQgIECgYEA4HMyzl+R82uIfQ99CewRw4SzSpfevnFVavOr7hq+s9J5S0Va52lM
+pBxPtyxKovd8dinIqdb9rufmxqR4+FTRpQb1hLZ/HVJ1f79jwhmrln2WxP4hiVB+
+02C0apnx9AVDlVuRuRUe1vZ2LwpgUyNVUulX+PvlnDk7YAf52UcF43kCgYEAxAbz
+tspHOMrHyygPmJgX4Mxei2BGWw8bsX/nqqS/der6Wf9eVZGrqz0bjlUWluRQQ3/S
+LpiUokujJgoauWafVQLyRSvtr7/ATt2p7+i2aT7aPys5GuVlk7lrlZTJTKNwr5EK
+sYGxW6Fhz+aYqtz5ykUe957Vnd3ViPe8DiKA2HcCgYBR7XrUHcp2of/WNnsbzhHF
+3oBbcAgcV94oBf3yEc0ecmtX8F74LVWOac8nO4Ga7t99ek8Gv7UlzPxN8ec+LifA
+J0QjR0Iq/9hn4wKU7S3W5szL5z9ykfFZUulIKB1LR0ieEiik+HKjYJ9PGGiEsFcK
+xqYX+kqbtcBYk1C94NDjcQKBgBPAz5Y/0+V5KaDjLI8n5GAWuAA7d1t9rkC4rtOX
+PmPXhdrDzPG6eB4NTlWNZXVXFG941ek0HuYr0QjoQ8EjAjNC1L77qjvniq1n0NQI
+EzmPx9ZNuLdpHk9AhALSt2YtohFPAFDazNB69qxIhGHTWqhzRqeVLdl2nSnsLNsP
+xwQJAoGAWaindsaPPdeUr4aXdaSh9qMo9vTaa6xACUtd+qXdNtttlvyqlj6yTee+
+z5AZpo2vLdDTnDt8AN/szyWAHpvhKlZc35fxYLaXWHbDylIhmG/Zaw/jxc8kMyKl
+JRUbu09rVwHu50zKZ8CHhqXTnA9E2b295H9H1QPRR6qvQb2jjlc=
+-----END RSA PRIVATE KEY-----""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(openstack_builder, "BUILDER_KEY_PATH", test_key_file)
+
+    assert (
+        openstack_builder._get_key_fingerprint()
+        == "e0:6c:37:7e:d6:f5:a7:7d:b7:bc:5d:27:ac:4c:8a:18"
+    )
 
 
 def test__determine_flavor_flavor_not_found():
