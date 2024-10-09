@@ -514,6 +514,10 @@ def create_openstack_server(
             security_groups=[security_group.name],
             flavor=openstack_metadata.flavor,
             network=openstack_metadata.network,
+            # hostname setting is required for microk8s testing
+            userdata="""#!/bin/bash
+hostnamectl set-hostname github-runner
+""",
             timeout=60 * 20,
             wait=True,
         )
