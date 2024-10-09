@@ -13,6 +13,7 @@ import time
 import typing
 
 import fabric
+import invoke
 import jinja2
 import openstack
 import openstack.compute.v2.flavor
@@ -249,6 +250,7 @@ def run(
         arch=image_config.arch,
         base=image_config.base,
         microk8s_channel=image_config.microk8s,
+        juju=image_config.juju,
         runner_version=image_config.runner_version,
         proxy=cloud_config.proxy,
     )
@@ -464,6 +466,7 @@ def _generate_cloud_init_script(
     arch: Arch,
     base: BaseImage,
     microk8s_channel: str,
+    juju: str,
     runner_version: str,
     proxy: str,
 ) -> str:
@@ -473,6 +476,7 @@ def _generate_cloud_init_script(
         arch: The GitHub runner architecture to download.
         base: The ubuntu base image.
         microk8s_channel: The MicroK8s channel to install.
+        juju: The juju channel to install.
         runner_version: The GitHub runner version to pin.
         proxy: The proxy to enable while setting up the VM.
 
@@ -489,6 +493,7 @@ def _generate_cloud_init_script(
         APT_PACKAGES=" ".join(IMAGE_DEFAULT_APT_PACKAGES),
         HWE_VERSION=BaseImage.get_version(base),
         MICROK8S_CHANNEL=microk8s_channel,
+        JUJU_CHANNEL=juju,
         RUNNER_VERSION=runner_version,
         RUNNER_ARCH=arch.value,
     )
@@ -533,7 +538,16 @@ def _wait_for_cloud_init_complete(
         Whether the cloud init is complete. Used for tenacity retry to pick up return value.
     """
     ssh_connection = _get_ssh_connection(conn=conn, server=server, ssh_key=ssh_key)
-    result: fabric.Result | None = ssh_connection.run("cloud-init status --wait", timeout=60 * 10)
+    try:
+        result: fabric.Result | None = ssh_connection.run(
+            "cloud-init status --wait", timeout=60 * 10
+        )
+    except invoke.exceptions.UnexpectedExit as exc:
+        log_out = conn.get_server_console(server=server)
+        logger.error("Cloud init output: %s", log_out)
+        raise github_runner_image_builder.errors.CloudInitFailError(
+            f"Unexpected exit code, reason: {exc.reason}, result: {exc.result}"
+        ) from exc
     if not result or not result.ok:
         logger.error("cloud-init status command failure, result: %s.", result)
         raise github_runner_image_builder.errors.CloudInitFailError("Invalid cloud-init status")

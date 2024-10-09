@@ -3,8 +3,9 @@
 
 """Unit tests for state module."""
 
-# Need access to protected functions for testing
-# pylint:disable=protected-access
+# Need access to protected functions for testing, all tests are part of oepnstack_builder.py
+# module.
+# pylint:disable=protected-access,too-many-lines
 
 import pathlib
 import typing
@@ -574,6 +575,7 @@ def test__generate_cloud_init_script():
         openstack_builder._generate_cloud_init_script(
             arch=openstack_builder.Arch.X64,
             base=openstack_builder.BaseImage.JAMMY,
+            juju="3.1/stable",
             runner_version="",
             proxy="test.proxy.internal:3128",
         )
@@ -582,6 +584,8 @@ def test__generate_cloud_init_script():
         == """#!/bin/bash
 
 set -e
+
+hostnamectl set-hostname github-runner
 
 function configure_proxy() {
     local proxy="$1"
@@ -673,6 +677,20 @@ function install_yq() {
     /usr/bin/sudo -E /usr/bin/snap remove go
 }
 
+function install_juju() {
+    local channel="$1"
+    if [[ -z "$channel" ]]; then
+        echo "Juju channel not provided, skipping installation."
+        return
+    fi
+    if ! lxd --version &> /dev/null; then
+        /usr/bin/snap install lxd
+    fi
+    /snap/bin/lxd init --auto
+    /usr/bin/snap install juju --channel="$channel"
+    /usr/bin/sudo -E -H -u ubuntu /snap/bin/juju bootstrap localhost localhost
+}
+
 function install_github_runner() {
     version="$1"
     arch="$2"
@@ -705,6 +723,7 @@ shellcheck tar time unzip wget"
 hwe_version="22.04"
 github_runner_version=""
 github_runner_arch="x64"
+juju_channel="3.1/stable"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
@@ -718,6 +737,7 @@ export -f install_yq
 su ubuntu -c "bash -c 'install_yq'"
 install_github_runner "$github_runner_version" "$github_runner_arch"
 chown_home
+install_juju "$juju_channel"
 # Make sure the disk is synced for snapshot
 sync
 echo "Finished sync"\
@@ -745,6 +765,30 @@ def test__wait_for_cloud_init_complete_fail(monkeypatch: pytest.MonkeyPatch):
         )
 
     assert "Invalid cloud-init status" in str(exc)
+
+
+def test__wait_for_cloud_init_unexpected_exit(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched _get_ssh_connection and connection.run functions that raises an\
+        error.
+    act: when _wait_for_cloud_init_complete is called.
+    assert: CloudInitFailError is raised.
+    """
+    mock_connection = MagicMock()
+    mock_connection.get_server_console = (get_log_mock := MagicMock())
+    mock_connection.run.side_effect = openstack_builder.invoke.exceptions.UnexpectedExit(
+        result=MagicMock(), reason=MagicMock()
+    )
+    monkeypatch.setattr(
+        openstack_builder, "_get_ssh_connection", MagicMock(return_value=mock_connection)
+    )
+
+    with pytest.raises(errors.CloudInitFailError):
+        openstack_builder._wait_for_cloud_init_complete(
+            conn=mock_connection, server=MagicMock(), ssh_key=MagicMock()
+        )
+
+    get_log_mock.assert_called_once()
 
 
 def test__wait_for_cloud_init_complete(monkeypatch: pytest.MonkeyPatch):

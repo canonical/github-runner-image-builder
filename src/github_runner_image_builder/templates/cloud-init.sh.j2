@@ -2,6 +2,8 @@
 
 set -e
 
+hostnamectl set-hostname github-runner
+
 function configure_proxy() {
     local proxy="$1"
     if [[ -z "$proxy" ]]; then
@@ -110,9 +112,14 @@ function install_juju() {
         echo "Juju channel not provided, skipping installation."
         return
     fi
-    /snap/bin/lxd init --auto
+
     /usr/bin/snap install juju --channel="$channel"
+    if ! lxd --version &> /dev/null; then
+        /usr/bin/snap install lxd
+    fi
+
     echo "Bootstrapping LXD on Juju"
+    /snap/bin/lxd init --auto
     /usr/bin/sudo -E -H -u ubuntu /snap/bin/juju bootstrap localhost localhost
 
     if command -v microk8s &> /dev/null; then
