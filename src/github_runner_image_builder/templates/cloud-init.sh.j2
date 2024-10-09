@@ -98,9 +98,9 @@ function install_juju() {
         echo "Juju channel not provided, skipping installation."
         return
     fi
-    /usr/bin/sudo -E /snap/bin/lxd init --auto
-    /usr/bin/sudo -E /usr/bin/snap install juju --channel="$channel"
-    /snap/bin/juju bootstrap localhost localhost
+    /snap/bin/lxd init --auto
+    /usr/bin/snap install juju --channel="$channel"
+    /usr/bin/sudo -E -H -u ubuntu /snap/bin/juju bootstrap localhost localhost
 }
 
 function install_github_runner() {
