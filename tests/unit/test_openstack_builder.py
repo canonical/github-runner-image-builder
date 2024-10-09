@@ -3,8 +3,9 @@
 
 """Unit tests for state module."""
 
-# Need access to protected functions for testing
-# pylint:disable=protected-access
+# Need access to protected functions for testing, all tests are part of oepnstack_builder.py
+# module.
+# pylint:disable=protected-access,too-many-lines
 
 import pathlib
 import typing
@@ -761,6 +762,30 @@ def test__wait_for_cloud_init_complete_fail(monkeypatch: pytest.MonkeyPatch):
         )
 
     assert "Invalid cloud-init status" in str(exc)
+
+
+def test__wait_for_cloud_init_unexpected_exit(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched _get_ssh_connection and connection.run functions that raises an\
+        error.
+    act: when _wait_for_cloud_init_complete is called.
+    assert: CloudInitFailError is raised.
+    """
+    mock_connection = MagicMock()
+    mock_connection.get_server_console = (get_log_mock := MagicMock())
+    mock_connection.run.side_effect = openstack_builder.invoke.exceptions.UnexpectedExit(
+        result=MagicMock(), reason=MagicMock()
+    )
+    monkeypatch.setattr(
+        openstack_builder, "_get_ssh_connection", MagicMock(return_value=mock_connection)
+    )
+
+    with pytest.raises(errors.CloudInitFailError):
+        openstack_builder._wait_for_cloud_init_complete(
+            conn=mock_connection, server=MagicMock(), ssh_key=MagicMock()
+        )
+
+    get_log_mock.assert_called_once()
 
 
 def test__wait_for_cloud_init_complete(monkeypatch: pytest.MonkeyPatch):
