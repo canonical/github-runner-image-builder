@@ -103,7 +103,7 @@ function install_microk8s() {
     fi
     /usr/bin/snap install microk8s --channel="$channel" $classic_flag
     /snap/bin/microk8s status --wait-ready
-    /usr/sbin/usermod --append --groups snap_microk8s,microk8s ubuntu
+    /usr/sbin/usermod --append --groups snap_microk8s ubuntu
 }
 
 function install_juju() {
