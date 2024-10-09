@@ -3,7 +3,9 @@
 
 """Module for interacting with external openstack VM image builder."""
 
+import base64
 import dataclasses
+import hashlib
 import logging
 import pathlib
 import shutil
@@ -23,11 +25,14 @@ import openstack.image.v2.image
 import openstack.key_manager
 import openstack.key_manager.key_manager_service
 import openstack.network.v2.network
+import openstack.network.v2.security_group
 import openstack.network.v2.subnet
 import paramiko
 import paramiko.ssh_exception
 import tenacity
 import yaml
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 
 import github_runner_image_builder.errors
 from github_runner_image_builder import cloud_image, config, store
@@ -149,7 +154,7 @@ def _create_keypair(conn: openstack.connection.Connection, prefix: str) -> None:
         conn: The Openstach connection instance.
         prefix: The prefix to use for OpenStack resource names.
     """
-    key_name = _get_keyname(prefix=prefix)
+    key_name = _get_keypair_name(prefix=prefix)
     key = conn.get_keypair(name_or_id=key_name)
     if key and BUILDER_KEY_PATH.exists():
         return
@@ -163,7 +168,7 @@ def _create_keypair(conn: openstack.connection.Connection, prefix: str) -> None:
     BUILDER_KEY_PATH.chmod(0o400)
 
 
-def _get_keyname(prefix: str) -> str:
+def _get_keypair_name(prefix: str) -> str:
     """Get OpenStack key name.
 
     Args:
@@ -246,17 +251,25 @@ def run(
         runner_version=image_config.runner_version,
         proxy=cloud_config.proxy,
     )
+    builder_name = _get_builder_name(
+        arch=image_config.arch, base=image_config.base, prefix=cloud_config.prefix
+    )
+    builder_key_name = _get_keypair_name(prefix=cloud_config.prefix)
     with openstack.connect(cloud=cloud_config.cloud_name) as conn:
+        _prepare_openstack_resources(
+            conn=conn,
+            builder_name=builder_name,
+            key_name=builder_key_name,
+            prefix=cloud_config.prefix,
+        )
         flavor = _determine_flavor(conn=conn, flavor_name=cloud_config.flavor)
         logger.info("Using flavor ID: %s.", flavor)
         network = _determine_network(conn=conn, network_name=cloud_config.network)
         logger.info("Using network ID: %s.", network)
         builder: openstack.compute.v2.server.Server = conn.create_server(
-            name=_get_builder_name(
-                arch=image_config.arch, base=image_config.base, prefix=cloud_config.prefix
-            ),
+            name=builder_name,
             image=_get_base_image_name(arch=image_config.arch, base=image_config.base),
-            key_name=_get_keyname(prefix=cloud_config.prefix),
+            key_name=builder_key_name,
             flavor=flavor,
             network=network,
             security_groups=[SHARED_SECURITY_GROUP_NAME],
@@ -291,6 +304,71 @@ def run(
         conn.delete_server(name_or_id=builder.id, wait=True, timeout=5 * 60)
         logger.info("Image builder run complete.")
     return ",".join(str(image.id) for image in images)
+
+
+def _prepare_openstack_resources(
+    conn: openstack.connection.Connection, builder_name: str, key_name: str, prefix: str
+) -> None:
+    """Ensure that OpenStack resources are in expected state.
+
+    1. Ensure the key that is installed matches what is expected by OpenStack.
+    2. Ensure that only a single security group exists.
+    3. Ensure that no VMs exist.
+
+    Args:
+        conn: The OpenStack connection instance.
+        builder_name: The OpenStack builder VM name that is used to build the image.
+        key_name: The OpenStack key name used to connect to the builder VM.
+        prefix: The OpenStack resource prefix.
+    """
+    # OpenStack library does not provide good type hinting
+    key: openstack.compute.v2.keypair.Keypair | None = conn.get_keypair(
+        name_or_id=key_name
+    )  # type: ignore
+    # Check fingerprint since the key may have diverged due to unforeseen circumstances.
+    if not key or key.fingerprint != _get_key_fingerprint():
+        _create_keypair(conn=conn, prefix=prefix)
+
+    security_groups: list[openstack.network.v2.security_group.SecurityGroup] = (
+        conn.search_security_groups(name_or_id=SHARED_SECURITY_GROUP_NAME)
+    )
+    if len(security_groups) != 1:
+        for security_group in security_groups:
+            conn.delete_security_group(name_or_id=security_group.id)
+        _create_security_group(conn=conn)
+
+    servers: list[openstack.compute.v2.server.Server] = conn.search_servers(
+        name_or_id=builder_name
+    )
+    if len(servers) > 0:
+        for server in servers:
+            conn.delete_server(name_or_id=server.id)
+
+
+def _get_key_fingerprint() -> str:
+    """Get the MD5 fingerprint of the ssh key.
+
+    1. Read the private PEM file.
+    2. Get the public key from the private key.
+    3. Extract the base64 part of the public key.
+    4. Generate MD5 hash.
+
+    Returns:
+        The MD5 fingerprint hash of the ssh public key.
+    """
+    key_data = BUILDER_KEY_PATH.read_bytes()
+    private_key = serialization.load_pem_private_key(
+        key_data, password=None, backend=default_backend()
+    )
+    public_key = private_key.public_key()
+    public_bytes = public_key.public_bytes(
+        encoding=serialization.Encoding.OpenSSH, format=serialization.PublicFormat.OpenSSH
+    )
+    key_base64 = public_bytes.split()[1]
+    key_data = base64.b64decode(key_base64)
+    # ignore B324:hashlib use of weak MD5 - OpenStack generates keys with this algo.
+    md5_hash = hashlib.md5(key_data).hexdigest()  # nosec: B324
+    return ":".join(md5_hash[i : i + 2] for i in range(0, len(md5_hash), 2))
 
 
 def _determine_flavor(conn: openstack.connection.Connection, flavor_name: str | None) -> str:
