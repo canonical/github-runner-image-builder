@@ -114,10 +114,10 @@ def _validate_snap_channel(
     if not value:
         return ""
     try:
-        [version, track] = value.strip().split("/")
-        return f"{version}/{track}"
+        track, risk = value.strip().split("/")
+        return f"{track}/{risk}"
     except ValueError as exc:
-        raise click.BadParameter("format must be '<version>/<track>'") from exc
+        raise click.BadParameter("format must be '<track>/<list>'") from exc
 
 
 @main.command(name="run")
