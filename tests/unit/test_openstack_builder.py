@@ -683,6 +683,9 @@ function install_juju() {
         echo "Juju channel not provided, skipping installation."
         return
     fi
+    if ! lxd --version &> /dev/null; then
+        /usr/bin/snap install lxd
+    fi
     /snap/bin/lxd init --auto
     /usr/bin/snap install juju --channel="$channel"
     /usr/bin/sudo -E -H -u ubuntu /snap/bin/juju bootstrap localhost localhost
