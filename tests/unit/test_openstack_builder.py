@@ -656,10 +656,8 @@ function configure_system_users() {
     /usr/bin/id -u ubuntu &>/dev/null || useradd --create-home ubuntu
     echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
     echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
-    /usr/sbin/groupadd -f microk8s
-    /usr/sbin/groupadd -f snap_microk8s
     /usr/sbin/groupadd -f docker
-    /usr/sbin/usermod --append --groups docker,microk8s,snap_microk8s,lxd,sudo ubuntu
+    /usr/sbin/usermod --append --groups docker,lxd,sudo ubuntu
 }
 
 function configure_usr_local_bin() {
@@ -694,6 +692,7 @@ function install_microk8s() {
     fi
     /usr/bin/snap install microk8s --channel="$channel" $classic_flag
     /snap/bin/microk8s status --wait-ready
+    /usr/sbin/usermod --append --groups snap_microk8s,microk8s ubuntu
 }
 
 function install_juju() {
@@ -757,7 +756,6 @@ configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
 disable_unattended_upgrades
 enable_network_fair_queuing_congestion
-configure_system_users
 configure_usr_local_bin
 install_yarn
 # install yq with ubuntu user due to GOPATH related go configuration settings
@@ -767,6 +765,7 @@ install_github_runner "$github_runner_version" "$github_runner_arch"
 chown_home
 install_microk8s "$microk8s_channel"
 install_juju "$juju_channel"
+configure_system_users
 # Make sure the disk is synced for snapshot
 sync
 echo "Finished sync"\
