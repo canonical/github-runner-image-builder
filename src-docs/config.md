@@ -88,6 +88,7 @@ The build image configuration values.
  
  - <b>`arch`</b>:  The architecture of the target image. 
  - <b>`base`</b>:  The ubuntu base OS of the image. 
+ - <b>`microk8s`</b>:  The MicroK8s snap channel to install. 
  - <b>`juju`</b>:  The Juju channel to install and bootstrap. 
  - <b>`runner_version`</b>:  The GitHub runner version to install on the VM. Defaults to latest. 
  - <b>`name`</b>:  The image name to upload on OpenStack. 
@@ -100,6 +101,7 @@ The build image configuration values.
 __init__(
     arch: Arch,
     base: BaseImage,
+    microk8s: str,
     juju: str,
     runner_version: str,
     name: str

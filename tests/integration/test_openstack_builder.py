@@ -99,6 +99,7 @@ def image_ids_fixture(
         image_config=config.ImageConfig(
             arch=image_config.arch,
             base=config.BaseImage.from_str(image_config.image),
+            microk8s="1.31-strict/stable",
             runner_version="",
             name=f"{test_id}-image-builder-test",
             juju="3.1/stable",

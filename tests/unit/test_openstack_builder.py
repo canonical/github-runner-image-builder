@@ -573,10 +573,14 @@ def test__generate_cloud_init_script():
     """
     assert (
         openstack_builder._generate_cloud_init_script(
-            arch=openstack_builder.Arch.X64,
-            base=openstack_builder.BaseImage.JAMMY,
-            juju="3.1/stable",
-            runner_version="",
+            image_config=openstack_builder.config.ImageConfig(
+                arch=openstack_builder.Arch.X64,
+                base=openstack_builder.BaseImage.JAMMY,
+                juju="3.1/stable",
+                microk8s="1.29-strict/stable",
+                runner_version="",
+                name="test-image",
+            ),
             proxy="test.proxy.internal:3128",
         )
         # The templated script contains similar lines to helper for setting up proxy.
@@ -677,18 +681,43 @@ function install_yq() {
     /usr/bin/sudo -E /usr/bin/snap remove go
 }
 
+function install_microk8s() {
+    local channel="$1"
+    if [[ -z "$channel" ]]; then
+        echo "Microk8s channel not provided, skipping installation."
+        return
+    fi
+    classic_flag=""
+    if [[ "$channel" != *"strict"* ]]; then
+        classic_flag="--classic"
+    fi
+    /usr/bin/snap install microk8s --channel="$channel" $classic_flag
+    /snap/bin/microk8s status --wait-ready
+    /snap/bin/microk8s enable dns hostpath-storage registry
+    /snap/bin/microk8s status --wait-ready
+    /usr/sbin/usermod --append --groups snap_microk8s ubuntu
+}
+
 function install_juju() {
     local channel="$1"
     if [[ -z "$channel" ]]; then
         echo "Juju channel not provided, skipping installation."
         return
     fi
+
+    /usr/bin/snap install juju --channel="$channel"
     if ! lxd --version &> /dev/null; then
         /usr/bin/snap install lxd
     fi
+
+    echo "Bootstrapping LXD on Juju"
     /snap/bin/lxd init --auto
-    /usr/bin/snap install juju --channel="$channel"
     /usr/bin/sudo -E -H -u ubuntu /snap/bin/juju bootstrap localhost localhost
+
+    if command -v microk8s &> /dev/null; then
+        echo "Bootstrapping MicroK8s on Juju"
+        /usr/bin/sudo -E -H -u ubuntu /snap/bin/juju bootstrap microk8s microk8s
+    fi
 }
 
 function install_github_runner() {
@@ -723,13 +752,13 @@ shellcheck tar time unzip wget"
 hwe_version="22.04"
 github_runner_version=""
 github_runner_arch="x64"
+microk8s_channel="1.29-strict/stable"
 juju_channel="3.1/stable"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
 disable_unattended_upgrades
 enable_network_fair_queuing_congestion
-configure_system_users
 configure_usr_local_bin
 install_yarn
 # install yq with ubuntu user due to GOPATH related go configuration settings
@@ -737,7 +766,9 @@ export -f install_yq
 su ubuntu -c "bash -c 'install_yq'"
 install_github_runner "$github_runner_version" "$github_runner_arch"
 chown_home
+install_microk8s "$microk8s_channel"
 install_juju "$juju_channel"
+configure_system_users
 # Make sure the disk is synced for snapshot
 sync
 echo "Finished sync"\
