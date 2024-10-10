@@ -67,8 +67,9 @@ function configure_system_users() {
     /usr/bin/id -u ubuntu &>/dev/null || useradd --create-home ubuntu
     echo "PATH=\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
     echo "PATH=\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
+    /usr/sbin/groupadd -f microk8s
     /usr/sbin/groupadd -f docker
-    /usr/sbin/usermod --append --groups docker,lxd,sudo ubuntu
+    /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
 }
 
 function configure_usr_local_bin() {
