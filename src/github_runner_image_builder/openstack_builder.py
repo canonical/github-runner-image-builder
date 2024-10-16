@@ -528,7 +528,7 @@ def _wait_for_cloud_init_complete(
     ssh_connection = _get_ssh_connection(conn=conn, server=server, ssh_key=ssh_key)
     try:
         result: fabric.Result | None = ssh_connection.run(
-            "cloud-init status --wait", timeout=60 * 10
+            "cloud-init status --wait", timeout=60 * 30
         )
     except invoke.exceptions.UnexpectedExit as exc:
         log_out = conn.get_server_console(server=server)
