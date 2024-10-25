@@ -206,7 +206,7 @@ echo $IMAGE_ID | tee {callback_result_path}
 @pytest.fixture(scope="module", name="dockerhub_mirror")
 def dockerhub_mirror_fixture(pytestconfig: pytest.Config) -> str | None:
     """Dockerhub mirror URL."""
-    return pytestconfig.getoption("--dockerhub-mirror")
+    return pytestconfig.getoption("--dockerhub-mirror", default="")
 
 
 @pytest.fixture(scope="module", name="openstack_image_name")

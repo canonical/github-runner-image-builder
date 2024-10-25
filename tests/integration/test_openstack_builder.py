@@ -81,6 +81,7 @@ def image_ids_fixture(
     openstack_metadata: types.OpenstackMeta,
     test_id: str,
     proxy: types.ProxyConfig,
+    dockerhub_mirror: str,
 ):
     """A CLI run.
 
@@ -90,6 +91,7 @@ def image_ids_fixture(
     image_ids = openstack_builder.run(
         cloud_config=openstack_builder.CloudConfig(
             cloud_name=openstack_metadata.cloud_name,
+            dockerhub_cache=dockerhub_mirror,
             flavor=openstack_metadata.flavor,
             network=openstack_metadata.network,
             proxy=proxy.http,
@@ -158,10 +160,7 @@ async def openstack_server_fixture(
 
 @pytest_asyncio.fixture(scope="module", name="ssh_connection")
 async def ssh_connection_fixture(
-    openstack_server: Server,
-    proxy: types.ProxyConfig,
-    openstack_metadata: types.OpenstackMeta,
-    dockerhub_mirror: str | None,
+    openstack_server: Server, proxy: types.ProxyConfig, openstack_metadata: types.OpenstackMeta
 ) -> SSHConnection:
     """The openstack server ssh connection fixture."""
     logger.info("Setting up SSH connection.")
@@ -173,7 +172,6 @@ async def ssh_connection_fixture(
             ssh_key=openstack_metadata.ssh_key.private_key,
         ),
         proxy=proxy,
-        dockerhub_mirror=dockerhub_mirror,
     )
 
     return ssh_connection
@@ -185,15 +183,13 @@ async def ssh_connection_fixture(
 @pytest.mark.amd64
 @pytest.mark.arm64
 @pytest.mark.usefixtures("make_dangling_resources")
-async def test_run(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
+async def test_run(ssh_connection: SSHConnection):
     """
     arrange: given openstack cloud instance.
     act: when run (build image) is called.
     assert: an image snapshot of working VM is created with the ability to run expected commands.
     """
-    helpers.run_openstack_tests(
-        dockerhub_mirror=dockerhub_mirror, ssh_connection=ssh_connection, external=True
-    )
+    helpers.run_openstack_tests(ssh_connection=ssh_connection, external=True)
 
 
 @pytest.mark.amd64
