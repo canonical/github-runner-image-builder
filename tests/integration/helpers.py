@@ -10,7 +10,6 @@ import logging
 import platform
 import tarfile
 import time
-import urllib.parse
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
@@ -18,7 +17,6 @@ from string import Template
 from typing import Awaitable, Callable, Generator, ParamSpec, Protocol, TypeVar, cast
 
 import openstack.exceptions
-import tenacity
 from fabric import Connection as SSHConnection
 from fabric import Result
 from invoke.exceptions import UnexpectedExit

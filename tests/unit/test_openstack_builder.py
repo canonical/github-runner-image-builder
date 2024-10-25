@@ -631,8 +631,8 @@ function configure_dockerhub_cache() {
         echo "Dockerhub cache not configured, skipping..."
         return
     fi
-    sudo mkdir -p /etc/docker/ && echo { \\"registry-mirrors\\": [\\"$dockerhub_cache\\"]}} | sudo tee \
-/etc/docker/daemon.json
+    sudo mkdir -p /etc/docker/ && echo { \\"registry-mirrors\\": [\\"$dockerhub_cache\\"]}} | \
+sudo tee /etc/docker/daemon.json
 }
 
 function install_apt_packages() {
