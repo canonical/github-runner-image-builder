@@ -137,6 +137,15 @@ def _validate_snap_channel(
     help=("The Ubuntu base image to use as build base."),
 )
 @click.option(
+    "--dockerhub-cache",
+    type=str,
+    default="",
+    help=(
+        "The DockerHub cache to use to instantiate builder VMs with. Useful when creating images"
+        "with MicroK8s."
+    ),
+)
+@click.option(
     "-k",
     "--keep-revisions",
     default=5,
@@ -215,6 +224,7 @@ def _validate_snap_channel(
 def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     arch: config.Arch | None,
     cloud_name: str,
+    dockerhub_cache: str,
     image_name: str,
     base_image: str,
     keep_revisions: int,
@@ -235,6 +245,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         arch: The architecture to run build for.
         cloud_name: The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in
             paths of the following order: current directory, ~/.config/openstack, /etc/openstack.
+        dockerhub_cache: The DockerHub cache to use for using cached images.
         image_name: The image name uploaded to Openstack.
         base_image: The Ubuntu base image to use as build base.
         keep_revisions: Number of past revisions to keep before deletion.
@@ -277,6 +288,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         image_ids = openstack_builder.run(
             cloud_config=openstack_builder.CloudConfig(
                 cloud_name=cloud_name,
+                dockerhub_cache=dockerhub_cache,
                 flavor=flavor,
                 network=network,
                 prefix=prefix,

@@ -215,6 +215,7 @@ class CloudConfig:
 
     Attributes:
         cloud_name: The OpenStack cloud name to use.
+        dockerhub_cache: The DockerHub cache to use for using cached images.
         flavor: The OpenStack flavor to launch builder VMs on.
         network: The OpenStack network to launch the builder VMs on.
         prefix: The prefix to use for OpenStack resource names.
@@ -224,6 +225,7 @@ class CloudConfig:
     """
 
     cloud_name: str
+    dockerhub_cache: str
     flavor: str
     network: str
     prefix: str
@@ -249,6 +251,7 @@ def run(
     cloud_init_script = _generate_cloud_init_script(
         image_config=image_config,
         proxy=cloud_config.proxy,
+        dockerhub_cache=cloud_config.dockerhub_cache,
     )
     builder_name = _get_builder_name(
         arch=image_config.arch, base=image_config.base, prefix=cloud_config.prefix
@@ -461,12 +464,14 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
 def _generate_cloud_init_script(
     image_config: config.ImageConfig,
     proxy: str,
+    dockerhub_cache: str,
 ) -> str:
     """Generate userdata for installing GitHub runner image components.
 
     Args:
         image_config: The target image configuration values.
         proxy: The proxy to enable while setting up the VM.
+        dockerhub_cache: The DockerHub cache to use for using cached images.
 
     Returns:
         The cloud-init script to create snapshot image.
@@ -478,6 +483,7 @@ def _generate_cloud_init_script(
     template = env.get_template("cloud-init.sh.j2")
     return template.render(
         PROXY_URL=proxy,
+        DOCKERHUB_CACHE=dockerhub_cache,
         APT_PACKAGES=" ".join(IMAGE_DEFAULT_APT_PACKAGES),
         HWE_VERSION=BaseImage.get_version(image_config.base),
         MICROK8S_CHANNEL=image_config.microk8s,

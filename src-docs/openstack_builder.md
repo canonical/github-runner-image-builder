@@ -70,7 +70,7 @@ Upload ubuntu base images to openstack to use as builder base. This is a separat
 
 ---
 
-<a href="../src/github_runner_image_builder/openstack_builder.py#L234"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/openstack_builder.py#L236"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `run`
 
@@ -110,6 +110,7 @@ The OpenStack cloud configuration values.
 **Attributes:**
  
  - <b>`cloud_name`</b>:  The OpenStack cloud name to use. 
+ - <b>`dockerhub_cache`</b>:  The DockerHub cache to use for using cached images. 
  - <b>`flavor`</b>:  The OpenStack flavor to launch builder VMs on. 
  - <b>`network`</b>:  The OpenStack network to launch the builder VMs on. 
  - <b>`prefix`</b>:  The prefix to use for OpenStack resource names. 
@@ -123,6 +124,7 @@ The OpenStack cloud configuration values.
 ```python
 __init__(
     cloud_name: str,
+    dockerhub_cache: str,
     flavor: str,
     network: str,
     prefix: str,

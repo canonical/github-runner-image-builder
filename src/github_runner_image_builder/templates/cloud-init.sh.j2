@@ -33,6 +33,15 @@ EOF
     sleep 5
 }
 
+function configure_dockerhub_cache() {
+    local dockerhub_cache="$1"
+    if [[ -z "$dockerhub_cache" ]]; then
+        echo "Dockerhub cache not configured, skipping..."
+        return
+    fi
+    sudo mkdir -p /etc/docker/ && echo { \"registry-mirrors\": [\"$dockerhub_cache\"]}} | sudo tee /etc/docker/daemon.json
+}
+
 function install_apt_packages() {
     local packages="$1"
     local hwe_version="$2"
@@ -155,6 +164,7 @@ function chown_home() {
 }
 
 proxy="{{ PROXY_URL }}"
+dockerhub_cache="{{ DOCKERHUB_CACHE }}"
 apt_packages="{{ APT_PACKAGES }}"
 hwe_version="{{ HWE_VERSION }}"
 github_runner_version="{{ RUNNER_VERSION }}"
@@ -163,6 +173,7 @@ microk8s_channel="{{ MICROK8S_CHANNEL }}"
 juju_channel="{{ JUJU_CHANNEL }}"
 
 configure_proxy "$proxy"
+configure_dockerhub_cache "$dockerhub_cache"
 install_apt_packages "$apt_packages" "$hwe_version"
 disable_unattended_upgrades
 enable_network_fair_queuing_congestion

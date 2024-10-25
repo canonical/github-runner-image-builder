@@ -172,6 +172,7 @@ def test__create_security_group():
         pytest.param(
             openstack_builder.CloudConfig(
                 cloud_name="test-cloud",
+                dockerhub_cache="https://test-dockerhub-cache.com:5000",
                 flavor="test-flavor",
                 network="test-network",
                 prefix="",
@@ -183,6 +184,7 @@ def test__create_security_group():
         pytest.param(
             openstack_builder.CloudConfig(
                 cloud_name="test-cloud",
+                dockerhub_cache="https://test-dockerhub-cache.com:5000",
                 flavor="test-flavor",
                 network="test-network",
                 prefix="",
@@ -194,6 +196,7 @@ def test__create_security_group():
         pytest.param(
             openstack_builder.CloudConfig(
                 cloud_name="test-cloud",
+                dockerhub_cache="https://test-dockerhub-cache.com:5000",
                 flavor="test-flavor",
                 network="test-network",
                 prefix="",
@@ -582,6 +585,7 @@ def test__generate_cloud_init_script():
                 name="test-image",
             ),
             proxy="test.proxy.internal:3128",
+            dockerhub_cache="https://test-dockerhub-cache.com:5000",
         )
         # The templated script contains similar lines to helper for setting up proxy.
         # pylint: disable=R0801
@@ -619,6 +623,16 @@ EOF
     /usr/bin/sudo snap set aproxy proxy=${proxy} listen=:8444;
     echo "Wait for aproxy to start"
     sleep 5
+}
+
+function configure_dockerhub_cache() {
+    local dockerhub_cache="$1"
+    if [[ -z "$dockerhub_cache" ]]; then
+        echo "Dockerhub cache not configured, skipping..."
+        return
+    fi
+    sudo mkdir -p /etc/docker/ && echo { \\"registry-mirrors\\": [\\"$dockerhub_cache\\"]}} | sudo tee \
+/etc/docker/daemon.json
 }
 
 function install_apt_packages() {
@@ -747,6 +761,7 @@ function chown_home() {
 }
 
 proxy="test.proxy.internal:3128"
+dockerhub_cache="https://test-dockerhub-cache.com:5000"
 apt_packages="build-essential docker.io gh jq npm python3-dev python3-pip python-is-python3 \
 shellcheck tar time unzip wget"
 hwe_version="22.04"
@@ -756,6 +771,7 @@ microk8s_channel="1.29-strict/stable"
 juju_channel="3.1/stable"
 
 configure_proxy "$proxy"
+configure_dockerhub_cache "$dockerhub_cache"
 install_apt_packages "$apt_packages" "$hwe_version"
 disable_unattended_upgrades
 enable_network_fair_queuing_congestion
