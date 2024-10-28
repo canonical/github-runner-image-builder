@@ -11,6 +11,8 @@ import pathlib
 import shutil
 import time
 import typing
+import urllib
+import urllib.parse
 
 import fabric
 import invoke
@@ -225,7 +227,7 @@ class CloudConfig:
     """
 
     cloud_name: str
-    dockerhub_cache: str
+    dockerhub_cache: urllib.parse.ParseResult | None
     flavor: str
     network: str
     prefix: str
@@ -464,7 +466,7 @@ def _determine_network(conn: openstack.connection.Connection, network_name: str 
 def _generate_cloud_init_script(
     image_config: config.ImageConfig,
     proxy: str,
-    dockerhub_cache: str,
+    dockerhub_cache: urllib.parse.ParseResult | None,
 ) -> str:
     """Generate userdata for installing GitHub runner image components.
 
@@ -483,7 +485,9 @@ def _generate_cloud_init_script(
     template = env.get_template("cloud-init.sh.j2")
     return template.render(
         PROXY_URL=proxy,
-        DOCKERHUB_CACHE=dockerhub_cache,
+        DOCKERHUB_CACHE_URL=dockerhub_cache.geturl() if dockerhub_cache else "",
+        DOCKERHUB_CACHE_HOST=dockerhub_cache.hostname if dockerhub_cache else "",
+        DOCKERHUB_CACHE_PORT=dockerhub_cache.port if dockerhub_cache else "",
         APT_PACKAGES=" ".join(IMAGE_DEFAULT_APT_PACKAGES),
         HWE_VERSION=BaseImage.get_version(image_config.base),
         MICROK8S_CHANNEL=image_config.microk8s,

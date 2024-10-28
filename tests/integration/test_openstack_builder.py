@@ -10,6 +10,7 @@ import functools
 import itertools
 import logging
 import typing
+import urllib.parse
 from datetime import datetime, timezone
 
 import pytest
@@ -81,7 +82,7 @@ def image_ids_fixture(
     openstack_metadata: types.OpenstackMeta,
     test_id: str,
     proxy: types.ProxyConfig,
-    dockerhub_mirror: str,
+    dockerhub_mirror: urllib.parse.ParseResult | None,
 ):
     """A CLI run.
 
