@@ -251,7 +251,7 @@ async def wait_for_valid_connection(
     connection_params: OpenStackConnectionParams,
     timeout: int = 30 * 60,
     proxy: types.ProxyConfig | None = None,
-    dockerhub_mirror: str | None = None,
+    dockerhub_mirror: urllib.parse.ParseResult | None = None,
 ) -> SSHConnection:
     """Wait for a valid SSH connection from Openstack server.
 
@@ -369,7 +369,9 @@ def _snap_ready(conn: SSHConnection) -> bool:
     wait=tenacity.wait_exponential(multiplier=2, min=10, max=60),
     stop=tenacity.stop_after_attempt(10),
 )
-def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None):
+def _configure_dockerhub_mirror(
+    conn: SSHConnection, dockerhub_mirror: urllib.parse.ParseResult | None
+):
     """Use dockerhub mirror if provided.
 
     Args:
@@ -379,7 +381,8 @@ def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | Non
     if not dockerhub_mirror:
         return
     command = f'sudo mkdir -p /etc/docker/ && \
-echo {{ \\"registry-mirrors\\": [\\"{dockerhub_mirror}\\"]}} | sudo tee /etc/docker/daemon.json'
+echo {{ \\"registry-mirrors\\": [\\"{dockerhub_mirror.geturl()}\\"]}} | sudo tee \
+/etc/docker/daemon.json'
     logger.info("Running command: %s", command)
     result: Result = conn.run(command)
     assert result.ok, "Failed to setup DockerHub mirror"
@@ -393,7 +396,9 @@ echo {{ \\"registry-mirrors\\": [\\"{dockerhub_mirror}\\"]}} | sudo tee /etc/doc
     assert result.ok, "Failed to restart docker"
 
 
-def format_dockerhub_mirror_microk8s_command(command: str, dockerhub_mirror: str) -> str:
+def format_dockerhub_mirror_microk8s_command(
+    command: str, dockerhub_mirror: urllib.parse.ParseResult
+) -> str:
     """Format dockerhub mirror for microk8s command.
 
     Args:
@@ -403,12 +408,17 @@ def format_dockerhub_mirror_microk8s_command(command: str, dockerhub_mirror: str
     Returns:
         The formatted dockerhub mirror registry command for snap microk8s.
     """
-    url = urllib.parse.urlparse(dockerhub_mirror)
-    return command.format(registry_url=url.geturl(), hostname=url.hostname, port=url.port)
+    return command.format(
+        registry_url=dockerhub_mirror.geturl(),
+        hostname=dockerhub_mirror.hostname,
+        port=dockerhub_mirror.port,
+    )
 
 
 def run_openstack_tests(
-    dockerhub_mirror: str | None, ssh_connection: SSHConnection, external: bool = False
+    dockerhub_mirror: urllib.parse.ParseResult | None,
+    ssh_connection: SSHConnection,
+    external: bool = False,
 ):
     """Run test commands on the openstack instance via ssh.
 

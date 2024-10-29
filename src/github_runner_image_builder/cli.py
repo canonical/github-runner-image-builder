@@ -5,6 +5,7 @@
 
 # Subprocess module is used to execute trusted commands
 import subprocess  # nosec: B404
+import urllib.parse
 from pathlib import Path
 
 import click
@@ -120,6 +121,31 @@ def _validate_snap_channel(
         raise click.BadParameter("format must be '<track>/<list>'") from exc
 
 
+# The arguments are necessary input for click validation function.
+def _parse_url(
+    ctx: click.Context, param: click.Parameter, value: str  # pylint: disable=unused-argument
+) -> urllib.parse.ParseResult | None:
+    """Validate snap channel string input.
+
+    Args:
+        ctx: Click context argument.
+        param: Click parameter argument.
+        value: The value passed into --dockerhub-cache option.
+
+    Raises:
+        BadParameter: If invalid URL was passed in.
+
+    Returns:
+        The dockerhub cache URL.
+    """
+    if not value:
+        return None
+    parse_result = urllib.parse.urlparse(value)
+    if not parse_result.netloc or not parse_result.scheme or not parse_result.port:
+        raise click.BadParameter("URL must be '<scheme>://<hostname>:<port>' format")
+    return parse_result
+
+
 @main.command(name="run")
 @click.argument("cloud_name")
 @click.argument("image_name")
@@ -135,6 +161,16 @@ def _validate_snap_channel(
     type=click.Choice(config.BASE_CHOICES),
     default="noble",
     help=("The Ubuntu base image to use as build base."),
+)
+@click.option(
+    "--dockerhub-cache",
+    type=str,
+    callback=_parse_url,
+    default=None,
+    help=(
+        "The DockerHub cache to use to instantiate builder VMs with. Useful when creating images"
+        "with MicroK8s."
+    ),
 )
 @click.option(
     "-k",
@@ -215,6 +251,7 @@ def _validate_snap_channel(
 def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     arch: config.Arch | None,
     cloud_name: str,
+    dockerhub_cache: urllib.parse.ParseResult | None,
     image_name: str,
     base_image: str,
     keep_revisions: int,
@@ -235,6 +272,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         arch: The architecture to run build for.
         cloud_name: The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in
             paths of the following order: current directory, ~/.config/openstack, /etc/openstack.
+        dockerhub_cache: The DockerHub cache to use for using cached images.
         image_name: The image name uploaded to Openstack.
         base_image: The Ubuntu base image to use as build base.
         keep_revisions: Number of past revisions to keep before deletion.
@@ -277,6 +315,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         image_ids = openstack_builder.run(
             cloud_config=openstack_builder.CloudConfig(
                 cloud_name=cloud_name,
+                dockerhub_cache=dockerhub_cache,
                 flavor=flavor,
                 network=network,
                 prefix=prefix,

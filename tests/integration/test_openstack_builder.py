@@ -10,6 +10,7 @@ import functools
 import itertools
 import logging
 import typing
+import urllib.parse
 from datetime import datetime, timezone
 
 import pytest
@@ -81,6 +82,7 @@ def image_ids_fixture(
     openstack_metadata: types.OpenstackMeta,
     test_id: str,
     proxy: types.ProxyConfig,
+    dockerhub_mirror: urllib.parse.ParseResult | None,
 ):
     """A CLI run.
 
@@ -90,6 +92,7 @@ def image_ids_fixture(
     image_ids = openstack_builder.run(
         cloud_config=openstack_builder.CloudConfig(
             cloud_name=openstack_metadata.cloud_name,
+            dockerhub_cache=dockerhub_mirror,
             flavor=openstack_metadata.flavor,
             network=openstack_metadata.network,
             proxy=proxy.http,
@@ -161,7 +164,7 @@ async def ssh_connection_fixture(
     openstack_server: Server,
     proxy: types.ProxyConfig,
     openstack_metadata: types.OpenstackMeta,
-    dockerhub_mirror: str | None,
+    dockerhub_mirror: urllib.parse.ParseResult | None,
 ) -> SSHConnection:
     """The openstack server ssh connection fixture."""
     logger.info("Setting up SSH connection.")
@@ -185,7 +188,9 @@ async def ssh_connection_fixture(
 @pytest.mark.amd64
 @pytest.mark.arm64
 @pytest.mark.usefixtures("make_dangling_resources")
-async def test_run(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
+async def test_run(
+    ssh_connection: SSHConnection, dockerhub_mirror: urllib.parse.ParseResult | None
+):
     """
     arrange: given openstack cloud instance.
     act: when run (build image) is called.

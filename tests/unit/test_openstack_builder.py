@@ -9,6 +9,7 @@
 
 import pathlib
 import typing
+import urllib.parse
 from unittest.mock import MagicMock
 
 import paramiko
@@ -172,6 +173,7 @@ def test__create_security_group():
         pytest.param(
             openstack_builder.CloudConfig(
                 cloud_name="test-cloud",
+                dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
                 flavor="test-flavor",
                 network="test-network",
                 prefix="",
@@ -183,6 +185,7 @@ def test__create_security_group():
         pytest.param(
             openstack_builder.CloudConfig(
                 cloud_name="test-cloud",
+                dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
                 flavor="test-flavor",
                 network="test-network",
                 prefix="",
@@ -194,6 +197,7 @@ def test__create_security_group():
         pytest.param(
             openstack_builder.CloudConfig(
                 cloud_name="test-cloud",
+                dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
                 flavor="test-flavor",
                 network="test-network",
                 prefix="",
@@ -582,6 +586,7 @@ def test__generate_cloud_init_script():
                 name="test-image",
             ),
             proxy="test.proxy.internal:3128",
+            dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
         )
         # The templated script contains similar lines to helper for setting up proxy.
         # pylint: disable=R0801
@@ -629,8 +634,8 @@ function install_apt_packages() {
     echo "Installing apt packages $packages"
     DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --no-install-recommends ${packages}
     echo "Installing linux-generic-hwe-${hwe_version}"
-    DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --install-recommends linux-generic-\
-hwe-${hwe_version}
+    DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --install-recommends \
+linux-generic-hwe-${hwe_version}
 }
 
 function disable_unattended_upgrades() {
@@ -683,6 +688,9 @@ function install_yq() {
 
 function install_microk8s() {
     local channel="$1"
+    local dockerhub_cache_url="$2"
+    local dockerhub_hostname="$3"
+    local dockerhub_port="$4"
     if [[ -z "$channel" ]]; then
         echo "Microk8s channel not provided, skipping installation."
         return
@@ -692,10 +700,37 @@ function install_microk8s() {
         classic_flag="--classic"
     fi
     /usr/bin/snap install microk8s --channel="$channel" $classic_flag
-    /snap/bin/microk8s status --wait-ready
-    /snap/bin/microk8s enable dns hostpath-storage registry
-    /snap/bin/microk8s status --wait-ready
     /usr/sbin/usermod --append --groups snap_microk8s ubuntu
+
+    if [[ -z "$dockerhub_cache_url" ]]; then
+        /usr/bin/echo "dockerhub cache not enabled, skipping installation"
+        initialize_microk8s_plugins
+        return
+    fi
+    install_microk8s_dockerhub_cache "$dockerhub_cache_url" "$dockerhub_hostname" "$dockerhub_port"
+    initialize_microk8s_plugins
+}
+
+function initialize_microk8s_plugins() {
+    /snap/bin/microk8s status --wait-ready --timeout=600
+    /snap/bin/microk8s enable dns hostpath-storage registry
+    /snap/bin/microk8s status --wait-ready --timeout=600
+}
+
+function install_microk8s_dockerhub_cache() {
+    local dockerhub_cache_url="$1"
+    local dockerhub_hostname="$2"
+    local dockerhub_port="$3"
+    /usr/bin/mkdir -p /var/snap/microk8s/current/args/certs.d/docker.io/
+    /usr/bin/cat <<EOF | /usr/bin/tee /var/snap/microk8s/current/args/certs.d/docker.io/hosts.toml
+server = $dockerhub_cache_url
+
+[host.$dockerhub_hostname:$dockerhub_port]
+    capabilities = ["pull", "resolve"]
+    override_path = true
+EOF
+    /snap/bin/microk8s stop
+    /snap/bin/microk8s start
 }
 
 function install_juju() {
@@ -733,11 +768,11 @@ function install_github_runner() {
         # e.g. 2.318.0
         version=${location##*/v}
     fi
-    /usr/bin/wget "https://github.com/actions/runner/releases/download/v$version/actions-runner-\
-linux-$arch-$version.tar.gz"
+    /usr/bin/wget "https://github.com/actions/runner/releases/download/v$version/\
+actions-runner-linux-$arch-$version.tar.gz"
     /usr/bin/mkdir -p /home/ubuntu/actions-runner
-    /usr/bin/tar -xvzf "actions-runner-linux-$arch-$version.tar.gz" --directory /home/ubuntu/\
-actions-runner
+    /usr/bin/tar -xvzf "actions-runner-linux-$arch-$version.tar.gz" --directory \
+/home/ubuntu/actions-runner
 
     rm "actions-runner-linux-$arch-$version.tar.gz"
 }
@@ -747,6 +782,9 @@ function chown_home() {
 }
 
 proxy="test.proxy.internal:3128"
+dockerhub_cache_url="https://test-dockerhub-cache.com:5000"
+dockerhub_cache_host="test-dockerhub-cache.com"
+dockerhub_cache_port="5000"
 apt_packages="build-essential docker.io gh jq npm python3-dev python3-pip python-is-python3 \
 shellcheck tar time unzip wget"
 hwe_version="22.04"
@@ -766,7 +804,8 @@ export -f install_yq
 su ubuntu -c "bash -c 'install_yq'"
 install_github_runner "$github_runner_version" "$github_runner_arch"
 chown_home
-install_microk8s "$microk8s_channel"
+install_microk8s "$microk8s_channel" "$dockerhub_cache_url" "$dockerhub_cache_host" \
+"$dockerhub_cache_port"
 install_juju "$juju_channel"
 configure_system_users
 # Make sure the disk is synced for snapshot
