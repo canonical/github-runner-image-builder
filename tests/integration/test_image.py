@@ -8,6 +8,7 @@ import logging
 
 # Subprocess is used to run the application.
 import subprocess  # nosec: B404
+import urllib.parse
 from pathlib import Path
 
 import pytest
@@ -52,7 +53,10 @@ async def openstack_server_fixture(
 
 @pytest_asyncio.fixture(scope="module", name="ssh_connection")
 async def ssh_connection_fixture(
-    openstack_server: Server, proxy: types.ProxyConfig, openstack_metadata: types.OpenstackMeta
+    openstack_server: Server,
+    proxy: types.ProxyConfig,
+    openstack_metadata: types.OpenstackMeta,
+    dockerhub_mirror: urllib.parse.ParseResult | None,
 ) -> SSHConnection:
     """The openstack server ssh connection fixture."""
     logger.info("Setting up SSH connection.")
@@ -64,6 +68,7 @@ async def ssh_connection_fixture(
             ssh_key=openstack_metadata.ssh_key.private_key,
         ),
         proxy=proxy,
+        dockerhub_mirror=dockerhub_mirror,
     )
 
     return ssh_connection
@@ -114,7 +119,9 @@ def cli_run_fixture(
 @pytest.mark.asyncio
 @pytest.mark.amd64
 @pytest.mark.usefixtures("cli_run")
-async def test_image_amd(image: str, tmp_path: Path):
+async def test_image_amd(
+    image: str, tmp_path: Path, dockerhub_mirror: urllib.parse.ParseResult | None
+):
     """
     arrange: given a built output from the CLI.
     act: when the image is booted and commands are executed.
@@ -131,6 +138,12 @@ async def test_image_amd(image: str, tmp_path: Path):
     for testcmd in commands.TEST_RUNNER_COMMANDS:
         if testcmd.external:
             continue
+        if testcmd == "configure dockerhub mirror":
+            if not dockerhub_mirror:
+                continue
+            testcmd.command = helpers.format_dockerhub_mirror_microk8s_command(
+                command=testcmd.command, dockerhub_mirror=dockerhub_mirror
+            )
         logger.info("Running command: %s", testcmd.command)
         # run command as ubuntu user. Passing in user argument would not be equivalent to a login
         # shell which is missing critical environment variables such as $USER and the user groups
@@ -158,13 +171,15 @@ async def test_openstack_upload(openstack_connection: Connection, openstack_imag
 @pytest.mark.arm64
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
-async def test_image_arm(ssh_connection: SSHConnection):
+async def test_image_arm(
+    ssh_connection: SSHConnection, dockerhub_mirror: urllib.parse.ParseResult | None
+):
     """
     arrange: given a built output from the CLI.
     act: when the image is booted and commands are executed.
     assert: commands do not error.
     """
-    helpers.run_openstack_tests(ssh_connection=ssh_connection)
+    helpers.run_openstack_tests(dockerhub_mirror=dockerhub_mirror, ssh_connection=ssh_connection)
 
 
 @pytest.mark.amd64
