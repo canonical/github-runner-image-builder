@@ -639,6 +639,7 @@ def _wait_for_snapshot_complete(
         image = conn.get_image(name_or_id=image.id)  # type: ignore
         if image.status == "active":
             return
+        logger.info("Image snapshot not yet active, waiting... %s: %s", image.name, image.id)
         time.sleep(60)
     # OpenStack library does not provide correct type hints for it.
     image = conn.get_image(name_or_id=image.id)  # type: ignore
