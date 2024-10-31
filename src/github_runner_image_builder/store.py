@@ -40,7 +40,7 @@ def create_snapshot(
         try:
             logger.info("Creating image snapshot, %s %s", image_name, server.name)
             image: Image = connection.create_image_snapshot(
-                name=image_name, server=server.id, wait=True, timeout=60 * 10
+                name=image_name, server=server.id, wait=True, timeout=60 * 30
             )
             logger.info("Pruning older snapshots, %s keeping %s.", image_name, keep_revisions)
             _prune_old_images(
@@ -48,7 +48,7 @@ def create_snapshot(
             )
             logger.info("Snapshot created successfully, %s %s.", image_name, image.id)
             return image
-        except openstack.exceptions.OpenStackCloudException as exc:
+        except openstack.exceptions.SDKException as exc:
             logger.exception("Error while creating snapshot (Base).")
             raise UploadImageError from exc
 
