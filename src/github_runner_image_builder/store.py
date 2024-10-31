@@ -48,9 +48,6 @@ def create_snapshot(
             )
             logger.info("Snapshot created successfully, %s %s.", image_name, image.id)
             return image
-        except openstack.exceptions.SDKException as exc:
-            logger.exception("Error while creating snapshot (SDK).")
-            raise UploadImageError from exc
         except openstack.exceptions.OpenStackCloudException as exc:
             logger.exception("Error while creating snapshot (Base).")
             raise UploadImageError from exc
