@@ -292,7 +292,9 @@ def run(
             server=builder,
             keep_revisions=keep_revisions,
         )
-        logger.info("Requested snapshot, waiting for snapshot to complete: %s.", image.id)
+        logger.info(
+            "Requested snapshot, waiting for snapshot to complete: %s, %s.", builder.id, image.id
+        )
         _wait_for_snapshot_complete(conn=conn, image=image)
         images = _upload_to_clouds(
             conn=conn,
