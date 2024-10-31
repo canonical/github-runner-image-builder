@@ -173,12 +173,6 @@ def _parse_url(
     ),
 )
 @click.option(
-    "-k",
-    "--keep-revisions",
-    default=5,
-    help="The maximum number of images to keep before deletion.",
-)
-@click.option(
     "-s",
     "--callback-script",
     type=click.Path(exists=True),
@@ -187,6 +181,12 @@ def _parse_url(
         "The callback script to trigger after image is built. The callback script is called"
         "with the first argument as the image ID."
     ),
+)
+@click.option(
+    "-k",
+    "--keep-revisions",
+    default=5,
+    help="The maximum number of images to keep before deletion.",
 )
 @click.option(
     "--runner-version",
@@ -241,6 +241,12 @@ def _parse_url(
     "Ignored if --experimental-external is not enabled",
 )
 @click.option(
+    "--script-url",
+    default="",
+    help="Run an external bash setup script fetched from the URL on the runners during cloud-init."
+    "Installation is run as root within the cloud-init script after the bare image default setup.",
+)
+@click.option(
     "--upload-clouds",
     default="",
     help="EXPERIMENTAL: Comma separated list of different clouds to use to upload the externally "
@@ -264,6 +270,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     network: str,
     prefix: str,
     proxy: str,
+    script_url: str,
     upload_clouds: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
@@ -285,6 +292,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         network: The Openstack network to assign to server to build images.
         prefix: The prefix to use for OpenStack resource names.
         proxy: Proxy to use for external build VMs.
+        script_url: The external setup bash script URL.
         upload_clouds: The Openstack cloud to use to upload externally built image.
     """
     arch = arch if arch else config.get_supported_arch()

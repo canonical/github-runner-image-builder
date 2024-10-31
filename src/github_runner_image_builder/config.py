@@ -7,6 +7,7 @@ import dataclasses
 import itertools
 import logging
 import platform
+import urllib.parse
 from enum import Enum
 from pathlib import Path
 from typing import Literal
@@ -147,6 +148,7 @@ class ImageConfig:
         microk8s: The MicroK8s snap channel to install.
         juju: The Juju channel to install and bootstrap.
         runner_version: The GitHub runner version to install on the VM. Defaults to latest.
+        script_url: The external setup bash script URL.
         name: The image name to upload on OpenStack.
     """
 
@@ -155,4 +157,5 @@ class ImageConfig:
     microk8s: str
     juju: str
     runner_version: str
+    script_url: urllib.parse.ParseResult | None
     name: str
