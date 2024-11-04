@@ -584,6 +584,7 @@ def test__generate_cloud_init_script():
                 microk8s="1.29-strict/stable",
                 runner_version="",
                 name="test-image",
+                script_url=urllib.parse.urlparse("https://test-url.com/script.sh"),
             ),
             proxy="test.proxy.internal:3128",
             dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
@@ -653,17 +654,6 @@ net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 EOF
     /usr/sbin/sysctl -p
-}
-
-function configure_system_users() {
-    echo "Configuring ubuntu user"
-    # only add ubuntu user if ubuntu does not exist
-    /usr/bin/id -u ubuntu &>/dev/null || useradd --create-home ubuntu
-    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
-    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
-    /usr/sbin/groupadd -f microk8s
-    /usr/sbin/groupadd -f docker
-    /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
 }
 
 function configure_usr_local_bin() {
@@ -781,6 +771,29 @@ function install_juju() {
     fi
 }
 
+function configure_system_users() {
+    echo "Configuring ubuntu user"
+    # only add ubuntu user if ubuntu does not exist
+    /usr/bin/id -u ubuntu &>/dev/null || useradd --create-home ubuntu
+    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
+    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
+    /usr/sbin/groupadd -f microk8s
+    /usr/sbin/groupadd -f docker
+    /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
+}
+
+function execute_script() {
+    local script_url="$1"
+    if [[ -z "$script_url" ]]; then
+        echo "Script URL not provided, skipping."
+        return
+    fi
+    wget "$script_url" -O external.sh
+    chmod +x external.sh
+    ./external.sh
+    rm external.sh
+}
+
 proxy="test.proxy.internal:3128"
 dockerhub_cache_url="https://test-dockerhub-cache.com:5000"
 dockerhub_cache_host="test-dockerhub-cache.com"
@@ -792,6 +805,7 @@ github_runner_version=""
 github_runner_arch="x64"
 microk8s_channel="1.29-strict/stable"
 juju_channel="3.1/stable"
+script_url="https://test-url.com/script.sh"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
@@ -808,6 +822,8 @@ install_microk8s "$microk8s_channel" "$dockerhub_cache_url" "$dockerhub_cache_ho
 "$dockerhub_cache_port"
 install_juju "$juju_channel"
 configure_system_users
+execute_script "$script_url"
+
 # Make sure the disk is synced for snapshot
 sync
 echo "Finished sync"\
