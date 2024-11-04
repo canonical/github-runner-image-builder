@@ -40,6 +40,8 @@ def run_inputs_fixture(callback_path: Path):
         "--base-image": "noble",
         "--keep-revisions": "5",
         "--callback-script": str(callback_path),
+        "--juju": "3.1/stable",
+        "--dockerhub-cache": "https://dockerhub-cache.internal:5000",
     }
 
 
@@ -112,7 +114,9 @@ def test_initialize(monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner, flag
     if not flags:
         mock_builder_init_func.assert_called_with()
     else:
-        mock_openstack_init_func.assert_called_with(arch=config.Arch.X64, cloud_name="hello")
+        mock_openstack_init_func.assert_called_with(
+            arch=config.Arch.X64, cloud_name="hello", prefix=""
+        )
 
 
 @pytest.mark.parametrize(
@@ -173,6 +177,10 @@ def test_latest_build_id(monkeypatch: pytest.MonkeyPatch, cli_runner: CliRunner)
         ),
         pytest.param({"": ""}, id="empty cloud name positional argument"),
         pytest.param({" ": ""}, id="empty image name positional argument"),
+        pytest.param({"--juju": "invalid-value"}, id="invalid juju channel value"),
+        pytest.param({"--juju": "3.1/stable/edge"}, id="more than 1 / values"),
+        pytest.param({"--dockerhub-cache": "invalidurl"}, id="invalid url"),
+        pytest.param({"--dockerhub-cache": "no-scheme.internal:5000"}, id="no scheme"),
     ],
 )
 def test_invalid_run_args(cli_runner: CliRunner, run_inputs: dict, invalid_args: dict):

@@ -8,6 +8,7 @@ import logging
 
 # Subprocess is used to run the application.
 import subprocess  # nosec: B404
+import urllib.parse
 from pathlib import Path
 
 import pytest
@@ -55,7 +56,7 @@ async def ssh_connection_fixture(
     openstack_server: Server,
     proxy: types.ProxyConfig,
     openstack_metadata: types.OpenstackMeta,
-    dockerhub_mirror: str | None,
+    dockerhub_mirror: urllib.parse.ParseResult | None,
 ) -> SSHConnection:
     """The openstack server ssh connection fixture."""
     logger.info("Setting up SSH connection.")
@@ -118,7 +119,9 @@ def cli_run_fixture(
 @pytest.mark.asyncio
 @pytest.mark.amd64
 @pytest.mark.usefixtures("cli_run")
-async def test_image_amd(image: str, tmp_path: Path, dockerhub_mirror: str | None):
+async def test_image_amd(
+    image: str, tmp_path: Path, dockerhub_mirror: urllib.parse.ParseResult | None
+):
     """
     arrange: given a built output from the CLI.
     act: when the image is booted and commands are executed.
@@ -133,6 +136,8 @@ async def test_image_amd(image: str, tmp_path: Path, dockerhub_mirror: str | Non
     instance = await helpers.create_lxd_instance(lxd_client=lxd, image=image)
 
     for testcmd in commands.TEST_RUNNER_COMMANDS:
+        if testcmd.external:
+            continue
         if testcmd == "configure dockerhub mirror":
             if not dockerhub_mirror:
                 continue
@@ -166,7 +171,9 @@ async def test_openstack_upload(openstack_connection: Connection, openstack_imag
 @pytest.mark.arm64
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("cli_run")
-async def test_image_arm(ssh_connection: SSHConnection, dockerhub_mirror: str | None):
+async def test_image_arm(
+    ssh_connection: SSHConnection, dockerhub_mirror: urllib.parse.ParseResult | None
+):
     """
     arrange: given a built output from the CLI.
     act: when the image is booted and commands are executed.

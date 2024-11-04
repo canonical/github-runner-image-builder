@@ -79,13 +79,15 @@ def upload_image(
     with openstack.connect(cloud=cloud_name) as connection:
         try:
             logger.info("Uploading image %s.", image_name)
+            # ignore type since the library does not provide correct type hinting but the docstring
+            # does define the return type.
             image: Image = connection.create_image(
                 name=image_name,
                 filename=str(image_path),
                 properties={"architecture": arch.to_openstack()},
                 allow_duplicates=True,
                 wait=True,
-            )
+            )  # type: ignore
             logger.info("Pruning older images %s, keeping %s.", image_name, keep_revisions)
             _prune_old_images(
                 connection=connection, image_name=image_name, num_revisions=keep_revisions
@@ -137,7 +139,8 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> str:
         images = _get_sorted_images_by_created_at(connection=connection, image_name=image_name)
         if not images:
             return ""
-        return images[0].id
+        # The type of ID is in string but the library does not provide correct type hints for it.
+        return images[0].id  # type: ignore
 
 
 def _get_sorted_images_by_created_at(
@@ -161,4 +164,6 @@ def _get_sorted_images_by_created_at(
         logger.exception("Failed to search images with name %s.", image_name)
         raise OpenstackError from exc
 
-    return sorted(images, key=lambda image: image.created_at, reverse=True)
+    # The type of images are list[Image] but the library does not provide correct type hints for
+    # it.
+    return sorted(images, key=lambda image: image.created_at, reverse=True)  # type: ignore

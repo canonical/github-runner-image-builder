@@ -5,6 +5,7 @@
 
 # Subprocess module is used to execute trusted commands
 import subprocess  # nosec: B404
+import urllib.parse
 from pathlib import Path
 
 import click
@@ -47,13 +48,22 @@ def main(log_level: str | int) -> None:
     default=False,
     help="EXPERIMENTAL: Use external Openstack builder to build images.",
 )
-def initialize(arch: config.Arch | None, cloud_name: str, experimental_external: bool) -> None:
+@click.option(
+    "--prefix",
+    default="",
+    help="Name of the OpenStack resources to prefix with. Used to run the image builder in "
+    "parallel under same OpenStack project. Ignored if --experimental-external is not enabled",
+)
+def initialize(
+    arch: config.Arch | None, cloud_name: str, experimental_external: bool, prefix: str
+) -> None:
     """Initialize builder CLI function wrapper.
 
     Args:
         arch: The architecture to build for.
         cloud_name: The cloud name to use from clouds.yaml.
         experimental_external: Whether to use external Openstack builder to build images.
+        prefix: The prefix to use for OpenStack resource names.
     """
     if not experimental_external:
         builder.initialize()
@@ -61,7 +71,9 @@ def initialize(arch: config.Arch | None, cloud_name: str, experimental_external:
     arch = arch if arch else config.get_supported_arch()
 
     openstack_builder.initialize(
-        arch=arch, cloud_name=openstack_builder.determine_cloud(cloud_name=cloud_name)
+        arch=arch,
+        cloud_name=openstack_builder.determine_cloud(cloud_name=cloud_name),
+        prefix=prefix,
     )
 
 
@@ -83,6 +95,57 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     )
 
 
+# The arguments are necessary input for click validation function.
+def _validate_snap_channel(
+    ctx: click.Context, param: click.Parameter, value: str  # pylint: disable=unused-argument
+) -> str:
+    """Validate snap channel string input.
+
+    Args:
+        ctx: Click context argument.
+        param: Click parameter argument.
+        value: The value passed into --juju option.
+
+    Raises:
+        BadParameter: If invalid juju channel was passed in.
+
+    Returns:
+        The validated Juju channel option.
+    """
+    if not value:
+        return ""
+    try:
+        track, risk = value.strip().split("/")
+        return f"{track}/{risk}"
+    except ValueError as exc:
+        raise click.BadParameter("format must be '<track>/<list>'") from exc
+
+
+# The arguments are necessary input for click validation function.
+def _parse_url(
+    ctx: click.Context, param: click.Parameter, value: str  # pylint: disable=unused-argument
+) -> urllib.parse.ParseResult | None:
+    """Validate snap channel string input.
+
+    Args:
+        ctx: Click context argument.
+        param: Click parameter argument.
+        value: The value passed into --dockerhub-cache option.
+
+    Raises:
+        BadParameter: If invalid URL was passed in.
+
+    Returns:
+        The dockerhub cache URL.
+    """
+    if not value:
+        return None
+    parse_result = urllib.parse.urlparse(value)
+    if not parse_result.netloc or not parse_result.scheme or not parse_result.port:
+        raise click.BadParameter("URL must be '<scheme>://<hostname>:<port>' format")
+    return parse_result
+
+
 @main.command(name="run")
 @click.argument("cloud_name")
 @click.argument("image_name")
@@ -98,6 +161,16 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     type=click.Choice(config.BASE_CHOICES),
     default="noble",
     help=("The Ubuntu base image to use as build base."),
+)
+@click.option(
+    "--dockerhub-cache",
+    type=str,
+    callback=_parse_url,
+    default=None,
+    help=(
+        "The DockerHub cache to use to instantiate builder VMs with. Useful when creating images"
+        "with MicroK8s."
+    ),
 )
 @click.option(
     "-k",
@@ -136,10 +209,30 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "Ignored if --experimental-external is not enabled",
 )
 @click.option(
+    "--juju",
+    callback=_validate_snap_channel,
+    default="",
+    help="Juju channel to install and bootstrap. E.g. to install Juju 3.1/stable, pass the values "
+    "--juju=3.1/stable",
+)
+@click.option(
+    "--microk8s",
+    callback=_validate_snap_channel,
+    default="",
+    help="Microk8s channel to install and bootstrap. E.g. to install Microk8s 1.31-strict/stable, "
+    "pass the values --microk8s=1.31-strict/stable",
+)
+@click.option(
     "--network",
     default="",
     help="EXPERIMENTAL: OpenStack network to launch the external build run VMs under. "
     "Ignored if --experimental-external is not enabled",
+)
+@click.option(
+    "--prefix",
+    default="",
+    help="Name of the OpenStack resources to prefix with. Used to run the image builder in "
+    "parallel under same OpenStack project. Ignored if --experimental-external is not enabled",
 )
 @click.option(
     "--proxy",
@@ -158,6 +251,7 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
 def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     arch: config.Arch | None,
     cloud_name: str,
+    dockerhub_cache: urllib.parse.ParseResult | None,
     image_name: str,
     base_image: str,
     keep_revisions: int,
@@ -165,7 +259,10 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     runner_version: str,
     experimental_external: bool,
     flavor: str,
+    juju: str,
+    microk8s: str,
     network: str,
+    prefix: str,
     proxy: str,
     upload_clouds: str,
 ) -> None:
@@ -175,6 +272,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         arch: The architecture to run build for.
         cloud_name: The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in
             paths of the following order: current directory, ~/.config/openstack, /etc/openstack.
+        dockerhub_cache: The DockerHub cache to use for using cached images.
         image_name: The image name uploaded to Openstack.
         base_image: The Ubuntu base image to use as build base.
         keep_revisions: Number of past revisions to keep before deletion.
@@ -182,7 +280,10 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         runner_version: GitHub runner version to pin.
         experimental_external: Whether to use external OpenStack builder.
         flavor: The Openstack flavor to create server to build images.
+        juju: The Juju channel to install and bootstrap.
+        microk8s: The Microk8s channel to install and bootstrap.
         network: The Openstack network to assign to server to build images.
+        prefix: The prefix to use for OpenStack resource names.
         proxy: Proxy to use for external build VMs.
         upload_clouds: The Openstack cloud to use to upload externally built image.
     """
@@ -194,6 +295,8 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                microk8s=microk8s,
+                juju=juju,
                 runner_version=runner_version,
                 name=image_name,
             ),
@@ -212,14 +315,18 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         image_ids = openstack_builder.run(
             cloud_config=openstack_builder.CloudConfig(
                 cloud_name=cloud_name,
+                dockerhub_cache=dockerhub_cache,
                 flavor=flavor,
                 network=network,
+                prefix=prefix,
                 proxy=proxy,
                 upload_cloud_names=upload_cloud_names,
             ),
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                microk8s=microk8s,
+                juju=juju,
                 runner_version=runner_version,
                 name=image_name,
             ),

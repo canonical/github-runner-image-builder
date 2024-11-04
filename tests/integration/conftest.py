@@ -7,6 +7,7 @@ import platform
 import secrets
 import string
 import typing
+import urllib.parse
 from pathlib import Path
 
 import openstack
@@ -47,6 +48,12 @@ def image_fixture(pytestconfig: pytest.Config) -> str:
     image = pytestconfig.getoption("--image")
     assert image, "Please specify the --image command line option"
     return image
+
+
+@pytest.fixture(scope="module", name="image_config")
+def image_config_fixture(arch: config.Arch, image: str):
+    """The image related configuration parameters."""
+    return types.ImageConfig(arch=arch, image=image)
 
 
 @pytest.fixture(scope="module", name="openstack_clouds_yaml")
@@ -198,9 +205,16 @@ echo $IMAGE_ID | tee {callback_result_path}
 
 
 @pytest.fixture(scope="module", name="dockerhub_mirror")
-def dockerhub_mirror_fixture(pytestconfig: pytest.Config) -> str | None:
+def dockerhub_mirror_fixture(pytestconfig: pytest.Config) -> urllib.parse.ParseResult | None:
     """Dockerhub mirror URL."""
-    return pytestconfig.getoption("--dockerhub-mirror")
+    dockerhub_mirror_url: str | None = pytestconfig.getoption("--dockerhub-mirror", default=None)
+    if not dockerhub_mirror_url:
+        return None
+    parse_result = urllib.parse.urlparse(dockerhub_mirror_url)
+    assert (
+        parse_result.netloc and parse_result.port and parse_result.geturl()
+    ), "Invalid dockerhub-mirror URL"
+    return parse_result
 
 
 @pytest.fixture(scope="module", name="openstack_image_name")
@@ -226,11 +240,19 @@ def ssh_key_fixture(
 
 @pytest.fixture(scope="module", name="openstack_metadata")
 def openstack_metadata_fixture(
-    openstack_connection: Connection, ssh_key: types.SSHKey, network_name: str, flavor_name: str
+    openstack_connection: Connection,
+    ssh_key: types.SSHKey,
+    network_name: str,
+    flavor_name: str,
+    cloud_name: str,
 ) -> types.OpenstackMeta:
     """A wrapper around openstack related info."""
     return types.OpenstackMeta(
-        connection=openstack_connection, ssh_key=ssh_key, network=network_name, flavor=flavor_name
+        connection=openstack_connection,
+        cloud_name=cloud_name,
+        ssh_key=ssh_key,
+        network=network_name,
+        flavor=flavor_name,
     )
 
 
