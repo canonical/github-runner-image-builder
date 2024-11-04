@@ -686,6 +686,32 @@ function install_yq() {
     /usr/bin/sudo -E /usr/bin/snap remove go
 }
 
+function install_github_runner() {
+    version="$1"
+    arch="$2"
+    echo "Installing GitHub runner"
+    if [[ -z "$version" ]]; then
+        # Follow redirectin to get latest version release location
+        # e.g. https://github.com/actions/runner/releases/tag/v2.318.0
+        location=$(curl -sIL "https://github.com/actions/runner/releases/latest" | sed -n \
+'s/^location: *//p' | tr -d '[:space:]')
+        # remove longest prefix from the right that matches the pattern */v
+        # e.g. 2.318.0
+        version=${location##*/v}
+    fi
+    /usr/bin/wget "https://github.com/actions/runner/releases/download/v$version/\
+actions-runner-linux-$arch-$version.tar.gz"
+    /usr/bin/mkdir -p /home/ubuntu/actions-runner
+    /usr/bin/tar -xvzf "actions-runner-linux-$arch-$version.tar.gz" --directory \
+/home/ubuntu/actions-runner
+
+    rm "actions-runner-linux-$arch-$version.tar.gz"
+}
+
+function chown_home() {
+    /usr/bin/chown --recursive ubuntu:ubuntu /home/ubuntu/
+}
+
 function install_microk8s() {
     local channel="$1"
     local dockerhub_cache_url="$2"
@@ -753,32 +779,6 @@ function install_juju() {
         echo "Bootstrapping MicroK8s on Juju"
         /usr/bin/sudo -E -H -u ubuntu /snap/bin/juju bootstrap microk8s microk8s
     fi
-}
-
-function install_github_runner() {
-    version="$1"
-    arch="$2"
-    echo "Installing GitHub runner"
-    if [[ -z "$version" ]]; then
-        # Follow redirectin to get latest version release location
-        # e.g. https://github.com/actions/runner/releases/tag/v2.318.0
-        location=$(curl -sIL "https://github.com/actions/runner/releases/latest" | sed -n \
-'s/^location: *//p' | tr -d '[:space:]')
-        # remove longest prefix from the right that matches the pattern */v
-        # e.g. 2.318.0
-        version=${location##*/v}
-    fi
-    /usr/bin/wget "https://github.com/actions/runner/releases/download/v$version/\
-actions-runner-linux-$arch-$version.tar.gz"
-    /usr/bin/mkdir -p /home/ubuntu/actions-runner
-    /usr/bin/tar -xvzf "actions-runner-linux-$arch-$version.tar.gz" --directory \
-/home/ubuntu/actions-runner
-
-    rm "actions-runner-linux-$arch-$version.tar.gz"
-}
-
-function chown_home() {
-    /usr/bin/chown --recursive ubuntu:ubuntu /home/ubuntu/
 }
 
 proxy="test.proxy.internal:3128"

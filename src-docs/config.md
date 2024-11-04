@@ -16,7 +16,7 @@ Module containing configurations.
 
 ---
 
-<a href="../src/github_runner_image_builder/config.py#L46"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/config.py#L47"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `get_supported_arch`
 
@@ -41,7 +41,7 @@ Get current machine architecture.
 
 ---
 
-<a href="../src/github_runner_image_builder/config.py#L17"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/config.py#L18"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `Arch`
 Supported system architectures. 
@@ -59,7 +59,7 @@ Supported system architectures.
 
 ---
 
-<a href="../src/github_runner_image_builder/config.py#L65"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/config.py#L66"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `BaseImage`
 The ubuntu OS base image to build and deploy runners on. 
@@ -77,7 +77,7 @@ The ubuntu OS base image to build and deploy runners on.
 
 ---
 
-<a href="../src/github_runner_image_builder/config.py#L140"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/config.py#L141"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `ImageConfig`
 The build image configuration values. 
@@ -91,6 +91,7 @@ The build image configuration values.
  - <b>`microk8s`</b>:  The MicroK8s snap channel to install. 
  - <b>`juju`</b>:  The Juju channel to install and bootstrap. 
  - <b>`runner_version`</b>:  The GitHub runner version to install on the VM. Defaults to latest. 
+ - <b>`script_url`</b>:  The external setup bash script URL. 
  - <b>`name`</b>:  The image name to upload on OpenStack. 
 
 <a href="../<string>"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
@@ -104,6 +105,7 @@ __init__(
     microk8s: str,
     juju: str,
     runner_version: str,
+    script_url: ParseResult | None,
     name: str
 ) → None
 ```
