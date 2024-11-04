@@ -130,19 +130,19 @@ def _parse_url(
     Args:
         ctx: Click context argument.
         param: Click parameter argument.
-        value: The value passed into --dockerhub-cache option.
+        value: The value passed into any URL option.
 
     Raises:
         BadParameter: If invalid URL was passed in.
 
     Returns:
-        The dockerhub cache URL.
+        The valid URL parse result.
     """
     if not value:
         return None
     parse_result = urllib.parse.urlparse(value)
-    if not parse_result.netloc or not parse_result.scheme or not parse_result.port:
-        raise click.BadParameter("URL must be '<scheme>://<hostname>:<port>' format")
+    if not parse_result.netloc or not parse_result.scheme:
+        raise click.BadParameter("URL must be '<scheme>://<hostname>' format")
     return parse_result
 
 
@@ -242,7 +242,8 @@ def _parse_url(
 )
 @click.option(
     "--script-url",
-    default="",
+    callback=_parse_url,
+    default=None,
     help="Run an external bash setup script fetched from the URL on the runners during cloud-init."
     "Installation is run as root within the cloud-init script after the bare image default setup.",
 )
@@ -270,7 +271,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     network: str,
     prefix: str,
     proxy: str,
-    script_url: str,
+    script_url: urllib.parse.ParseResult | None,
     upload_clouds: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
@@ -306,6 +307,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 microk8s=microk8s,
                 juju=juju,
                 runner_version=runner_version,
+                script_url=None,
                 name=image_name,
             ),
             keep_revisions=keep_revisions,
@@ -336,6 +338,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 microk8s=microk8s,
                 juju=juju,
                 runner_version=runner_version,
+                script_url=script_url,
                 name=image_name,
             ),
             keep_revisions=keep_revisions,

@@ -184,6 +184,18 @@ function configure_system_users() {
     /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
 }
 
+function execute_script() {
+    local script_url="$1"
+    if [[ -z "$script_url" ]]; then
+        echo "Script URL not provided, skipping."
+        return
+    fi
+    wget "$script_url" -O external.sh
+    chmod +x external.sh
+    ./external.sh
+    rm external.sh
+}
+
 proxy="{{ PROXY_URL }}"
 dockerhub_cache_url="{{ DOCKERHUB_CACHE_URL }}"
 dockerhub_cache_host="{{ DOCKERHUB_CACHE_HOST }}"
@@ -210,7 +222,7 @@ chown_home
 install_microk8s "$microk8s_channel" "$dockerhub_cache_url" "$dockerhub_cache_host" "$dockerhub_cache_port"
 install_juju "$juju_channel"
 configure_system_users
-
+execute_script "$script_url"
 
 # Make sure the disk is synced for snapshot
 sync
