@@ -299,6 +299,9 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     arch = arch if arch else config.get_supported_arch()
     base = config.BaseImage.from_str(base_image)
     if not experimental_external:
+        click.echo(
+            "[WARNING] Image builder via chroot will be deprecated in version 0.9.0.", err=True
+        )
         image_ids = builder.run(
             cloud_name=cloud_name,
             image_config=config.ImageConfig(
