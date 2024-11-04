@@ -106,6 +106,11 @@ def image_ids_fixture(
             runner_version="",
             name=f"{test_id}-image-builder-test",
             juju="3.1/stable",
+            script_url=urllib.parse.urlparse(
+                "https://raw.githubusercontent.com/canonical/github-runner-image-builder/"
+                "eb0ca315bf8c7aa732b811120cbabca4b8d16216/tests/integration/testdata/"
+                "test_script.sh"
+            ),
         ),
         keep_revisions=1,
     )
