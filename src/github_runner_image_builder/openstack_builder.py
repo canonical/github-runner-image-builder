@@ -292,7 +292,9 @@ def run(
             server=builder,
             keep_revisions=keep_revisions,
         )
-        logger.info("Requested snapshot, waiting for snapshot to complete: %s.", image.id)
+        logger.info(
+            "Requested snapshot, waiting for snapshot to complete: %s, %s.", builder.id, image.id
+        )
         _wait_for_snapshot_complete(conn=conn, image=image)
         images = _upload_to_clouds(
             conn=conn,
@@ -640,6 +642,9 @@ def _wait_for_snapshot_complete(
         image = conn.get_image(name_or_id=image.id)  # type: ignore
         if image.status == "active":
             return
+        logger.info(
+            "Image snapshot not yet active, waiting..., name: %s, id: %s", image.name, image.id
+        )
         time.sleep(60)
     # OpenStack library does not provide correct type hints for it.
     image = conn.get_image(name_or_id=image.id)  # type: ignore
