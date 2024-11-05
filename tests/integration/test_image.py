@@ -138,7 +138,7 @@ async def test_image_amd(
     for testcmd in commands.TEST_RUNNER_COMMANDS:
         if testcmd.external:
             continue
-        if testcmd == "configure dockerhub mirror":
+        if testcmd.name == "configure dockerhub mirror":
             if not dockerhub_mirror:
                 continue
             testcmd.command = helpers.format_dockerhub_mirror_microk8s_command(
