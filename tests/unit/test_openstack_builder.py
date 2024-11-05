@@ -584,6 +584,7 @@ def test__generate_cloud_init_script():
                 microk8s="1.29-strict/stable",
                 runner_version="",
                 name="test-image",
+                script_url=urllib.parse.urlparse("https://test-url.com/script.sh"),
             ),
             proxy="test.proxy.internal:3128",
             dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
@@ -655,17 +656,6 @@ EOF
     /usr/sbin/sysctl -p
 }
 
-function configure_system_users() {
-    echo "Configuring ubuntu user"
-    # only add ubuntu user if ubuntu does not exist
-    /usr/bin/id -u ubuntu &>/dev/null || useradd --create-home ubuntu
-    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
-    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
-    /usr/sbin/groupadd -f microk8s
-    /usr/sbin/groupadd -f docker
-    /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
-}
-
 function configure_usr_local_bin() {
     echo "Configuring /usr/local/bin path"
     /usr/bin/chmod 777 /usr/local/bin
@@ -684,6 +674,32 @@ function install_yq() {
     /usr/bin/sudo -E /snap/bin/go build -C yq -o /usr/bin/yq
     /usr/bin/sudo -E /usr/bin/rm -rf yq
     /usr/bin/sudo -E /usr/bin/snap remove go
+}
+
+function install_github_runner() {
+    version="$1"
+    arch="$2"
+    echo "Installing GitHub runner"
+    if [[ -z "$version" ]]; then
+        # Follow redirectin to get latest version release location
+        # e.g. https://github.com/actions/runner/releases/tag/v2.318.0
+        location=$(curl -sIL "https://github.com/actions/runner/releases/latest" | sed -n \
+'s/^location: *//p' | tr -d '[:space:]')
+        # remove longest prefix from the right that matches the pattern */v
+        # e.g. 2.318.0
+        version=${location##*/v}
+    fi
+    /usr/bin/wget "https://github.com/actions/runner/releases/download/v$version/\
+actions-runner-linux-$arch-$version.tar.gz"
+    /usr/bin/mkdir -p /home/ubuntu/actions-runner
+    /usr/bin/tar -xvzf "actions-runner-linux-$arch-$version.tar.gz" --directory \
+/home/ubuntu/actions-runner
+
+    rm "actions-runner-linux-$arch-$version.tar.gz"
+}
+
+function chown_home() {
+    /usr/bin/chown --recursive ubuntu:ubuntu /home/ubuntu/
 }
 
 function install_microk8s() {
@@ -755,30 +771,27 @@ function install_juju() {
     fi
 }
 
-function install_github_runner() {
-    version="$1"
-    arch="$2"
-    echo "Installing GitHub runner"
-    if [[ -z "$version" ]]; then
-        # Follow redirectin to get latest version release location
-        # e.g. https://github.com/actions/runner/releases/tag/v2.318.0
-        location=$(curl -sIL "https://github.com/actions/runner/releases/latest" | sed -n \
-'s/^location: *//p' | tr -d '[:space:]')
-        # remove longest prefix from the right that matches the pattern */v
-        # e.g. 2.318.0
-        version=${location##*/v}
-    fi
-    /usr/bin/wget "https://github.com/actions/runner/releases/download/v$version/\
-actions-runner-linux-$arch-$version.tar.gz"
-    /usr/bin/mkdir -p /home/ubuntu/actions-runner
-    /usr/bin/tar -xvzf "actions-runner-linux-$arch-$version.tar.gz" --directory \
-/home/ubuntu/actions-runner
-
-    rm "actions-runner-linux-$arch-$version.tar.gz"
+function configure_system_users() {
+    echo "Configuring ubuntu user"
+    # only add ubuntu user if ubuntu does not exist
+    /usr/bin/id -u ubuntu &>/dev/null || useradd --create-home ubuntu
+    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
+    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
+    /usr/sbin/groupadd -f microk8s
+    /usr/sbin/groupadd -f docker
+    /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
 }
 
-function chown_home() {
-    /usr/bin/chown --recursive ubuntu:ubuntu /home/ubuntu/
+function execute_script() {
+    local script_url="$1"
+    if [[ -z "$script_url" ]]; then
+        echo "Script URL not provided, skipping."
+        return
+    fi
+    wget "$script_url" -O external.sh
+    chmod +x external.sh
+    ./external.sh
+    rm external.sh
 }
 
 proxy="test.proxy.internal:3128"
@@ -792,6 +805,7 @@ github_runner_version=""
 github_runner_arch="x64"
 microk8s_channel="1.29-strict/stable"
 juju_channel="3.1/stable"
+script_url="https://test-url.com/script.sh"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
@@ -808,6 +822,8 @@ install_microk8s "$microk8s_channel" "$dockerhub_cache_url" "$dockerhub_cache_ho
 "$dockerhub_cache_port"
 install_juju "$juju_channel"
 configure_system_users
+execute_script "$script_url"
+
 # Make sure the disk is synced for snapshot
 sync
 echo "Finished sync"\

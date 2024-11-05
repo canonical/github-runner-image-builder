@@ -85,4 +85,9 @@ sudo microk8s stop && sudo microk8s start""",
         command="sudo sysctl -a | grep 'net.ipv4.tcp_congestion_control = bbr'",
     ),
     Commands(name="test juju installed", command="juju version | grep 3.1", external=True),
+    Commands(
+        name="test external script",
+        command="cat /home/ubuntu/test.txt | grep 'hello world'",
+        external=True,
+    ),
 )

@@ -496,6 +496,7 @@ def _generate_cloud_init_script(
         JUJU_CHANNEL=image_config.juju,
         RUNNER_VERSION=image_config.runner_version,
         RUNNER_ARCH=image_config.arch.value,
+        SCRIPT_URL=image_config.script_url.geturl() if image_config.script_url else "",
     )
 
 
