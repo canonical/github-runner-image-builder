@@ -186,14 +186,24 @@ function configure_system_users() {
 
 function execute_script() {
     local script_url="$1"
+    local env_vars="$2"
     if [[ -z "$script_url" ]]; then
         echo "Script URL not provided, skipping."
         return
     fi
+    # Write temp environment variables file, load and delete.
+    TEMP_FILE=$(mktemp)
+    echo "$env_vars" > "$TEMP_FILE"
+    # Source the temporary file and run the script
+    set -a  # Automatically export all variables
+    source "$TEMP_FILE"
+    set +a  # Stop automatically exporting variables
+
     wget "$script_url" -O external.sh
     chmod +x external.sh
     ./external.sh
     rm external.sh
+    rm "$TEMP_FILE"
 }
 
 proxy="{{ PROXY_URL }}"
