@@ -502,7 +502,13 @@ def _generate_cloud_init_script(
             else ""
         ),
         SCRIPT_SECRETS=(
-            image_config.script_config.script_secrets
+            " ".join(
+                f"{secret_key}={secret_value}"
+                for (
+                    secret_key,
+                    secret_value,
+                ) in image_config.script_config.script_secrets.items()
+            )
             if image_config.script_config.script_secrets
             else ""
         ),

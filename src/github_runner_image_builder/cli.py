@@ -3,6 +3,8 @@
 
 """Main entrypoint for github-runner-image-builder cli application."""
 
+import os
+
 # Subprocess module is used to execute trusted commands
 import subprocess  # nosec: B404
 import urllib.parse
@@ -11,6 +13,9 @@ from pathlib import Path
 import click
 
 from github_runner_image_builder import builder, config, logging, openstack_builder, store
+
+# Bandit thinks this is a hardcoded secret.
+SECRET_PREFIX = "IMAGE_BUILDER_SECRET_"  # nosec
 
 
 @click.option(
@@ -248,12 +253,6 @@ def _parse_url(
     "Installation is run as root within the cloud-init script after the bare image default setup.",
 )
 @click.option(
-    "--script-secrets",
-    default="",
-    help="The space separated external secrets to load before running external script_url. e.g. "
-    "SECRET_ONE=HELLO SECRET_TWO=WORLD",
-)
-@click.option(
     "--upload-clouds",
     default="",
     help="EXPERIMENTAL: Comma separated list of different clouds to use to upload the externally "
@@ -278,7 +277,6 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     prefix: str,
     proxy: str,
     script_url: urllib.parse.ParseResult | None,
-    script_secrets: str | None,
     upload_clouds: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
@@ -301,8 +299,6 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         prefix: The prefix to use for OpenStack resource names.
         proxy: Proxy to use for external build VMs.
         script_url: The external setup bash script URL.
-        script_secrets: The space separated external secrets to load before running external \
-            script_url. e.g. "SECRET_ONE=HELLO SECRET_TWO=WORLD"
         upload_clouds: The Openstack cloud to use to upload externally built image.
     """
     arch = arch if arch else config.get_supported_arch()
@@ -321,7 +317,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 runner_version=runner_version,
                 script_config=config.ScriptConfig(
                     script_url=None,
-                    script_secrets=None,
+                    script_secrets={},
                 ),
                 name=image_name,
             ),
@@ -355,7 +351,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 runner_version=runner_version,
                 script_config=config.ScriptConfig(
                     script_url=script_url,
-                    script_secrets=script_secrets,
+                    script_secrets=_load_secrets(),
                 ),
                 name=image_name,
             ),
@@ -365,3 +361,16 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     if callback_script:
         # The callback script is a user trusted script.
         subprocess.check_call([str(callback_script), image_ids])  # nosec: B603
+
+
+def _load_secrets() -> dict[str, str]:
+    """Load image builder secrets set as environment variables.
+
+    Returns:
+        The secrets key value pairs.
+    """
+    secrets: dict[str, str] = {}
+    for env in os.environ:
+        if env.startswith(SECRET_PREFIX):
+            secrets[env.removeprefix(SECRET_PREFIX)] = os.environ[env]
+    return secrets

@@ -112,7 +112,10 @@ def image_ids_fixture(
                     "eb0ca315bf8c7aa732b811120cbabca4b8d16216/tests/integration/testdata/"
                     "test_script.sh"
                 ),
-                script_secrets="TEST_SECRET=SHOULD_EXIST TEST_NON_SECRET=SHOULD_NOT_EXIST",
+                script_secrets={
+                    "TEST_SECRET": "SHOULD_EXIST",
+                    "TEST_NON_SECRET": "SHOULD_NOT_EXIST",
+                },
             ),
         ),
         keep_revisions=1,

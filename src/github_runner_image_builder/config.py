@@ -149,7 +149,7 @@ class ScriptConfig:
     """
 
     script_url: urllib.parse.ParseResult | None
-    script_secrets: str | None
+    script_secrets: dict[str, str]
 
 
 @dataclasses.dataclass

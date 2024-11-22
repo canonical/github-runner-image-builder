@@ -586,7 +586,7 @@ def test__generate_cloud_init_script():
                 name="test-image",
                 script_config=openstack_builder.config.ScriptConfig(
                     script_url=urllib.parse.urlparse("https://test-url.com/script.sh"),
-                    script_secrets="TEST_SECRET_ONE=HELLO TEST_SECRET_TWO=WORLD",
+                    script_secrets={"TEST_SECRET_ONE": "HELLO", "TEST_SECRET_TWO": "WORLD"},
                 ),
             ),
             proxy="test.proxy.internal:3128",

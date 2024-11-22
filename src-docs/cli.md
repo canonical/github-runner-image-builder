@@ -8,5 +8,6 @@ Main entrypoint for github-runner-image-builder cli application.
 **Global Variables**
 ---------------
 - **click**
+- **SECRET_PREFIX**
 
 

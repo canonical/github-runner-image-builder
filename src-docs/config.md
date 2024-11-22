@@ -94,7 +94,7 @@ The custom setup script configurations.
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(script_url: ParseResult | None, script_secrets: str | None) → None
+__init__(script_url: ParseResult | None, script_secrets: dict[str, str]) → None
 ```
 
 
