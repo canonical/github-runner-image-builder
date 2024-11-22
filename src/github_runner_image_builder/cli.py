@@ -248,6 +248,12 @@ def _parse_url(
     "Installation is run as root within the cloud-init script after the bare image default setup.",
 )
 @click.option(
+    "--script-secrets",
+    default="",
+    help="The space separated external secrets to load before running external script_url. e.g. "
+    "SECRET_ONE=HELLO SECRET_TWO=WORLD",
+)
+@click.option(
     "--upload-clouds",
     default="",
     help="EXPERIMENTAL: Comma separated list of different clouds to use to upload the externally "
@@ -272,6 +278,7 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     prefix: str,
     proxy: str,
     script_url: urllib.parse.ParseResult | None,
+    script_secrets: str | None,
     upload_clouds: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
@@ -294,6 +301,8 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
         prefix: The prefix to use for OpenStack resource names.
         proxy: Proxy to use for external build VMs.
         script_url: The external setup bash script URL.
+        script_secrets: The space separated external secrets to load before running external \
+            script_url. e.g. "SECRET_ONE=HELLO SECRET_TWO=WORLD"
         upload_clouds: The Openstack cloud to use to upload externally built image.
     """
     arch = arch if arch else config.get_supported_arch()
@@ -310,7 +319,10 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 microk8s=microk8s,
                 juju=juju,
                 runner_version=runner_version,
-                script_url=None,
+                script_config=config.ScriptConfig(
+                    script_url=None,
+                    script_secrets=None,
+                ),
                 name=image_name,
             ),
             keep_revisions=keep_revisions,
@@ -341,7 +353,10 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 microk8s=microk8s,
                 juju=juju,
                 runner_version=runner_version,
-                script_url=script_url,
+                script_config=config.ScriptConfig(
+                    script_url=script_url,
+                    script_secrets=script_secrets,
+                ),
                 name=image_name,
             ),
             keep_revisions=keep_revisions,

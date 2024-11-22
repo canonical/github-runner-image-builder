@@ -193,7 +193,10 @@ function execute_script() {
     fi
     # Write temp environment variables file, load and delete.
     TEMP_FILE=$(mktemp)
-    echo "$env_vars" > "$TEMP_FILE"
+    IFS=' ' read -r -a vars <<< "$env_vars"
+    for var in "${vars[@]}"; do
+        echo "$var" >> "$TEMP_FILE"
+    done
     # Source the temporary file and run the script
     set -a  # Automatically export all variables
     source "$TEMP_FILE"
@@ -217,6 +220,7 @@ github_runner_arch="{{ RUNNER_ARCH }}"
 microk8s_channel="{{ MICROK8S_CHANNEL }}"
 juju_channel="{{ JUJU_CHANNEL }}"
 script_url="{{ SCRIPT_URL }}"
+script_secrets="{{ SCRIPT_SECRETS }}"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
@@ -232,7 +236,7 @@ chown_home
 install_microk8s "$microk8s_channel" "$dockerhub_cache_url" "$dockerhub_cache_host" "$dockerhub_cache_port"
 install_juju "$juju_channel"
 configure_system_users
-execute_script "$script_url"
+execute_script "$script_url" "$script_secrets"
 
 # Make sure the disk is synced for snapshot
 sync

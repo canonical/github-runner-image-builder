@@ -139,6 +139,20 @@ LOG_LEVELS = tuple(
 
 
 @dataclasses.dataclass
+class ScriptConfig:
+    """The custom setup script configurations.
+
+    Attributes:
+        script_url: The external setup bash script URL.
+        script_secrets: The space separated external secrets to load before running external \
+            script_url. e.g. "SECRET_ONE=HELLO SECRET_TWO=WORLD"
+    """
+
+    script_url: urllib.parse.ParseResult | None
+    script_secrets: str | None
+
+
+@dataclasses.dataclass
 class ImageConfig:
     """The build image configuration values.
 
@@ -148,7 +162,7 @@ class ImageConfig:
         microk8s: The MicroK8s snap channel to install.
         juju: The Juju channel to install and bootstrap.
         runner_version: The GitHub runner version to install on the VM. Defaults to latest.
-        script_url: The external setup bash script URL.
+        script_config: The custom setup script configurations.
         name: The image name to upload on OpenStack.
     """
 
@@ -157,5 +171,5 @@ class ImageConfig:
     microk8s: str
     juju: str
     runner_version: str
-    script_url: urllib.parse.ParseResult | None
+    script_config: ScriptConfig
     name: str

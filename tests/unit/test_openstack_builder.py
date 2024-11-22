@@ -584,7 +584,10 @@ def test__generate_cloud_init_script():
                 microk8s="1.29-strict/stable",
                 runner_version="",
                 name="test-image",
-                script_url=urllib.parse.urlparse("https://test-url.com/script.sh"),
+                script_config=openstack_builder.config.ScriptConfig(
+                    script_url=urllib.parse.urlparse("https://test-url.com/script.sh"),
+                    script_secrets="TEST_SECRET_ONE=HELLO TEST_SECRET_TWO=WORLD",
+                ),
             ),
             proxy="test.proxy.internal:3128",
             dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
@@ -784,14 +787,27 @@ function configure_system_users() {
 
 function execute_script() {
     local script_url="$1"
+    local env_vars="$2"
     if [[ -z "$script_url" ]]; then
         echo "Script URL not provided, skipping."
         return
     fi
+    # Write temp environment variables file, load and delete.
+    TEMP_FILE=$(mktemp)
+    IFS=' ' read -r -a vars <<< "$env_vars"
+    for var in "${vars[@]}"; do
+        echo "$var" >> "$TEMP_FILE"
+    done
+    # Source the temporary file and run the script
+    set -a  # Automatically export all variables
+    source "$TEMP_FILE"
+    set +a  # Stop automatically exporting variables
+
     wget "$script_url" -O external.sh
     chmod +x external.sh
     ./external.sh
     rm external.sh
+    rm "$TEMP_FILE"
 }
 
 proxy="test.proxy.internal:3128"
@@ -806,6 +822,7 @@ github_runner_arch="x64"
 microk8s_channel="1.29-strict/stable"
 juju_channel="3.1/stable"
 script_url="https://test-url.com/script.sh"
+script_secrets="TEST_SECRET_ONE=HELLO TEST_SECRET_TWO=WORLD"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
@@ -822,7 +839,7 @@ install_microk8s "$microk8s_channel" "$dockerhub_cache_url" "$dockerhub_cache_ho
 "$dockerhub_cache_port"
 install_juju "$juju_channel"
 configure_system_users
-execute_script "$script_url"
+execute_script "$script_url" "$script_secrets"
 
 # Make sure the disk is synced for snapshot
 sync
