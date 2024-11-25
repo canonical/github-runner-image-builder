@@ -3,6 +3,8 @@
 
 """Main entrypoint for github-runner-image-builder cli application."""
 
+import os
+
 # Subprocess module is used to execute trusted commands
 import subprocess  # nosec: B404
 import urllib.parse
@@ -11,6 +13,9 @@ from pathlib import Path
 import click
 
 from github_runner_image_builder import builder, config, logging, openstack_builder, store
+
+# Bandit thinks this is a hardcoded secret.
+SECRET_PREFIX = "IMAGE_BUILDER_SECRET_"  # nosec
 
 
 @click.option(
@@ -310,7 +315,10 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 microk8s=microk8s,
                 juju=juju,
                 runner_version=runner_version,
-                script_url=None,
+                script_config=config.ScriptConfig(
+                    script_url=None,
+                    script_secrets={},
+                ),
                 name=image_name,
             ),
             keep_revisions=keep_revisions,
@@ -341,7 +349,10 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
                 microk8s=microk8s,
                 juju=juju,
                 runner_version=runner_version,
-                script_url=script_url,
+                script_config=config.ScriptConfig(
+                    script_url=script_url,
+                    script_secrets=_load_secrets(),
+                ),
                 name=image_name,
             ),
             keep_revisions=keep_revisions,
@@ -350,3 +361,16 @@ def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positi
     if callback_script:
         # The callback script is a user trusted script.
         subprocess.check_call([str(callback_script), image_ids])  # nosec: B603
+
+
+def _load_secrets() -> dict[str, str]:
+    """Load image builder secrets set as environment variables.
+
+    Returns:
+        The secrets key value pairs.
+    """
+    return {
+        key.removeprefix(SECRET_PREFIX): value
+        for key, value in os.environ.items()
+        if key.startswith(SECRET_PREFIX)
+    }

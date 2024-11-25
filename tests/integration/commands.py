@@ -90,4 +90,14 @@ sudo microk8s stop && sudo microk8s start""",
         command="cat /home/ubuntu/test.txt | grep 'hello world'",
         external=True,
     ),
+    Commands(
+        name="test external script secrets (should exist)",
+        command='grep -q "SHOULD_EXIST" secret.txt',
+        external=True,
+    ),
+    Commands(
+        name="test external script secrets (should not exist)",
+        command='! grep -q "SHOULD_NOT_EXIST" secret.txt',
+        external=True,
+    ),
 )

@@ -7,6 +7,7 @@
 # pylint:disable=protected-access
 
 import itertools
+import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -247,3 +248,18 @@ def test_run(
     )
 
     assert result.exit_code == 0
+
+
+def test__load_secrets():
+    """
+    arrange: given secrets prefixed with IMAGE_BUILDER_SECRET_.
+    act: when _load_secrets is called.
+    assert: secrets are loaded correctly.
+    """
+    os.environ["IMAGE_BUILDER_SECRET_TEST_SECRET"] = (test_secret_value := "TEST_SECRET")
+    os.environ["IMAGE_BUILDER_SECRET_TEST_SECRET_SECONDARY"] = test_secret_value
+
+    assert cli._load_secrets() == {
+        "TEST_SECRET": test_secret_value,
+        "TEST_SECRET_SECONDARY": test_secret_value,
+    }
