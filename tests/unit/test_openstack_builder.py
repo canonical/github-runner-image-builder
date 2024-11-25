@@ -801,13 +801,13 @@ function execute_script() {
     # Source the temporary file and run the script
     set -a  # Automatically export all variables
     source "$TEMP_FILE"
+    rm "$TEMP_FILE"
     set +a  # Stop automatically exporting variables
 
     wget "$script_url" -O external.sh
     chmod +x external.sh
     ./external.sh
     rm external.sh
-    rm "$TEMP_FILE"
 }
 
 proxy="test.proxy.internal:3128"

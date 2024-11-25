@@ -369,8 +369,8 @@ def _load_secrets() -> dict[str, str]:
     Returns:
         The secrets key value pairs.
     """
-    secrets: dict[str, str] = {}
-    for env in os.environ:
-        if env.startswith(SECRET_PREFIX):
-            secrets[env.removeprefix(SECRET_PREFIX)] = os.environ[env]
-    return secrets
+    return {
+        key.removeprefix(SECRET_PREFIX): value
+        for key, value in os.environ.items()
+        if key.startswith(SECRET_PREFIX)
+    }
