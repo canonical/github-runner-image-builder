@@ -56,7 +56,7 @@ SHARED_SECURITY_GROUP_NAME = "github-runner-image-builder-v1"
 CREATE_SERVER_TIMEOUT = 5 * 60  # seconds
 
 MIN_CPU = 2
-MIN_RAM = 8192  # M
+MIN_RAM = 1024  # M
 MIN_DISK = 20  # G
 
 
