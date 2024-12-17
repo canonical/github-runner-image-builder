@@ -209,6 +209,17 @@ Represents an error while compressing cloud-img.
 
 <a href="../src/github_runner_image_builder/errors.py#L80"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
+## <kbd>class</kbd> `HomeDirectoryChangeOwnershipError`
+Represents an error while changing ubuntu home directory. 
+
+
+
+
+
+---
+
+<a href="../src/github_runner_image_builder/errors.py#L84"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
 ## <kbd>class</kbd> `OpenstackBaseError`
 Represents an error while interacting with Openstack. 
 
@@ -218,7 +229,7 @@ Represents an error while interacting with Openstack.
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L84"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L88"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `UnauthorizedError`
 Represents an unauthorized connection to Openstack. 
@@ -229,7 +240,7 @@ Represents an unauthorized connection to Openstack.
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L88"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L92"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `UploadImageError`
 Represents an error when uploading image to Openstack. 
@@ -240,7 +251,7 @@ Represents an error when uploading image to Openstack.
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L92"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L96"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `OpenstackError`
 Represents an error while communicating with Openstack. 
@@ -251,7 +262,7 @@ Represents an error while communicating with Openstack.
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L96"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L100"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `CloudsYAMLError`
 Represents an error with clouds.yaml for OpenStack connection. 
@@ -262,7 +273,7 @@ Represents an error with clouds.yaml for OpenStack connection.
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L100"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L104"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `NotFoundError`
 Represents an error with not matching OpenStack object found. 
@@ -273,7 +284,7 @@ Represents an error with not matching OpenStack object found.
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L104"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L108"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `FlavorNotFoundError`
 Represents an error with given OpenStack flavor not found. 
@@ -284,7 +295,7 @@ Represents an error with given OpenStack flavor not found.
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L108"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L112"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `FlavorRequirementsNotMetError`
 Represents an error with given OpenStack flavor not meeting the minimum requirements. 
@@ -295,7 +306,7 @@ Represents an error with given OpenStack flavor not meeting the minimum requirem
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L112"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L116"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `NetworkNotFoundError`
 Represents an error with given OpenStack network not found. 
@@ -306,7 +317,7 @@ Represents an error with given OpenStack network not found.
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L116"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L120"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `AddressNotFoundError`
 Represents an error with OpenStack instance not receiving an IP address. 
@@ -317,7 +328,7 @@ Represents an error with OpenStack instance not receiving an IP address.
 
 ---
 
-<a href="../src/github_runner_image_builder/errors.py#L120"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/errors.py#L124"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `CloudInitFailError`
 Represents an error with cloud-init. 

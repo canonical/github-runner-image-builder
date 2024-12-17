@@ -3,7 +3,7 @@
 
 [project]
 name = "github-runner-image-builder"
-version = "0.5.2"
+version = "0.9.1"
 authors = [
     { name = "Canonical IS DevOps", email = "is-devops-team@canonical.com" },
 ]
@@ -65,7 +65,8 @@ exclude = [".git", "__pycache__", ".tox", "build", "dist", "*.egg_info", "venv"]
 select = ["E", "W", "F", "C", "N", "R", "D", "H"]
 # Ignore W503 because using black creates errors with this
 # Ignore D107 Missing docstring in __init__
-ignore = ["W503", "D107"]
+# Ignore E203: whitespace before : error since it conflicts with black formatter.
+ignore = ["W503", "D107", "E203"]
 # D100, D101, D102, D103, D104: Ignore docstring style issues in tests
 per-file-ignores = ["tests/*:D100,D101,D102,D103,D104,D205,D212"]
 docstring-convention = "google"

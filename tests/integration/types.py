@@ -9,6 +9,8 @@ from pathlib import Path
 from openstack.compute.v2.keypair import Keypair
 from openstack.connection import Connection
 
+from github_runner_image_builder import config
+
 
 class ProxyConfig(typing.NamedTuple):
     """Proxy configuration.
@@ -63,12 +65,26 @@ class OpenstackMeta(typing.NamedTuple):
 
     Attributes:
         connection: The connection instance to Openstack.
+        cloud_name: The OpenStack cloud name to connect to.
         ssh_key: The SSH-Key created to connect to Openstack instance.
         network: The Openstack network to create instances under.
         flavor: The flavor to create instances with.
     """
 
     connection: Connection
+    cloud_name: str
     ssh_key: SSHKey
     network: str
     flavor: str
+
+
+class ImageConfig(typing.NamedTuple):
+    """The image related configuration parameters.
+
+    Attributes:
+        arch: The architecture to build for.
+        image: The ubuntu base image.
+    """
+
+    arch: config.Arch
+    image: str

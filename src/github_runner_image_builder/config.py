@@ -7,6 +7,7 @@ import dataclasses
 import itertools
 import logging
 import platform
+import urllib.parse
 from enum import Enum
 from pathlib import Path
 from typing import Literal
@@ -128,12 +129,27 @@ IMAGE_DEFAULT_APT_PACKAGES = [
 
 _LOG_LEVELS = (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR)
 LOG_LEVELS = tuple(
-    itertools.chain(
+    str(level)
+    for level in itertools.chain(
         _LOG_LEVELS,
         (logging.getLevelName(level) for level in _LOG_LEVELS),
         (logging.getLevelName(level).lower() for level in _LOG_LEVELS),
     )
 )
+
+
+@dataclasses.dataclass
+class ScriptConfig:
+    """The custom setup script configurations.
+
+    Attributes:
+        script_url: The external setup bash script URL.
+        script_secrets: The space separated external secrets to load before running external \
+            script_url. e.g. "SECRET_ONE=HELLO SECRET_TWO=WORLD"
+    """
+
+    script_url: urllib.parse.ParseResult | None
+    script_secrets: dict[str, str]
 
 
 @dataclasses.dataclass
@@ -143,11 +159,17 @@ class ImageConfig:
     Attributes:
         arch: The architecture of the target image.
         base: The ubuntu base OS of the image.
+        microk8s: The MicroK8s snap channel to install.
+        juju: The Juju channel to install and bootstrap.
         runner_version: The GitHub runner version to install on the VM. Defaults to latest.
+        script_config: The custom setup script configurations.
         name: The image name to upload on OpenStack.
     """
 
     arch: Arch
     base: BaseImage
+    microk8s: str
+    juju: str
     runner_version: str
+    script_config: ScriptConfig
     name: str

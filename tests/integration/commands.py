@@ -14,11 +14,13 @@ class Commands:
         name: The test name.
         command: The command to execute.
         env: Additional run envs.
+        external: OpenStack VM test only (Chroot unsupported test).
     """
 
     name: str
     command: str
     env: dict | None = None
+    external: bool = False
 
 
 # This is matched with E2E test run of github-runner-operator charm.
@@ -74,4 +76,28 @@ sudo microk8s stop && sudo microk8s start""",
         name="test sctp support", command="sudo apt-get install lksctp-tools -yq && checksctp"
     ),
     Commands(name="test HWE kernel", command="uname -a | grep generic"),
+    Commands(
+        name="test network congestion policy(fq)",
+        command="sudo sysctl -a | grep 'net.core.default_qdisc = fq'",
+    ),
+    Commands(
+        name="test network congestion policy",
+        command="sudo sysctl -a | grep 'net.ipv4.tcp_congestion_control = bbr'",
+    ),
+    Commands(name="test juju installed", command="juju version | grep 3.1", external=True),
+    Commands(
+        name="test external script",
+        command="cat /home/ubuntu/test.txt | grep 'hello world'",
+        external=True,
+    ),
+    Commands(
+        name="test external script secrets (should exist)",
+        command='grep -q "SHOULD_EXIST" secret.txt',
+        external=True,
+    ),
+    Commands(
+        name="test external script secrets (should not exist)",
+        command='! grep -q "SHOULD_NOT_EXIST" secret.txt',
+        external=True,
+    ),
 )

@@ -25,9 +25,6 @@ jobs:
           pipx install tox
       - name: Run integration tests
         run: tox -e integration -- -m arm64 --image=${{ matrix.image }} ${{ secrets.INTEGRATION_TEST_ARGS }}
-      - name: Tmate
-        if: ${{ failure() }}
-        uses: canonical/action-tmate@main
   integration-tests-amd:
     name: Integration test (X64)
     runs-on: [self-hosted, X64, jammy, stg-private-endpoint]

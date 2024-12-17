@@ -46,7 +46,7 @@ Upload image to openstack glance.
 
 ---
 
-<a href="../src/github_runner_image_builder/store.py#L58"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="../src/github_runner_image_builder/store.py#L56"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>function</kbd> `upload_image`
 

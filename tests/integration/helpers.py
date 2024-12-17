@@ -4,6 +4,7 @@
 """Helper utilities for integration tests."""
 
 import collections
+import dataclasses
 import inspect
 import logging
 import platform
@@ -229,23 +230,33 @@ def _instance_running(instance: Instance) -> bool:
     return result.exit_code == 0
 
 
-# All the arguments are necessary
-async def wait_for_valid_connection(  # pylint: disable=too-many-arguments
-    connection: Connection,
-    server_name: str,
-    network: str,
-    ssh_key: Path,
-    timeout: int = 30 * 60,
-    proxy: types.ProxyConfig | None = None,
-    dockerhub_mirror: str | None = None,
-) -> SSHConnection:
-    """Wait for a valid SSH connection from Openstack server.
+@dataclasses.dataclass
+class OpenStackConnectionParams:
+    """Parameters for connecting to OpenStack instance.
 
-    Args:
+    Attributes:
         connection: The openstack connection client to communicate with Openstack.
         server_name: Openstack server to find the valid connection from.
         network: The network to find valid connection from.
         ssh_key: The path to public ssh_key to create connection with.
+    """
+
+    connection: Connection
+    server_name: str
+    network: str
+    ssh_key: Path
+
+
+async def wait_for_valid_connection(
+    connection_params: OpenStackConnectionParams,
+    timeout: int = 30 * 60,
+    proxy: types.ProxyConfig | None = None,
+    dockerhub_mirror: urllib.parse.ParseResult | None = None,
+) -> SSHConnection:
+    """Wait for a valid SSH connection from Openstack server.
+
+    Args:
+        connection_params: Parameters for connecting to OpenStack instance.
         timeout: Number of seconds to wait before raising a timeout error.
         proxy: The proxy to configure on host runner.
         dockerhub_mirror: The DockerHub mirror URL.
@@ -258,18 +269,24 @@ async def wait_for_valid_connection(  # pylint: disable=too-many-arguments
     """
     start_time = time.time()
     while time.time() - start_time <= timeout:
-        server: Server | None = connection.get_server(name_or_id=server_name)
+        server: Server | None = connection_params.connection.get_server(
+            name_or_id=connection_params.server_name
+        )
         if not server or not server.addresses:
             time.sleep(10)
             continue
-        for address in server.addresses[network]:
+        for address in server.addresses[connection_params.network]:
             ip = address["addr"]
-            logger.info("Trying SSH into %s using key: %s...", ip, str(ssh_key.absolute()))
+            logger.info(
+                "Trying SSH into %s using key: %s...",
+                ip,
+                str(connection_params.ssh_key.absolute()),
+            )
             ssh_connection = SSHConnection(
                 host=ip,
                 user="ubuntu",
-                connect_kwargs={"key_filename": str(ssh_key.absolute())},
-                connect_timeout=10 * 60,
+                connect_kwargs={"key_filename": str(connection_params.ssh_key.absolute())},
+                connect_timeout=60 * 10,
             )
             try:
                 result: Result = ssh_connection.run("echo 'hello world'")
@@ -352,7 +369,9 @@ def _snap_ready(conn: SSHConnection) -> bool:
     wait=tenacity.wait_exponential(multiplier=2, min=10, max=60),
     stop=tenacity.stop_after_attempt(10),
 )
-def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | None):
+def _configure_dockerhub_mirror(
+    conn: SSHConnection, dockerhub_mirror: urllib.parse.ParseResult | None
+):
     """Use dockerhub mirror if provided.
 
     Args:
@@ -362,7 +381,8 @@ def _configure_dockerhub_mirror(conn: SSHConnection, dockerhub_mirror: str | Non
     if not dockerhub_mirror:
         return
     command = f'sudo mkdir -p /etc/docker/ && \
-echo {{ \\"registry-mirrors\\": [\\"{dockerhub_mirror}\\"]}} | sudo tee /etc/docker/daemon.json'
+echo {{ \\"registry-mirrors\\": [\\"{dockerhub_mirror.geturl()}\\"]}} | sudo tee \
+/etc/docker/daemon.json'
     logger.info("Running command: %s", command)
     result: Result = conn.run(command)
     assert result.ok, "Failed to setup DockerHub mirror"
@@ -376,7 +396,9 @@ echo {{ \\"registry-mirrors\\": [\\"{dockerhub_mirror}\\"]}} | sudo tee /etc/doc
     assert result.ok, "Failed to restart docker"
 
 
-def format_dockerhub_mirror_microk8s_command(command: str, dockerhub_mirror: str) -> str:
+def format_dockerhub_mirror_microk8s_command(
+    command: str, dockerhub_mirror: urllib.parse.ParseResult
+) -> str:
     """Format dockerhub mirror for microk8s command.
 
     Args:
@@ -386,18 +408,28 @@ def format_dockerhub_mirror_microk8s_command(command: str, dockerhub_mirror: str
     Returns:
         The formatted dockerhub mirror registry command for snap microk8s.
     """
-    url = urllib.parse.urlparse(dockerhub_mirror)
-    return command.format(registry_url=url.geturl(), hostname=url.hostname, port=url.port)
+    return command.format(
+        registry_url=dockerhub_mirror.geturl(),
+        hostname=dockerhub_mirror.hostname,
+        port=dockerhub_mirror.port,
+    )
 
 
-def run_openstack_tests(dockerhub_mirror: str | None, ssh_connection: SSHConnection):
+def run_openstack_tests(
+    dockerhub_mirror: urllib.parse.ParseResult | None,
+    ssh_connection: SSHConnection,
+    external: bool = False,
+):
     """Run test commands on the openstack instance via ssh.
 
     Args:
         dockerhub_mirror: The dockerhub mirror URL to reduce rate limiting for tests.
         ssh_connection: The SSH connection instance to OpenStack test server.
+        external: Whether the test is for external VM builder image test.
     """
     for testcmd in commands.TEST_RUNNER_COMMANDS:
+        if not external and testcmd.external:
+            continue
         if testcmd == "configure dockerhub mirror":
             if not dockerhub_mirror:
                 continue
@@ -492,6 +524,10 @@ def create_openstack_server(
             security_groups=[security_group.name],
             flavor=openstack_metadata.flavor,
             network=openstack_metadata.network,
+            # hostname setting is required for microk8s testing
+            userdata="""#!/bin/bash
+hostnamectl set-hostname github-runner
+""",
             timeout=60 * 20,
             wait=True,
         )

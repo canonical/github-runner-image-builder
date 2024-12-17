@@ -3,13 +3,19 @@
 
 """Main entrypoint for github-runner-image-builder cli application."""
 
+import os
+
 # Subprocess module is used to execute trusted commands
 import subprocess  # nosec: B404
+import urllib.parse
 from pathlib import Path
 
 import click
 
 from github_runner_image_builder import builder, config, logging, openstack_builder, store
+
+# Bandit thinks this is a hardcoded secret.
+SECRET_PREFIX = "IMAGE_BUILDER_SECRET_"  # nosec
 
 
 @click.option(
@@ -47,13 +53,22 @@ def main(log_level: str | int) -> None:
     default=False,
     help="EXPERIMENTAL: Use external Openstack builder to build images.",
 )
-def initialize(arch: config.Arch | None, cloud_name: str, experimental_external: bool) -> None:
+@click.option(
+    "--prefix",
+    default="",
+    help="Name of the OpenStack resources to prefix with. Used to run the image builder in "
+    "parallel under same OpenStack project. Ignored if --experimental-external is not enabled",
+)
+def initialize(
+    arch: config.Arch | None, cloud_name: str, experimental_external: bool, prefix: str
+) -> None:
     """Initialize builder CLI function wrapper.
 
     Args:
         arch: The architecture to build for.
         cloud_name: The cloud name to use from clouds.yaml.
         experimental_external: Whether to use external Openstack builder to build images.
+        prefix: The prefix to use for OpenStack resource names.
     """
     if not experimental_external:
         builder.initialize()
@@ -61,7 +76,9 @@ def initialize(arch: config.Arch | None, cloud_name: str, experimental_external:
     arch = arch if arch else config.get_supported_arch()
 
     openstack_builder.initialize(
-        arch=arch, cloud_name=openstack_builder.determine_cloud(cloud_name=cloud_name)
+        arch=arch,
+        cloud_name=openstack_builder.determine_cloud(cloud_name=cloud_name),
+        prefix=prefix,
     )
 
 
@@ -83,6 +100,57 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     )
 
 
+# The arguments are necessary input for click validation function.
+def _validate_snap_channel(
+    ctx: click.Context, param: click.Parameter, value: str  # pylint: disable=unused-argument
+) -> str:
+    """Validate snap channel string input.
+
+    Args:
+        ctx: Click context argument.
+        param: Click parameter argument.
+        value: The value passed into --juju option.
+
+    Raises:
+        BadParameter: If invalid juju channel was passed in.
+
+    Returns:
+        The validated Juju channel option.
+    """
+    if not value:
+        return ""
+    try:
+        track, risk = value.strip().split("/")
+        return f"{track}/{risk}"
+    except ValueError as exc:
+        raise click.BadParameter("format must be '<track>/<list>'") from exc
+
+
+# The arguments are necessary input for click validation function.
+def _parse_url(
+    ctx: click.Context, param: click.Parameter, value: str  # pylint: disable=unused-argument
+) -> urllib.parse.ParseResult | None:
+    """Validate snap channel string input.
+
+    Args:
+        ctx: Click context argument.
+        param: Click parameter argument.
+        value: The value passed into any URL option.
+
+    Raises:
+        BadParameter: If invalid URL was passed in.
+
+    Returns:
+        The valid URL parse result.
+    """
+    if not value:
+        return None
+    parse_result = urllib.parse.urlparse(value)
+    if not parse_result.netloc or not parse_result.scheme:
+        raise click.BadParameter("URL must be '<scheme>://<hostname>' format")
+    return parse_result
+
+
 @main.command(name="run")
 @click.argument("cloud_name")
 @click.argument("image_name")
@@ -100,10 +168,14 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     help=("The Ubuntu base image to use as build base."),
 )
 @click.option(
-    "-k",
-    "--keep-revisions",
-    default=5,
-    help="The maximum number of images to keep before deletion.",
+    "--dockerhub-cache",
+    type=str,
+    callback=_parse_url,
+    default=None,
+    help=(
+        "The DockerHub cache to use to instantiate builder VMs with. Useful when creating images"
+        "with MicroK8s."
+    ),
 )
 @click.option(
     "-s",
@@ -114,6 +186,12 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
         "The callback script to trigger after image is built. The callback script is called"
         "with the first argument as the image ID."
     ),
+)
+@click.option(
+    "-k",
+    "--keep-revisions",
+    default=5,
+    help="The maximum number of images to keep before deletion.",
 )
 @click.option(
     "--runner-version",
@@ -136,10 +214,30 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "Ignored if --experimental-external is not enabled",
 )
 @click.option(
+    "--juju",
+    callback=_validate_snap_channel,
+    default="",
+    help="Juju channel to install and bootstrap. E.g. to install Juju 3.1/stable, pass the values "
+    "--juju=3.1/stable",
+)
+@click.option(
+    "--microk8s",
+    callback=_validate_snap_channel,
+    default="",
+    help="Microk8s channel to install and bootstrap. E.g. to install Microk8s 1.31-strict/stable, "
+    "pass the values --microk8s=1.31-strict/stable",
+)
+@click.option(
     "--network",
     default="",
     help="EXPERIMENTAL: OpenStack network to launch the external build run VMs under. "
     "Ignored if --experimental-external is not enabled",
+)
+@click.option(
+    "--prefix",
+    default="",
+    help="Name of the OpenStack resources to prefix with. Used to run the image builder in "
+    "parallel under same OpenStack project. Ignored if --experimental-external is not enabled",
 )
 @click.option(
     "--proxy",
@@ -148,16 +246,24 @@ def get_latest_build_id(cloud_name: str, image_name: str) -> None:
     "Ignored if --experimental-external is not enabled",
 )
 @click.option(
-    "--upload-cloud",
+    "--script-url",
+    callback=_parse_url,
+    default=None,
+    help="Run an external bash setup script fetched from the URL on the runners during cloud-init."
+    "Installation is run as root within the cloud-init script after the bare image default setup.",
+)
+@click.option(
+    "--upload-clouds",
     default="",
-    help="EXPERIMENTAL: Different cloud to use to upload the externally built image. The cloud "
-    "connection parameters should exist in the clouds.yaml. Ignored if --experimental-external is"
-    " not enabled, as a part of external build mode parameter.",
+    help="EXPERIMENTAL: Comma separated list of different clouds to use to upload the externally "
+    "built image. The cloud connection parameters should exist in the clouds.yaml. Ignored if "
+    "--experimental-external is not enabled, as a part of external build mode parameter.",
 )
 # click doesn't yet support dataclasses, hence all arguments are required.
-def run(  # pylint: disable=too-many-arguments
+def run(  # pylint: disable=too-many-arguments, too-many-locals, too-many-positional-arguments
     arch: config.Arch | None,
     cloud_name: str,
+    dockerhub_cache: urllib.parse.ParseResult | None,
     image_name: str,
     base_image: str,
     keep_revisions: int,
@@ -165,9 +271,13 @@ def run(  # pylint: disable=too-many-arguments
     runner_version: str,
     experimental_external: bool,
     flavor: str,
+    juju: str,
+    microk8s: str,
     network: str,
+    prefix: str,
     proxy: str,
-    upload_cloud: str,
+    script_url: urllib.parse.ParseResult | None,
+    upload_clouds: str,
 ) -> None:
     """Build a cloud image using chroot and upload it to OpenStack.
 
@@ -175,6 +285,7 @@ def run(  # pylint: disable=too-many-arguments
         arch: The architecture to run build for.
         cloud_name: The cloud to use from the clouds.yaml file. The CLI looks for clouds.yaml in
             paths of the following order: current directory, ~/.config/openstack, /etc/openstack.
+        dockerhub_cache: The DockerHub cache to use for using cached images.
         image_name: The image name uploaded to Openstack.
         base_image: The Ubuntu base image to use as build base.
         keep_revisions: Number of past revisions to keep before deletion.
@@ -182,44 +293,84 @@ def run(  # pylint: disable=too-many-arguments
         runner_version: GitHub runner version to pin.
         experimental_external: Whether to use external OpenStack builder.
         flavor: The Openstack flavor to create server to build images.
+        juju: The Juju channel to install and bootstrap.
+        microk8s: The Microk8s channel to install and bootstrap.
         network: The Openstack network to assign to server to build images.
+        prefix: The prefix to use for OpenStack resource names.
         proxy: Proxy to use for external build VMs.
-        upload_cloud: The Opensttack cloud to use to upload externally built image.
+        script_url: The external setup bash script URL.
+        upload_clouds: The Openstack cloud to use to upload externally built image.
     """
     arch = arch if arch else config.get_supported_arch()
     base = config.BaseImage.from_str(base_image)
     if not experimental_external:
-        image_id = builder.run(
+        click.echo(
+            "[WARNING] Image builder via chroot will be deprecated in version 0.9.0.", err=True
+        )
+        image_ids = builder.run(
             cloud_name=cloud_name,
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                microk8s=microk8s,
+                juju=juju,
                 runner_version=runner_version,
+                script_config=config.ScriptConfig(
+                    script_url=None,
+                    script_secrets={},
+                ),
                 name=image_name,
             ),
             keep_revisions=keep_revisions,
         )
         # 2024/07/09: Only print image_id for chroot building for backwards compatibility. To be
         # deprecated when external builder is in stable.
-        click.echo(image_id, nl=False)
+        click.echo(image_ids, nl=False)
     else:
-        image_id = openstack_builder.run(
+        # coverage thinks this line can lead to exit.
+        upload_cloud_names = (  # pragma: no cover
+            [cloud_name.strip() for cloud_name in upload_clouds.split(",")]
+            if upload_clouds
+            else None
+        )
+        image_ids = openstack_builder.run(
             cloud_config=openstack_builder.CloudConfig(
                 cloud_name=cloud_name,
+                dockerhub_cache=dockerhub_cache,
                 flavor=flavor,
                 network=network,
+                prefix=prefix,
                 proxy=proxy,
-                upload_cloud_name=upload_cloud,
+                upload_cloud_names=upload_cloud_names,
             ),
             image_config=config.ImageConfig(
                 arch=arch,
                 base=base,
+                microk8s=microk8s,
+                juju=juju,
                 runner_version=runner_version,
+                script_config=config.ScriptConfig(
+                    script_url=script_url,
+                    script_secrets=_load_secrets(),
+                ),
                 name=image_name,
             ),
             keep_revisions=keep_revisions,
         )
-        click.echo(f"Image build success:\n{image_id}", nl=False)
+        click.echo(f"Image build success:\n{image_ids}", nl=False)
     if callback_script:
         # The callback script is a user trusted script.
-        subprocess.check_call([str(callback_script), image_id])  # nosec: B603
+        subprocess.check_call([str(callback_script), image_ids])  # nosec: B603
+
+
+def _load_secrets() -> dict[str, str]:
+    """Load image builder secrets set as environment variables.
+
+    Returns:
+        The secrets key value pairs.
+    """
+    return {
+        key.removeprefix(SECRET_PREFIX): value
+        for key, value in os.environ.items()
+        if key.startswith(SECRET_PREFIX)
+    }

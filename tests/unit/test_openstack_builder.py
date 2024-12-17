@@ -3,11 +3,13 @@
 
 """Unit tests for state module."""
 
-# Need access to protected functions for testing
-# pylint:disable=protected-access
+# Need access to protected functions for testing, all tests are part of oepnstack_builder.py
+# module.
+# pylint:disable=protected-access,too-many-lines
 
 import pathlib
 import typing
+import urllib.parse
 from unittest.mock import MagicMock
 
 import paramiko
@@ -93,7 +95,7 @@ def test_initialize(monkeypatch: pytest.MonkeyPatch):
         openstack_builder, "_create_security_group", (create_security_group_mock := MagicMock())
     )
 
-    openstack_builder.initialize(MagicMock(), MagicMock())
+    openstack_builder.initialize(MagicMock(), MagicMock(), MagicMock())
 
     download_mock.assert_called()
     upload_mock.assert_called()
@@ -113,7 +115,7 @@ def test__create_keypair_already_exists(monkeypatch: pytest.MonkeyPatch, tmp_pat
     monkeypatch.setattr(openstack_builder, "BUILDER_KEY_PATH", tmp_key_path)
     connection_mock = MagicMock()
 
-    openstack_builder._create_keypair(conn=connection_mock)
+    openstack_builder._create_keypair(conn=connection_mock, prefix="")
 
     connection_mock.create_keypair.assert_not_called()
 
@@ -132,7 +134,7 @@ def test__create_keypair(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
     connection_mock.create_keypair.return_value = (mock_key := MagicMock())
     mock_key.private_key = "ssh-key-contents"
 
-    openstack_builder._create_keypair(conn=connection_mock)
+    openstack_builder._create_keypair(conn=connection_mock, prefix="")
 
     connection_mock.create_keypair.assert_called()
     assert tmp_path.exists()
@@ -171,22 +173,38 @@ def test__create_security_group():
         pytest.param(
             openstack_builder.CloudConfig(
                 cloud_name="test-cloud",
+                dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
                 flavor="test-flavor",
                 network="test-network",
+                prefix="",
                 proxy="test-proxy",
-                upload_cloud_name="",
+                upload_cloud_names=[],
             ),
             id="no upload-cloud-name",
         ),
         pytest.param(
             openstack_builder.CloudConfig(
                 cloud_name="test-cloud",
+                dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
                 flavor="test-flavor",
                 network="test-network",
+                prefix="",
                 proxy="test-proxy",
-                upload_cloud_name="test-cloud-2",
+                upload_cloud_names=["test-cloud-1"],
             ),
-            id="upload-cloud-name defined",
+            id="single upload-cloud-name defined",
+        ),
+        pytest.param(
+            openstack_builder.CloudConfig(
+                cloud_name="test-cloud",
+                dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
+                flavor="test-flavor",
+                network="test-network",
+                prefix="",
+                proxy="test-proxy",
+                upload_cloud_names=["test-cloud-1", "test-cloud-2"],
+            ),
+            id="multiple upload-cloud-name defined",
         ),
     ],
 )
@@ -198,6 +216,9 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.Cl
     """
     monkeypatch.setattr(
         openstack_builder, "_generate_cloud_init_script", (generate_cloud_init_mock := MagicMock())
+    )
+    monkeypatch.setattr(
+        openstack_builder, "_prepare_openstack_resources", (ensure_resources_mock := MagicMock())
     )
     monkeypatch.setattr(
         openstack_builder, "_determine_flavor", (determine_flavor_mock := MagicMock())
@@ -228,6 +249,7 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.Cl
     )
 
     generate_cloud_init_mock.assert_called()
+    ensure_resources_mock.assert_called()
     determine_flavor_mock.assert_called()
     determine_network_mock.assert_called()
     wait_cloud_init_mock.assert_called()
@@ -235,6 +257,107 @@ def test_run(monkeypatch: pytest.MonkeyPatch, cloud_config: openstack_builder.Cl
     create_image_snapshot.assert_called()
     connection_mock.create_server.assert_called()
     connection_mock.delete_server.assert_called()
+
+
+def test__prepare_openstack_resources_invalid_resources(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given monkeypatched openstack functions that return invalid openstack state.
+    act: when _prepare_openstack_resources is called.
+    assert: recovery functions are called.
+    """
+    monkeypatch.setattr(openstack_builder, "_create_keypair", create_keypair_mock := MagicMock())
+    monkeypatch.setattr(
+        openstack_builder, "_create_security_group", create_security_group_mock := MagicMock()
+    )
+    connection_mock = MagicMock()
+    connection_mock.get_keypair.return_value = None
+    connection_mock.search_security_groups.return_value = [MagicMock(), MagicMock()]
+    connection_mock.search_servers.return_value = [MagicMock(), MagicMock()]
+
+    openstack_builder._prepare_openstack_resources(
+        conn=connection_mock, builder_name="test", key_name="test", prefix="test"
+    )
+
+    create_keypair_mock.assert_called_once()
+    create_security_group_mock.assert_called_once()
+    connection_mock.delete_security_group.assert_called()
+    connection_mock.delete_server.assert_called()
+
+
+def test__prepare_openstack_resources(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given clean OpenStack resources state.
+    act: when _prepare_openstack_resources is called.
+    assert: no recovery functions are called.
+    """
+    monkeypatch.setattr(openstack_builder, "_create_keypair", create_keypair_mock := MagicMock())
+    monkeypatch.setattr(
+        openstack_builder,
+        "_get_key_fingerprint",
+        MagicMock(return_value=(fingerprint_mock := MagicMock())),
+    )
+    monkeypatch.setattr(
+        openstack_builder, "_create_security_group", create_security_group_mock := MagicMock()
+    )
+    connection_mock = MagicMock()
+    connection_mock.get_keypair.return_value = (keypair_mock := MagicMock())
+    keypair_mock.fingerprint = fingerprint_mock
+    connection_mock.search_security_groups.return_value = [MagicMock()]
+    connection_mock.search_servers.return_value = []
+
+    openstack_builder._prepare_openstack_resources(
+        conn=connection_mock, builder_name="test", key_name="test", prefix="test"
+    )
+
+    create_keypair_mock.assert_not_called()
+    create_security_group_mock.assert_not_called()
+    connection_mock.delete_security_group.assert_not_called()
+    connection_mock.delete_server.assert_not_called()
+
+
+def test__get_key_fingerprint(monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path):
+    """
+    arrange: given monkeypatched BUILDER_KEY_PATH that contains a mock ssh private key.
+    act: when _get_key_fingerprint is called.
+    assert: expected MD5 hash is generated.
+    """
+    test_key_file = tmp_path / "test-key"
+    test_key_file.write_text(
+        """-----BEGIN RSA PRIVATE KEY-----
+MIIEogIBAAKCAQEAq95LRs57Vw5wq6YP7H0Dimw6zMVs8eMl86xyp938JG0bTXs3
+ekyo5WH+QltDkLxBd8PInjUcHwEeci8+4dQq5JwTSX/2rgHKhoEX3ePDlohRbLpR
+ccaIPbFcIoNSqaZ8nuO37zwcbNWVv6BJlYdMlPVyPaGclAvN7NDpqHeV7b5JtOGU
+lZOS/DbsKqCXNBpiqUsqRAaBSGF8yvEnoJSHtrTTN9HkPW1Ssf8NfCo4X3V+/E2v
+7eUdAuu7buCRZ3W0qaez7Et3I0Zktp8fDXFdo30eZ+qXUU7hrai52Se7TGQ6iTGO
+fbAgGMdtbEReuXMxRUGBYwIeYQodtQ+yyirVPwIDAQABAoIBABJJjOjz1NvmhXE+
+Mjjk9G4o0KOJPkEJUmMjLkVTsXM5c3ZDGMbCnBYMNJRgRvLXlSpmgqo9gciAGKU9
+sbXbGtVIZiT5S14ogqGH4D+T70kifXIm675CHwJcJNmR75xtl++wJe98Deo8BRBm
+wG2l/9gPEHYjrsLHSW9cAKtpo2JbIu76MyHbVk7TGQ7Rnho6cNvM/dM1IL3S2Jgd
+3wjEQIDia+k57lImm+czkkvKUd/geAkx+Qv6ngUVpdIrBoG0iccFvKQK3+hWQ3e6
+VEf2Up+LAh/gtpVsNwQLwEsJ+o1VjmTNhGHEjJjzi7tCwf/xKXy4q78jtpbIatCr
+xUrQgIECgYEA4HMyzl+R82uIfQ99CewRw4SzSpfevnFVavOr7hq+s9J5S0Va52lM
+pBxPtyxKovd8dinIqdb9rufmxqR4+FTRpQb1hLZ/HVJ1f79jwhmrln2WxP4hiVB+
+02C0apnx9AVDlVuRuRUe1vZ2LwpgUyNVUulX+PvlnDk7YAf52UcF43kCgYEAxAbz
+tspHOMrHyygPmJgX4Mxei2BGWw8bsX/nqqS/der6Wf9eVZGrqz0bjlUWluRQQ3/S
+LpiUokujJgoauWafVQLyRSvtr7/ATt2p7+i2aT7aPys5GuVlk7lrlZTJTKNwr5EK
+sYGxW6Fhz+aYqtz5ykUe957Vnd3ViPe8DiKA2HcCgYBR7XrUHcp2of/WNnsbzhHF
+3oBbcAgcV94oBf3yEc0ecmtX8F74LVWOac8nO4Ga7t99ek8Gv7UlzPxN8ec+LifA
+J0QjR0Iq/9hn4wKU7S3W5szL5z9ykfFZUulIKB1LR0ieEiik+HKjYJ9PGGiEsFcK
+xqYX+kqbtcBYk1C94NDjcQKBgBPAz5Y/0+V5KaDjLI8n5GAWuAA7d1t9rkC4rtOX
+PmPXhdrDzPG6eB4NTlWNZXVXFG941ek0HuYr0QjoQ8EjAjNC1L77qjvniq1n0NQI
+EzmPx9ZNuLdpHk9AhALSt2YtohFPAFDazNB69qxIhGHTWqhzRqeVLdl2nSnsLNsP
+xwQJAoGAWaindsaPPdeUr4aXdaSh9qMo9vTaa6xACUtd+qXdNtttlvyqlj6yTee+
+z5AZpo2vLdDTnDt8AN/szyWAHpvhKlZc35fxYLaXWHbDylIhmG/Zaw/jxc8kMyKl
+JRUbu09rVwHu50zKZ8CHhqXTnA9E2b295H9H1QPRR6qvQb2jjlc=
+-----END RSA PRIVATE KEY-----""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(openstack_builder, "BUILDER_KEY_PATH", test_key_file)
+
+    assert (
+        openstack_builder._get_key_fingerprint()
+        == "e0:6c:37:7e:d6:f5:a7:7d:b7:bc:5d:27:ac:4c:8a:18"
+    )
 
 
 def test__determine_flavor_flavor_not_found():
@@ -454,14 +577,28 @@ def test__generate_cloud_init_script():
     """
     assert (
         openstack_builder._generate_cloud_init_script(
-            arch=openstack_builder.Arch.X64,
-            base=openstack_builder.BaseImage.JAMMY,
-            runner_version="",
+            image_config=openstack_builder.config.ImageConfig(
+                arch=openstack_builder.Arch.X64,
+                base=openstack_builder.BaseImage.JAMMY,
+                juju="3.1/stable",
+                microk8s="1.29-strict/stable",
+                runner_version="",
+                name="test-image",
+                script_config=openstack_builder.config.ScriptConfig(
+                    script_url=urllib.parse.urlparse("https://test-url.com/script.sh"),
+                    script_secrets={"TEST_SECRET_ONE": "HELLO", "TEST_SECRET_TWO": "WORLD"},
+                ),
+            ),
             proxy="test.proxy.internal:3128",
+            dockerhub_cache=urllib.parse.urlparse("https://test-dockerhub-cache.com:5000"),
         )
         # The templated script contains similar lines to helper for setting up proxy.
         # pylint: disable=R0801
         == """#!/bin/bash
+
+set -e
+
+hostnamectl set-hostname github-runner
 
 function configure_proxy() {
     local proxy="$1"
@@ -489,6 +626,8 @@ table ip aproxy {
 EOF
     echo "Configuring aproxy"
     /usr/bin/sudo snap set aproxy proxy=${proxy} listen=:8444;
+    echo "Wait for aproxy to start"
+    sleep 5
 }
 
 function install_apt_packages() {
@@ -499,8 +638,8 @@ function install_apt_packages() {
     echo "Installing apt packages $packages"
     DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --no-install-recommends ${packages}
     echo "Installing linux-generic-hwe-${hwe_version}"
-    DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --install-recommends linux-generic-\
-hwe-${hwe_version}
+    DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install -y --install-recommends \
+linux-generic-hwe-${hwe_version}
 }
 
 function disable_unattended_upgrades() {
@@ -512,14 +651,12 @@ function disable_unattended_upgrades() {
     /usr/bin/apt-get remove -y unattended-upgrades
 }
 
-function configure_system_users() {
-    echo "Configuring ubuntu user"
-    # only add ubuntu user if ubuntu does not exist
-    /usr/bin/id -u ubuntu &>/dev/null || useradd --create-home ubuntu
-    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
-    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
-    /usr/sbin/groupadd microk8s
-    /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
+function enable_network_fair_queuing_congestion() {
+    /usr/bin/cat <<EOF | /usr/bin/sudo /usr/bin/tee -a /etc/sysctl.conf
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+EOF
+    /usr/sbin/sysctl -p
 }
 
 function configure_usr_local_bin() {
@@ -534,11 +671,12 @@ function install_yarn() {
 }
 
 function install_yq() {
-    /usr/bin/sudo snap install go --classic
-    /usr/bin/git clone https://github.com/mikefarah/yq.git
-    /snap/bin/go build -C yq -o /usr/bin/yq
-    /usr/bin/rm -rf yq
-    /usr/bin/sudo snap remove go
+    /usr/bin/sudo -E /usr/bin/snap install go --classic
+    /usr/bin/sudo -E /usr/bin/git clone https://github.com/mikefarah/yq.git
+    /usr/bin/sudo -E /snap/bin/go mod tidy -C yq
+    /usr/bin/sudo -E /snap/bin/go build -C yq -o /usr/bin/yq
+    /usr/bin/sudo -E /usr/bin/rm -rf yq
+    /usr/bin/sudo -E /usr/bin/snap remove go
 }
 
 function install_github_runner() {
@@ -554,31 +692,158 @@ function install_github_runner() {
         # e.g. 2.318.0
         version=${location##*/v}
     fi
-    /usr/bin/wget "https://github.com/actions/runner/releases/download/v$version/actions-runner-\
-linux-$arch-$version.tar.gz"
+    /usr/bin/wget "https://github.com/actions/runner/releases/download/v$version/\
+actions-runner-linux-$arch-$version.tar.gz"
     /usr/bin/mkdir -p /home/ubuntu/actions-runner
-    /usr/bin/tar -xvzf "actions-runner-linux-$arch-$version.tar.gz" --directory /home/ubuntu/\
-actions-runner
-    /usr/bin/chown --recursive ubuntu:ubuntu /home/ubuntu/actions-runner
+    /usr/bin/tar -xvzf "actions-runner-linux-$arch-$version.tar.gz" --directory \
+/home/ubuntu/actions-runner
 
     rm "actions-runner-linux-$arch-$version.tar.gz"
 }
 
+function chown_home() {
+    /usr/bin/chown --recursive ubuntu:ubuntu /home/ubuntu/
+}
+
+function install_microk8s() {
+    local channel="$1"
+    local dockerhub_cache_url="$2"
+    local dockerhub_hostname="$3"
+    local dockerhub_port="$4"
+    if [[ -z "$channel" ]]; then
+        echo "Microk8s channel not provided, skipping installation."
+        return
+    fi
+    classic_flag=""
+    if [[ "$channel" != *"strict"* ]]; then
+        classic_flag="--classic"
+    fi
+    /usr/bin/snap install microk8s --channel="$channel" $classic_flag
+    /usr/sbin/usermod --append --groups snap_microk8s ubuntu
+
+    if [[ -z "$dockerhub_cache_url" ]]; then
+        /usr/bin/echo "dockerhub cache not enabled, skipping installation"
+        initialize_microk8s_plugins
+        return
+    fi
+    install_microk8s_dockerhub_cache "$dockerhub_cache_url" "$dockerhub_hostname" "$dockerhub_port"
+    initialize_microk8s_plugins
+}
+
+function initialize_microk8s_plugins() {
+    /snap/bin/microk8s status --wait-ready --timeout=600
+    /snap/bin/microk8s enable dns hostpath-storage registry
+    /snap/bin/microk8s status --wait-ready --timeout=600
+}
+
+function install_microk8s_dockerhub_cache() {
+    local dockerhub_cache_url="$1"
+    local dockerhub_hostname="$2"
+    local dockerhub_port="$3"
+    /usr/bin/mkdir -p /var/snap/microk8s/current/args/certs.d/docker.io/
+    /usr/bin/cat <<EOF | /usr/bin/tee /var/snap/microk8s/current/args/certs.d/docker.io/hosts.toml
+server = $dockerhub_cache_url
+
+[host.$dockerhub_hostname:$dockerhub_port]
+    capabilities = ["pull", "resolve"]
+    override_path = true
+EOF
+    /snap/bin/microk8s stop
+    /snap/bin/microk8s start
+}
+
+function install_juju() {
+    local channel="$1"
+    if [[ -z "$channel" ]]; then
+        echo "Juju channel not provided, skipping installation."
+        return
+    fi
+
+    /usr/bin/snap install juju --channel="$channel"
+    if ! lxd --version &> /dev/null; then
+        /usr/bin/snap install lxd
+    fi
+
+    echo "Bootstrapping LXD on Juju"
+    /snap/bin/lxd init --auto
+    /usr/bin/sudo -E -H -u ubuntu /snap/bin/juju bootstrap localhost localhost
+
+    if command -v microk8s &> /dev/null; then
+        echo "Bootstrapping MicroK8s on Juju"
+        /usr/bin/sudo -E -H -u ubuntu /snap/bin/juju bootstrap microk8s microk8s
+    fi
+}
+
+function configure_system_users() {
+    echo "Configuring ubuntu user"
+    # only add ubuntu user if ubuntu does not exist
+    /usr/bin/id -u ubuntu &>/dev/null || useradd --create-home ubuntu
+    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.profile
+    echo "PATH=\\$PATH:/home/ubuntu/.local/bin" >> /home/ubuntu/.bashrc
+    /usr/sbin/groupadd -f microk8s
+    /usr/sbin/groupadd -f docker
+    /usr/sbin/usermod --append --groups docker,microk8s,lxd,sudo ubuntu
+}
+
+function execute_script() {
+    local script_url="$1"
+    local env_vars="$2"
+    if [[ -z "$script_url" ]]; then
+        echo "Script URL not provided, skipping."
+        return
+    fi
+    # Write temp environment variables file, load and delete.
+    TEMP_FILE=$(mktemp)
+    IFS=' ' read -r -a vars <<< "$env_vars"
+    for var in "${vars[@]}"; do
+        echo "$var" >> "$TEMP_FILE"
+    done
+    # Source the temporary file and run the script
+    set -a  # Automatically export all variables
+    source "$TEMP_FILE"
+    rm "$TEMP_FILE"
+    set +a  # Stop automatically exporting variables
+
+    wget "$script_url" -O external.sh
+    chmod +x external.sh
+    ./external.sh
+    rm external.sh
+}
+
 proxy="test.proxy.internal:3128"
+dockerhub_cache_url="https://test-dockerhub-cache.com:5000"
+dockerhub_cache_host="test-dockerhub-cache.com"
+dockerhub_cache_port="5000"
 apt_packages="build-essential docker.io gh jq npm python3-dev python3-pip python-is-python3 \
 shellcheck tar time unzip wget"
 hwe_version="22.04"
 github_runner_version=""
 github_runner_arch="x64"
+microk8s_channel="1.29-strict/stable"
+juju_channel="3.1/stable"
+script_url="https://test-url.com/script.sh"
+script_secrets="TEST_SECRET_ONE=HELLO TEST_SECRET_TWO=WORLD"
 
 configure_proxy "$proxy"
 install_apt_packages "$apt_packages" "$hwe_version"
 disable_unattended_upgrades
-configure_system_users
+enable_network_fair_queuing_congestion
 configure_usr_local_bin
 install_yarn
-install_yq
-install_github_runner "$github_runner_version" "$github_runner_arch"\
+# install yq with ubuntu user due to GOPATH related go configuration settings
+export -f install_yq
+su ubuntu -c "bash -c 'install_yq'"
+install_github_runner "$github_runner_version" "$github_runner_arch"
+chown_home
+install_microk8s "$microk8s_channel" "$dockerhub_cache_url" "$dockerhub_cache_host" \
+"$dockerhub_cache_port"
+install_juju "$juju_channel"
+configure_system_users
+execute_script "$script_url" "$script_secrets"
+
+# Make sure the disk is synced for snapshot
+sync
+echo "Finished sync"\
 """
     )
     # pylint: enable=R0801
@@ -603,6 +868,30 @@ def test__wait_for_cloud_init_complete_fail(monkeypatch: pytest.MonkeyPatch):
         )
 
     assert "Invalid cloud-init status" in str(exc)
+
+
+def test__wait_for_cloud_init_unexpected_exit(monkeypatch: pytest.MonkeyPatch):
+    """
+    arrange: given a monkeypatched _get_ssh_connection and connection.run functions that raises an\
+        error.
+    act: when _wait_for_cloud_init_complete is called.
+    assert: CloudInitFailError is raised.
+    """
+    mock_connection = MagicMock()
+    mock_connection.get_server_console = (get_log_mock := MagicMock())
+    mock_connection.run.side_effect = openstack_builder.invoke.exceptions.UnexpectedExit(
+        result=MagicMock(), reason=MagicMock()
+    )
+    monkeypatch.setattr(
+        openstack_builder, "_get_ssh_connection", MagicMock(return_value=mock_connection)
+    )
+
+    with pytest.raises(errors.CloudInitFailError):
+        openstack_builder._wait_for_cloud_init_complete(
+            conn=mock_connection, server=MagicMock(), ssh_key=MagicMock()
+        )
+
+    get_log_mock.assert_called_once()
 
 
 def test__wait_for_cloud_init_complete(monkeypatch: pytest.MonkeyPatch):
