@@ -43,6 +43,6 @@ This event begins building the image.
 For more information, refer to the official OpenStack documentation on creating servers here:
 https://docs.openstack.org/python-openstackclient/pike/cli/command-objects/server.html#server-create
 
-### Cleanup
+### Clean up
 
 - To clean up, run `openstack image delete <image-name>` after you're done following the tutorial .
