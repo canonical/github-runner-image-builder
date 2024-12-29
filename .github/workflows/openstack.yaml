@@ -10,7 +10,7 @@ concurrency:
 jobs:
   openstack-setup:
     name: OpenStack setup
-    runs-on: [self-hosted, self-hosted-linux-amd64-jammy-xlarge]
+    runs-on: [self-hosted, stg-private-endpoint]
     steps:
       # - name: Setup tmate session
       #   uses: canonical/action-tmate@main
