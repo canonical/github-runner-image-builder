@@ -1,0 +1,14 @@
+name: Workflo test
+
+on:
+  push:
+
+jobs:
+  openstack-setup:
+    name: OpenStack setup
+    runs-on: [self-hosted, self-hosted-linux-amd64-jammy-xlarge]
+    steps:
+      - name: Setup microstack VM
+        uses: yanksyoon/microstack-action
+      - name: Setup tmate session
+        uses: canonical/action-tmate@main
