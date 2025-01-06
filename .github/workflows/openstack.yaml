@@ -16,3 +16,4 @@ jobs:
         uses: yanksyoon/microstack-action@main
       - name: Setup tmate session
         uses: canonical/action-tmate@main
+        if: ${{ failure() }}
