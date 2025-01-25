@@ -1,0 +1,10 @@
+name: just test arm64
+
+on: [push]
+jobs:
+    issues-event-tests:
+        runs-on: [self-hosted, stg-private-endpoint, jammy, ARM64]
+        steps:
+        - name: Echo runner name
+          run: |
+            echo "Hello, world"
